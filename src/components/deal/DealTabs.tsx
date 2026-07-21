@@ -6,18 +6,21 @@ export default function DealTabs({
   defaultTab,
   analysis,
   negotiation,
+  fulfillment,
   history,
   actuals,
 }: {
   defaultTab?: string;
   analysis: React.ReactNode;
   negotiation: React.ReactNode;
+  fulfillment?: React.ReactNode;
   history: React.ReactNode;
   actuals?: React.ReactNode;
 }) {
   const tabs: { name: string; node: React.ReactNode }[] = [
     { name: "Analysis", node: analysis },
     { name: "Negotiation", node: negotiation },
+    ...(fulfillment ? [{ name: "Fulfillment", node: fulfillment }] : []),
     ...(actuals ? [{ name: "Actuals", node: actuals }] : []),
     { name: "History", node: history },
   ];

@@ -153,6 +153,157 @@ export interface AnalysisResult {
 
 export type ImageMediaType = "image/png" | "image/jpeg" | "image/webp" | "image/gif";
 
+const CONTRACT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    deliverables: {
+      type: "array",
+      description:
+        "Every piece of content the creator owes. One entry per distinct deliverable type; use quantity for repeats.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          description: { type: "string", description: "e.g. 'YouTube integration, 60-90s'" },
+          platform: {
+            type: ["string", "null"],
+            description: "One of: youtube, instagram, tiktok. Null if the deliverable is not platform-specific.",
+          },
+          quantity: { type: "number" },
+          dueDate: { type: ["string", "null"], description: "YYYY-MM-DD if an absolute date is stated" },
+          dueDaysAfterDelivery: {
+            type: ["number", "null"],
+            description: "Days after product delivery, if the deadline is relative to receiving a product",
+          },
+          dueRule: {
+            type: ["string", "null"],
+            description: "The deadline as written in the contract, if it is neither an absolute date nor days-after-delivery",
+          },
+        },
+        required: ["description", "platform", "quantity", "dueDate", "dueDaysAfterDelivery", "dueRule"],
+      },
+    },
+    payments: {
+      type: "array",
+      description: "Every payment owed to the creator. Split by milestone if the contract does.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          description: { type: "string" },
+          amount: { type: "number", description: "EUR" },
+          trigger: {
+            type: "string",
+            enum: ["on_signing", "on_delivery", "on_verification", "date"],
+          },
+          dueDate: { type: ["string", "null"] },
+        },
+        required: ["description", "amount", "trigger", "dueDate"],
+      },
+    },
+    product: {
+      type: ["object", "null"],
+      additionalProperties: false,
+      description: "Physical product the brand sends, if any (gifted or seeded deals)",
+      properties: {
+        description: { type: "string" },
+        value: { type: ["number", "null"] },
+      },
+      required: ["description", "value"],
+    },
+    usageRights: { type: ["string", "null"] },
+    exclusivity: { type: ["string", "null"] },
+    paymentTerms: { type: ["string", "null"], description: "e.g. Net-30" },
+    totalFee: { type: ["number", "null"] },
+    notes: {
+      type: "array",
+      items: { type: "string" },
+      description: "Anything unusual worth the manager's attention (penalties, approval rights, renewal clauses)",
+    },
+  },
+  required: [
+    "deliverables",
+    "payments",
+    "product",
+    "usageRights",
+    "exclusivity",
+    "paymentTerms",
+    "totalFee",
+    "notes",
+  ],
+} as const;
+
+export interface ContractParseResult {
+  terms: unknown;
+  usage: TokenUsage;
+}
+
+/** Reads a signed contract into structured terms the app can generate work from. */
+export async function parseContract(params: {
+  pdfBase64?: string;
+  image?: { base64: string; mediaType: ImageMediaType };
+  text?: string;
+  dealContext?: string;
+}): Promise<ContractParseResult> {
+  const client = getClient();
+  const content: Anthropic.ContentBlockParam[] = [];
+
+  if (params.pdfBase64) {
+    content.push({
+      type: "document",
+      source: { type: "base64", media_type: "application/pdf", data: params.pdfBase64 },
+    });
+  }
+  if (params.image) {
+    content.push({
+      type: "image",
+      source: { type: "base64", media_type: params.image.mediaType, data: params.image.base64 },
+    });
+  }
+  content.push({
+    type: "text",
+    text: [
+      "Extract the operative terms from this influencer marketing contract so they can be tracked.",
+      "Rules:",
+      "- Capture every deliverable and every payment, exactly as agreed. Do not invent terms.",
+      "- Amounts in EUR as numbers. If a currency other than EUR is used, still return the number and note the currency in notes.",
+      "- If a deadline is relative to receiving a product, use dueDaysAfterDelivery rather than guessing a date.",
+      "- If something important is ambiguous or missing (no deadline, no payment trigger), say so in notes.",
+      params.text ? `\nContract text:\n"""${params.text}"""` : "",
+      params.dealContext ? `\nFor context, the deal as negotiated:\n${params.dealContext}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  });
+
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 16000,
+    thinking: { type: "adaptive" },
+    system:
+      "You are Counterpart, reading signed influencer contracts for a marketing manager. You extract terms faithfully and never invent obligations that are not in the document.",
+    messages: [{ role: "user", content }],
+    output_config: {
+      format: { type: "json_schema", schema: CONTRACT_SCHEMA as unknown as Record<string, unknown> },
+    },
+  });
+
+  if (response.stop_reason === "refusal") {
+    throw new Error("The contract could not be read (refused).");
+  }
+  const text = response.content.find((b) => b.type === "text")?.text;
+  if (!text) throw new Error("Empty contract parse response.");
+
+  return {
+    terms: JSON.parse(text),
+    usage: {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+    },
+  };
+}
+
 export async function analyzeDeal(params: {
   deal: Deal;
   playbook: PlaybookContext;

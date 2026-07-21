@@ -110,6 +110,63 @@ CREATE TABLE IF NOT EXISTS usage_log (
     engagement_rate REAL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
+  if (!cols.includes("deal_type")) db.exec("ALTER TABLE deals ADD COLUMN deal_type TEXT");
+  db.exec(`CREATE TABLE IF NOT EXISTS contracts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    deal_id INTEGER NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+    partner_id INTEGER,
+    filename TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    mime TEXT NOT NULL,
+    parsed_terms TEXT,
+    status TEXT NOT NULL DEFAULT 'uploaded',
+    parse_error TEXT,
+    signed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS content_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    deal_id INTEGER NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+    partner_id INTEGER,
+    title TEXT NOT NULL,
+    platform TEXT,
+    due_date TEXT,
+    due_rule TEXT,
+    due_days_after_delivery INTEGER,
+    status TEXT NOT NULL DEFAULT 'planned',
+    posted_url TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS payment_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    deal_id INTEGER NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+    partner_id INTEGER,
+    description TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    trigger TEXT NOT NULL DEFAULT 'on_verification',
+    due_date TEXT,
+    linked_content_ids TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'pending',
+    approved_at TEXT,
+    paid_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS shipments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    deal_id INTEGER NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+    partner_id INTEGER,
+    product TEXT NOT NULL,
+    value INTEGER,
+    address TEXT,
+    carrier TEXT,
+    tracking TEXT,
+    status TEXT NOT NULL DEFAULT 'to_prepare',
+    shipped_at TEXT,
+    delivered_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
   db.exec(`CREATE TABLE IF NOT EXISTS campaigns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -752,7 +809,8 @@ export function updateDeal(dealId: number, fields: Record<string, unknown>) {
     "agreed_price", "anchor", "target", "walkaway", "breakeven", "avg_views",
     "engagement_rate", "status_label", "status_tone", "campaign", "analysis", "channel_url",
     "actual_views", "actual_clicks", "actual_orders", "actual_revenue", "actuals_logged_at",
-    "job", "job_error",
+    "job_status", "job_error", "job_started_at",
+    "partner_id", "campaign_id", "deal_type",
   ];
   const keys = Object.keys(fields).filter((k) => allowed.includes(k));
   if (keys.length === 0) return;

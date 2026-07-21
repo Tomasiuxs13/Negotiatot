@@ -8,6 +8,15 @@ import DealTabs from "@/components/deal/DealTabs";
 import DeleteDealButton from "@/components/deal/DeleteDealButton";
 import ActualsPanel from "@/components/deal/ActualsPanel";
 import JobPoller, { JobChip } from "@/components/deal/JobPoller";
+import ContractBlock from "@/components/deal/ContractBlock";
+import { ContentItemsBlock, PaymentItemsBlock, ShipmentsBlock } from "@/components/deal/WorkBlocks";
+import {
+  getContentItems,
+  getContract,
+  getPaymentItems,
+  getShipments,
+  parseTerms,
+} from "@/lib/fulfillment";
 import AnalysisTab from "@/components/deal/AnalysisTab";
 import NegotiationTab from "@/components/deal/NegotiationTab";
 
@@ -31,6 +40,17 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   const messages = getMessages(deal.id);
   const platforms = dealPlatforms(deal);
   const scope = dealScope(deal);
+  const contract = getContract(deal.id) ?? null;
+  const contentItems = getContentItems(deal.id);
+  const paymentItems = getPaymentItems(deal.id);
+  const shipments = getShipments(deal.id);
+  const showFulfillment =
+    deal.stage === "agreed" ||
+    contract != null ||
+    contentItems.length > 0 ||
+    paymentItems.length > 0 ||
+    shipments.length > 0;
+
   const campaign = deal.campaign_id != null ? getCampaign(deal.campaign_id) : undefined;
   const campaignOverrides = campaign ? describeOverrides(parseOverrides(campaign.overrides)) : [];
 
@@ -75,7 +95,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
 
   return (
     <main className="flex-1 overflow-y-auto p-8">
-      <JobPoller active={deal.job_status != null} />
+      <JobPoller active={deal.job_status != null || contract?.status === "parsing"} />
       {deal.job_error && !deal.job_status && (
         <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 max-w-2xl">
           {deal.job_error}
@@ -148,13 +168,27 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
       <DealTabs
         defaultTab={
           deal.stage === "agreed"
-            ? "Actuals"
+            ? "Fulfillment"
             : deal.stage === "negotiating" || deal.stage === "offer_sent"
               ? "Negotiation"
               : "Analysis"
         }
         analysis={<AnalysisTab deal={deal} />}
         negotiation={<NegotiationTab deal={deal} messages={messages} />}
+        fulfillment={
+          showFulfillment ? (
+            <div className="space-y-4 max-w-4xl">
+              <ContractBlock
+                dealId={deal.id}
+                contract={contract}
+                terms={parseTerms(contract?.parsed_terms)}
+              />
+              <ContentItemsBlock dealId={deal.id} items={contentItems} />
+              <ShipmentsBlock dealId={deal.id} shipments={shipments} />
+              <PaymentItemsBlock dealId={deal.id} payments={paymentItems} />
+            </div>
+          ) : undefined
+        }
         actuals={
           deal.stage === "agreed" || deal.agreed_price != null ? <ActualsPanel deal={deal} /> : undefined
         }

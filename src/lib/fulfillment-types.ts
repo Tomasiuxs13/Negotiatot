@@ -1,0 +1,126 @@
+/**
+ * Shapes and labels for the fulfillment domain. Deliberately free of any database
+ * import so client components can use these without pulling better-sqlite3 into the
+ * browser bundle. Query functions live in fulfillment.ts (server only).
+ */
+
+export type ContentStatus =
+  | "planned"
+  | "in_production"
+  | "submitted"
+  | "approved"
+  | "posted"
+  | "verified";
+
+export type PaymentTrigger = "on_signing" | "on_delivery" | "on_verification" | "date";
+export type PaymentStatus = "pending" | "approvable" | "approved" | "paid";
+export type ShipmentStatus = "to_prepare" | "shipped" | "delivered";
+
+export interface Contract {
+  id: number;
+  deal_id: number;
+  partner_id: number | null;
+  filename: string;
+  file_path: string;
+  mime: string;
+  parsed_terms: string | null;
+  status: "uploaded" | "parsing" | "parsed" | "confirmed";
+  parse_error: string | null;
+  signed_at: string | null;
+  created_at: string;
+}
+
+export interface ContentItem {
+  id: number;
+  deal_id: number;
+  partner_id: number | null;
+  title: string;
+  platform: string | null;
+  due_date: string | null;
+  due_rule: string | null;
+  due_days_after_delivery: number | null;
+  status: ContentStatus;
+  posted_url: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PaymentItem {
+  id: number;
+  deal_id: number;
+  partner_id: number | null;
+  description: string;
+  amount: number;
+  trigger: PaymentTrigger;
+  due_date: string | null;
+  linked_content_ids: string; // JSON array of content item ids
+  status: PaymentStatus;
+  approved_at: string | null;
+  paid_at: string | null;
+  created_at: string;
+}
+
+export interface Shipment {
+  id: number;
+  deal_id: number;
+  partner_id: number | null;
+  product: string;
+  value: number | null;
+  address: string | null;
+  carrier: string | null;
+  tracking: string | null;
+  status: ShipmentStatus;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  created_at: string;
+}
+
+/** What Claude extracts from a signed contract. */
+export interface ParsedTerms {
+  deliverables: {
+    description: string;
+    platform: string | null;
+    quantity: number;
+    dueDate: string | null;
+    dueDaysAfterDelivery: number | null;
+    dueRule: string | null;
+  }[];
+  payments: {
+    description: string;
+    amount: number;
+    trigger: PaymentTrigger;
+    dueDate: string | null;
+  }[];
+  product: { description: string; value: number | null } | null;
+  usageRights: string | null;
+  exclusivity: string | null;
+  paymentTerms: string | null;
+  totalFee: number | null;
+  notes: string[];
+}
+
+export const CONTENT_STATUS_FLOW: ContentStatus[] = [
+  "planned",
+  "in_production",
+  "submitted",
+  "approved",
+  "posted",
+  "verified",
+];
+
+export const CONTENT_STATUS_LABEL: Record<ContentStatus, string> = {
+  planned: "Planned",
+  in_production: "In production",
+  submitted: "Submitted",
+  approved: "Approved",
+  posted: "Posted",
+  verified: "Verified",
+};
+
+export const PAYMENT_TRIGGER_LABEL: Record<PaymentTrigger, string> = {
+  on_signing: "On signing",
+  on_delivery: "On product delivery",
+  on_verification: "On content verified",
+  date: "On date",
+};
