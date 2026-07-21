@@ -2,7 +2,8 @@ import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import NewPartnerButton from "@/components/partners/NewPartnerButton";
 import { getPartnerChannels, getPartnerDeals, getPartners } from "@/lib/db";
-import { parseTags, partnerStats } from "@/lib/partners";
+import { parseTags, partnerStats, partnerStatus } from "@/lib/partners";
+import PartnerStatusPill from "@/components/partners/PartnerStatusPill";
 import { PLATFORM_META, type Platform } from "@/lib/types";
 import { euro, euroCpm } from "@/lib/format";
 
@@ -22,6 +23,7 @@ export default async function PartnersPage({
       partner: p,
       tags: parseTags(p.tags),
       channels: getPartnerChannels(p.id),
+      partnerDeals: deals,
       stats: partnerStats(deals),
     };
   });
@@ -69,6 +71,7 @@ export default async function PartnersPage({
               <thead>
                 <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
                   <th className="px-4 py-3 font-medium">Partner</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Channels</th>
                   <th className="px-4 py-3 font-medium text-right">Deals</th>
                   <th className="px-4 py-3 font-medium text-right">Committed</th>
@@ -80,7 +83,7 @@ export default async function PartnersPage({
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(({ partner, tags, channels, stats }) => (
+                {filtered.map(({ partner, tags, channels, partnerDeals, stats }) => (
                   <tr key={partner.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <Link
@@ -101,6 +104,9 @@ export default async function PartnersPage({
                           ))}
                         </span>
                       )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <PartnerStatusPill status={partnerStatus(partnerDeals)} />
                     </td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-2 text-slate-500">

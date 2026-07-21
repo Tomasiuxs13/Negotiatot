@@ -29,17 +29,16 @@ export function getContractById(id: number): Contract | undefined {
 
 export function createContract(fields: {
   dealId: number;
-  partnerId: number | null;
   filename: string;
   filePath: string;
   mime: string;
 }): number {
   const info = db
     .prepare(
-      `INSERT INTO contracts (deal_id, partner_id, filename, file_path, mime, status)
-       VALUES (?, ?, ?, ?, ?, 'parsing')`
+      `INSERT INTO contracts (deal_id, filename, file_path, mime, status)
+       VALUES (?, ?, ?, ?, 'parsing')`
     )
-    .run(fields.dealId, fields.partnerId, fields.filename, fields.filePath, fields.mime);
+    .run(fields.dealId, fields.filename, fields.filePath, fields.mime);
   return Number(info.lastInsertRowid);
 }
 
@@ -87,7 +86,6 @@ export function getContentItems(dealId: number): ContentItem[] {
 
 export function createContentItem(fields: {
   dealId: number;
-  partnerId: number | null;
   title: string;
   platform?: string | null;
   dueDate?: string | null;
@@ -96,12 +94,11 @@ export function createContentItem(fields: {
 }): number {
   const info = db
     .prepare(
-      `INSERT INTO content_items (deal_id, partner_id, title, platform, due_date, due_rule, due_days_after_delivery)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO content_items (deal_id, title, platform, due_date, due_rule, due_days_after_delivery)
+       VALUES (?, ?, ?, ?, ?, ?)`
     )
     .run(
       fields.dealId,
-      fields.partnerId,
       fields.title,
       fields.platform ?? null,
       fields.dueDate ?? null,
@@ -224,7 +221,6 @@ export function getAllPaymentItems(): (PaymentItem & { creator: string })[] {
 
 export function createPaymentItem(fields: {
   dealId: number;
-  partnerId: number | null;
   description: string;
   amount: number;
   trigger: PaymentTrigger;
@@ -235,12 +231,11 @@ export function createPaymentItem(fields: {
   const status: PaymentStatus = fields.trigger === "on_signing" ? "approvable" : "pending";
   const info = db
     .prepare(
-      `INSERT INTO payment_items (deal_id, partner_id, description, amount, trigger, due_date, linked_content_ids, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO payment_items (deal_id, description, amount, trigger, due_date, linked_content_ids, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       fields.dealId,
-      fields.partnerId,
       fields.description,
       Math.round(fields.amount),
       fields.trigger,
@@ -287,16 +282,15 @@ export function getShipments(dealId: number): Shipment[] {
 
 export function createShipment(fields: {
   dealId: number;
-  partnerId: number | null;
   product: string;
   value?: number | null;
   address?: string | null;
 }): number {
   const info = db
     .prepare(
-      "INSERT INTO shipments (deal_id, partner_id, product, value, address) VALUES (?, ?, ?, ?, ?)"
+      "INSERT INTO shipments (deal_id, product, value, address) VALUES (?, ?, ?, ?)"
     )
-    .run(fields.dealId, fields.partnerId, fields.product, fields.value ?? null, fields.address ?? null);
+    .run(fields.dealId, fields.product, fields.value ?? null, fields.address ?? null);
   return Number(info.lastInsertRowid);
 }
 

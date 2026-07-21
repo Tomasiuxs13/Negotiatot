@@ -109,9 +109,9 @@ function addDeal(fields) {
 
 function addContract(dealId, partnerId, terms, signedAt) {
   db.prepare(
-    `INSERT INTO contracts (deal_id, partner_id, filename, file_path, mime, parsed_terms, status, signed_at)
-     VALUES (?, ?, ?, ?, 'application/pdf', ?, 'confirmed', ?)`
-  ).run(dealId, partnerId, `${terms.brand ?? "agreement"}.pdf`, `contracts/demo/deal-${dealId}.pdf`, JSON.stringify(terms), signedAt);
+    `INSERT INTO contracts (deal_id, filename, file_path, mime, parsed_terms, status, signed_at)
+     VALUES (?, ?, ?, 'application/pdf', ?, 'confirmed', ?)`
+  ).run(dealId, `${terms.brand ?? "agreement"}.pdf`, `contracts/demo/deal-${dealId}.pdf`, JSON.stringify(terms), signedAt);
 }
 
 function addContent(dealId, partnerId, items) {
@@ -121,13 +121,12 @@ function addContent(dealId, partnerId, items) {
       Number(
         db
           .prepare(
-            `INSERT INTO content_items (deal_id, partner_id, title, platform, due_date, due_days_after_delivery, status, posted_url,
+            `INSERT INTO content_items (deal_id, title, platform, due_date, due_days_after_delivery, status, posted_url,
                                         actual_views, actual_clicks, actual_orders, actual_revenue)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .run(
             dealId,
-            partnerId,
             it.title,
             it.platform ?? null,
             it.due ?? null,
@@ -147,11 +146,10 @@ function addContent(dealId, partnerId, items) {
 
 function addPayment(dealId, partnerId, p) {
   db.prepare(
-    `INSERT INTO payment_items (deal_id, partner_id, description, amount, trigger, linked_content_ids, status, approved_at, paid_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO payment_items (deal_id, description, amount, trigger, linked_content_ids, status, approved_at, paid_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     dealId,
-    partnerId,
     p.description,
     p.amount,
     p.trigger,
@@ -164,11 +162,10 @@ function addPayment(dealId, partnerId, p) {
 
 function addShipment(dealId, partnerId, s) {
   db.prepare(
-    `INSERT INTO shipments (deal_id, partner_id, product, value, address, carrier, tracking, status, shipped_at, delivered_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO shipments (deal_id, product, value, address, carrier, tracking, status, shipped_at, delivered_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     dealId,
-    partnerId,
     s.product,
     s.value ?? null,
     s.address ?? null,
@@ -260,6 +257,63 @@ console.log("Seeding demo deals…");
   addPayment(dealId, partnerId, { description: "Advance on signing", amount: 950, trigger: "on_signing", status: "paid", approvedAt: stamp(-11), paidAt: stamp(-10) });
   addPayment(dealId, partnerId, { description: "Balance on verified publication", amount: 1500, trigger: "on_verification", linked: content, status: "pending" });
   console.log("  ✓ NordicNiklas — overdue content, product delivered, balance pending");
+}
+
+/* 1b. NordicNiklas, round two — the same partner, a second collaboration. This is what
+       the partner record is for: the Copilot negotiates knowing what you paid in spring,
+       and what that money actually delivered. */
+{
+  const partnerId = db.prepare("SELECT id FROM partners WHERE name = 'NordicNiklas'").get().id;
+  const dealId = addDeal({
+    creator: "NordicNiklas",
+    partnerId,
+    platforms: ["youtube"],
+    deliverables: "1× YouTube integration",
+    campaign: "Spring hardware push",
+    stage: "completed",
+    dealType: "paid",
+    round: 2,
+    firstAsk: 2400,
+    currentAsk: 2200,
+    currentOffer: 2100,
+    agreedPrice: 2100,
+    anchor: 1800,
+    target: 2050,
+    walkaway: 2300,
+    breakeven: 2900,
+    avgViews: 88000,
+    er: 4.6,
+    statusLabel: "Completed",
+    statusTone: "good",
+    updatedAt: stamp(-95),
+  });
+  const content = addContent(dealId, partnerId, [
+    {
+      title: "YouTube integration (spring)",
+      platform: "youtube",
+      due: day(-110),
+      status: "verified",
+      url: "https://youtube.com/watch?v=niklas-spring",
+      views: 71000,
+      clicks: 910,
+      orders: 28,
+      revenue: 3360,
+    },
+  ]);
+  addPayment(dealId, partnerId, {
+    description: "Full fee",
+    amount: 2100,
+    trigger: "on_verification",
+    linked: content,
+    status: "paid",
+    approvedAt: stamp(-108),
+    paidAt: stamp(-100),
+  });
+  db.prepare(
+    `UPDATE deals SET actual_views = 71000, actual_clicks = 910, actual_orders = 28,
+       actual_revenue = 3360, actuals_logged_at = ? WHERE id = ?`
+  ).run(stamp(-98), dealId);
+  console.log("  ✓ NordicNiklas (2nd deal) — completed in spring, gives the Copilot history");
 }
 
 /* 2. HomeWithHanna — everything delivered and verified: payment READY TO APPROVE. */

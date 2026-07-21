@@ -19,7 +19,6 @@ export type ShipmentStatus = "to_prepare" | "shipped" | "delivered";
 export interface Contract {
   id: number;
   deal_id: number;
-  partner_id: number | null;
   filename: string;
   file_path: string;
   mime: string;
@@ -33,7 +32,6 @@ export interface Contract {
 export interface ContentItem {
   id: number;
   deal_id: number;
-  partner_id: number | null;
   title: string;
   platform: string | null;
   due_date: string | null;
@@ -54,7 +52,6 @@ export interface ContentItem {
 export interface PaymentItem {
   id: number;
   deal_id: number;
-  partner_id: number | null;
   description: string;
   amount: number;
   trigger: PaymentTrigger;
@@ -69,7 +66,6 @@ export interface PaymentItem {
 export interface Shipment {
   id: number;
   deal_id: number;
-  partner_id: number | null;
   product: string;
   value: number | null;
   address: string | null;

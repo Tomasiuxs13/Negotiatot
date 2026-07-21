@@ -2,7 +2,8 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createDealAction } from "@/app/new/actions";
+import { createDealAction, lookupPartnerAction, type PartnerPrefill } from "@/app/new/actions";
+import { euro, euroCpm } from "@/lib/format";
 
 const inputClass =
   "w-full border border-slate-200 rounded-lg bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand";
@@ -32,6 +33,31 @@ export default function NewDealForm({
   const [warning, setWarning] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>(["youtube"]);
+  const [known, setKnown] = useState<PartnerPrefill | null>(null);
+
+  /**
+   * Recognises a returning creator and fills in what we already hold on them, so the
+   * second collaboration starts from the record rather than from a blank form.
+   */
+  const recognisePartner = (name: string) => {
+    startTransition(async () => {
+      const found = await lookupPartnerAction(name);
+      setKnown(found);
+      if (found) {
+        if (found.platforms.length > 0) setSelected(found.platforms);
+        const form = formRef.current;
+        if (form) {
+          const fill = (field: string, value: string | number | null) => {
+            const el = form.elements.namedItem(field) as HTMLInputElement | null;
+            if (el && !el.value && value != null) el.value = String(value);
+          };
+          fill("channel_url", found.channelUrl);
+          fill("known_avg_views", found.avgViews);
+          fill("known_engagement", found.engagementRate);
+        }
+      }
+    });
+  };
 
   const togglePlatform = (value: string) => {
     setSelected((prev) =>
@@ -60,6 +86,36 @@ export default function NewDealForm({
   return (
     <form ref={formRef} onSubmit={submit} className="space-y-4">
       {stage && <input type="hidden" name="stage" value={stage} />}
+
+      {known && (
+        <div className="bg-brand/5 border border-brand/30 rounded-lg px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-brand-dark" style={{ fontSize: 16 }}>
+              history
+            </span>
+            <span className="text-sm font-semibold text-slate-900">
+              {known.dealCount > 0
+                ? `You've worked with ${known.name} ${known.dealCount === 1 ? "once" : `${known.dealCount} times`}`
+                : `${known.name} is already in your partners`}
+            </span>
+          </div>
+          <p className="text-xs text-slate-600 mt-1 ml-6">
+            {known.lastAgreedPrice != null ? (
+              <>
+                Last time: {euro(known.lastAgreedPrice)}
+                {known.lastScope ? ` for ${known.lastScope}` : ""}
+                {known.lastDealDate ? ` (${known.lastDealDate})` : ""}
+                {known.lastActualCpm != null
+                  ? ` · delivered at ${euroCpm(known.lastActualCpm)} CPM`
+                  : ""}
+                . The Copilot will use this as your anchor.
+              </>
+            ) : (
+              "Their channels and known stats have been filled in below."
+            )}
+          </p>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -76,6 +132,11 @@ export default function NewDealForm({
             placeholder="e.g. TechWithMarta"
             className={inputClass}
             required
+            onBlur={(e) => recognisePartner(e.target.value)}
+            onChange={(e) => {
+              // Picking from the datalist fires change, not blur.
+              if (partners.some((p) => p.name === e.target.value)) recognisePartner(e.target.value);
+            }}
           />
           <datalist id="partner-names">
             {partners.map((p) => (

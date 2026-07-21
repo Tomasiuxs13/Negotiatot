@@ -5,6 +5,7 @@ import {
   getCampaign,
   getDeal,
   getMessages,
+  getPartnerDeals,
   getPlaybook,
   getSetting,
   logUsage,
@@ -18,6 +19,7 @@ import {
   type ImageMediaType,
 } from "./claude";
 import type { Deal } from "./types";
+import { priorDeals, type PriorDeal } from "./partners";
 
 export function platformsOf(deal: Pick<Deal, "platform" | "platforms">): string[] {
   if (deal.platforms) {
@@ -29,6 +31,12 @@ export function platformsOf(deal: Pick<Deal, "platform" | "platforms">): string[
     }
   }
   return [deal.platform];
+}
+
+/** What this creator has already been paid, so a repeat negotiation isn't argued blind. */
+export function dealHistory(deal: Deal): PriorDeal[] {
+  if (deal.partner_id == null) return [];
+  return priorDeals(getPartnerDeals(deal.partner_id), deal.id);
 }
 
 /**
@@ -87,6 +95,7 @@ export async function performAnalysis(
       reportImage: inputs.reportImage,
       theirMessage: theirMessage || undefined,
       channelUrl: inputs.channelUrl || deal.channel_url || undefined,
+      history: dealHistory(deal),
     });
 
     logUsage(dealId, "analysis", MODEL, result.usage.inputTokens, result.usage.outputTokens);
@@ -140,6 +149,7 @@ export async function performRecommendation(dealId: number) {
       deal,
       messages,
       playbook: playbookContext(platformsOf(deal), deal.campaign_id),
+      history: dealHistory(deal),
     });
 
     logUsage(dealId, "recommendation", MODEL, reco.usage.inputTokens, reco.usage.outputTokens);

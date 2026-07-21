@@ -10,12 +10,15 @@ import {
   findPartnerByName,
   getCampaign,
   getPartner,
+  getPartnerChannels,
+  getPartnerDeals,
   setJob,
   updateDeal,
   upsertPartnerChannel,
 } from "@/lib/db";
 import { hasApiKey, type ImageMediaType } from "@/lib/claude";
 import { performAnalysis } from "@/lib/engine";
+import { priorDeals } from "@/lib/partners";
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
@@ -158,4 +161,55 @@ export async function createDealAction(
     })
   );
   return { id };
+}
+
+export interface PartnerPrefill {
+  partnerId: number;
+  name: string;
+  platforms: string[];
+  channelUrl: string | null;
+  avgViews: number | null;
+  engagementRate: number | null;
+  dealCount: number;
+  lastAgreedPrice: number | null;
+  lastDealDate: string | null;
+  lastScope: string | null;
+  lastActualCpm: number | null;
+}
+
+/**
+ * Everything already known about a returning creator. Retyping a partner's reach for
+ * the third collaboration is both tedious and a chance to enter it wrong.
+ */
+export async function lookupPartnerAction(name: string): Promise<PartnerPrefill | null> {
+  const trimmed = name.trim();
+  if (trimmed.length < 2) return null;
+
+  const partner = findPartnerByName(trimmed);
+  if (!partner) return null;
+
+  const channels = getPartnerChannels(partner.id);
+  const history = priorDeals(getPartnerDeals(partner.id));
+  const last = history[0] ?? null;
+  // A single "avg views" plus "engagement" pair has to describe one channel, or the
+  // two numbers contradict each other. The biggest channel is the one to describe.
+  const withViews = channels.filter((c) => c.avg_views != null);
+  const primary =
+    withViews.length > 0
+      ? withViews.reduce((best, c) => (c.avg_views! > best.avg_views! ? c : best))
+      : channels[0];
+
+  return {
+    partnerId: partner.id,
+    name: partner.name,
+    platforms: channels.map((c) => c.platform),
+    channelUrl: primary?.url ?? channels.find((c) => c.url)?.url ?? null,
+    avgViews: primary?.avg_views ?? null,
+    engagementRate: primary?.engagement_rate ?? null,
+    dealCount: history.length,
+    lastAgreedPrice: last?.agreedPrice ?? null,
+    lastDealDate: last?.date ?? null,
+    lastScope: last?.scope ?? null,
+    lastActualCpm: last?.actualCpm ?? null,
+  };
 }

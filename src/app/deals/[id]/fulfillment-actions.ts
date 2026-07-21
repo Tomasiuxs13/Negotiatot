@@ -69,7 +69,6 @@ export async function uploadContractAction(
 
   const contractId = createContract({
     dealId,
-    partnerId: deal.partner_id,
     filename: file.name,
     filePath: relativePath,
     mime: file.type,
@@ -136,7 +135,6 @@ export async function confirmContractAction(
   if (!deal) return { error: "Deal not found" };
 
   const dealId = contract.deal_id;
-  const partnerId = contract.partner_id ?? deal.partner_id;
 
   // Replace anything generated from a previous confirmation of this contract.
   for (const item of getContentItems(dealId)) deleteContentItem(item.id);
@@ -149,7 +147,6 @@ export async function confirmContractAction(
       contentIds.push(
         createContentItem({
           dealId,
-          partnerId,
           title: quantity > 1 ? `${deliverable.description} (${i + 1}/${quantity})` : deliverable.description,
           platform: deliverable.platform,
           dueDate: deliverable.dueDate,
@@ -164,7 +161,6 @@ export async function confirmContractAction(
   for (const payment of terms.payments ?? []) {
     createPaymentItem({
       dealId,
-      partnerId,
       description: payment.description,
       amount: payment.amount,
       trigger: payment.trigger,
@@ -179,7 +175,6 @@ export async function confirmContractAction(
   if (terms.product) {
     createShipment({
       dealId,
-      partnerId,
       product: terms.product.description,
       value: terms.product.value,
     });
@@ -236,7 +231,7 @@ export async function addContentItemAction(
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
   if (!fields.title.trim()) return { error: "Give the content item a name." };
-  createContentItem({ dealId, partnerId: deal.partner_id, ...fields, title: fields.title.trim() });
+  createContentItem({ dealId, ...fields, title: fields.title.trim() });
   refreshPaymentStatuses(dealId);
   refresh(dealId);
   return {};
@@ -271,7 +266,6 @@ export async function addPaymentItemAction(
   if (!fields.amount || fields.amount <= 0) return { error: "Enter an amount." };
   createPaymentItem({
     dealId,
-    partnerId: deal.partner_id,
     description: fields.description.trim(),
     amount: fields.amount,
     trigger: fields.trigger,
@@ -298,7 +292,7 @@ export async function addShipmentAction(
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
   if (!fields.product.trim()) return { error: "Describe the product." };
-  createShipment({ dealId, partnerId: deal.partner_id, ...fields, product: fields.product.trim() });
+  createShipment({ dealId, ...fields, product: fields.product.trim() });
   refresh(dealId);
   return {};
 }

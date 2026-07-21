@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import PartnerProfile from "@/components/partners/PartnerProfile";
 import { getPartner, getPartnerChannels, getPartnerDeals } from "@/lib/db";
-import { partnerStats } from "@/lib/partners";
+import { partnerStats, partnerStatus } from "@/lib/partners";
+import PartnerStatusPill from "@/components/partners/PartnerStatusPill";
 import { STAGES, dealPlatforms, PLATFORM_META } from "@/lib/types";
 import { euro, euroCpm } from "@/lib/format";
 
@@ -44,6 +45,9 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
           Partners
         </Link>{" "}
         / {partner.name}
+        <span className="ml-2 align-middle">
+          <PartnerStatusPill status={partnerStatus(deals)} />
+        </span>
       </div>
 
       <div className="space-y-4 max-w-5xl">
@@ -90,6 +94,10 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
                   <th className="px-4 py-2.5 font-medium">Campaign</th>
                   <th className="px-4 py-2.5 font-medium text-right">Their ask</th>
                   <th className="px-4 py-2.5 font-medium text-right">Price</th>
+                  <th className="px-4 py-2.5 font-medium text-right" title="What that price actually cost per 1000 views">
+                    Real CPM
+                  </th>
+                  <th className="px-4 py-2.5 font-medium text-right">When</th>
                 </tr>
               </thead>
               <tbody>
@@ -114,6 +122,14 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
                     </td>
                     <td className="px-4 py-2.5 text-right font-tabular">
                       {euro(d.agreed_price ?? d.current_offer)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-tabular text-slate-500">
+                      {d.actual_views && d.agreed_price
+                        ? euroCpm((d.agreed_price / d.actual_views) * 1000)
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-xs text-slate-400 whitespace-nowrap">
+                      {d.updated_at.slice(0, 10)}
                     </td>
                   </tr>
                 ))}

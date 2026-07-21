@@ -187,6 +187,20 @@ CREATE TABLE IF NOT EXISTS usage_log (
   )`);
 }
 
+/**
+ * A collaboration item belongs to its deal, and reaches the partner through it. These
+ * columns duplicated that link, were never read, and silently went stale whenever a
+ * deal changed hands — so the schema now enforces the single path.
+ */
+for (const table of ["content_items", "payment_items", "shipments", "contracts"]) {
+  const cols = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  if (cols.includes("partner_id")) {
+    db.exec(`ALTER TABLE ${table} DROP COLUMN partner_id`);
+  }
+}
+
 // Per-deliverable results. A bundle deal spans platforms, so deal-level totals can't
 // say which platform delivered what — these can.
 {

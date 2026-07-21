@@ -1,6 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { Deal, DealAnalysis, Message } from "./types";
+import type { PriorDeal } from "./partners";
 
 export const MODEL = "claude-opus-4-8";
 
@@ -304,9 +305,40 @@ export async function parseContract(params: {
   };
 }
 
+/**
+ * What this creator has cost before. In a repeat negotiation your own history is a
+ * stronger anchor than any market rate, so it goes into the prompt whenever it exists.
+ */
+function historyBlock(history: PriorDeal[] | undefined, creator: string): string {
+  if (!history || history.length === 0) return "";
+
+  const lines = history.slice(0, 5).map((h) => {
+    const parts = [
+      `${h.date}: ${h.scope ?? "collaboration"} (${h.platforms.join(" + ")})`,
+      `agreed €${h.agreedPrice}`,
+    ];
+    if (h.firstAsk != null && h.agreedPrice != null && h.firstAsk > h.agreedPrice) {
+      const pct = Math.round(((h.firstAsk - h.agreedPrice) / h.firstAsk) * 100);
+      parts.push(`down from their €${h.firstAsk} ask (−${pct}%)`);
+    }
+    if (h.actualCpm != null) {
+      parts.push(`delivered ${h.actualViews?.toLocaleString("en")} views · real CPM €${h.actualCpm.toFixed(2)}`);
+    }
+    return `- ${parts.join(" · ")}`;
+  });
+
+  return [
+    ``,
+    `## Your history with ${creator}`,
+    ...lines,
+    `Use this: what you actually paid before is the strongest anchor you have. If they now ask for more than last time, make them justify what changed. If a past deal under-delivered on views, say so and price accordingly.`,
+  ].join("\n");
+}
+
 export async function analyzeDeal(params: {
   deal: Deal;
   playbook: PlaybookContext;
+  history?: PriorDeal[];
   reportPdfBase64?: string;
   reportImage?: { base64: string; mediaType: ImageMediaType };
   reportText?: string;
@@ -329,6 +361,8 @@ export async function analyzeDeal(params: {
   if (params.channelUrl) facts.push(`Channel URL: ${params.channelUrl}`);
   if (params.theirMessage) facts.push(`Their message / rate card:\n"""${params.theirMessage}"""`);
   if (params.reportText) facts.push(`Analytics report (text):\n"""${params.reportText}"""`);
+  const history = historyBlock(params.history, deal.creator);
+  if (history) facts.push(history);
 
   const userContent: Anthropic.ContentBlockParam[] = [];
   if (params.reportPdfBase64) {
@@ -523,6 +557,7 @@ export async function recommendNextMove(params: {
   deal: Deal;
   messages: Message[];
   playbook: PlaybookContext;
+  history?: PriorDeal[];
 }): Promise<RecoResult> {
   const { deal, messages, playbook } = params;
   const client = getClient();
@@ -549,6 +584,7 @@ export async function recommendNextMove(params: {
     `Manager's numbers — anchor €${deal.anchor ?? "?"}, target €${deal.target ?? "?"}, walk-away €${deal.walkaway ?? "?"}, breakeven €${deal.breakeven ?? "?"}`,
     `Avg views: ${deal.avg_views ?? "unknown"} · engagement: ${deal.engagement_rate ?? "unknown"}%`,
     analysis ? `Prior analysis summary: ${analysis.verdictSummary}` : "",
+    historyBlock(params.history, deal.creator),
     ``,
     `## Conversation so far`,
     thread || "(no messages yet — this is the opening offer)",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseTags, partnerStats } from "../partners";
+import { parseTags, partnerStats, partnerStatus, priorDeals } from "../partners";
 import type { Deal } from "../types";
 
 const deal = (over: Partial<Deal>): Deal =>
@@ -69,5 +69,50 @@ describe("parseTags", () => {
     expect(parseTags(null)).toEqual([]);
     expect(parseTags("not json")).toEqual([]);
     expect(parseTags('{"a":1}')).toEqual([]);
+  });
+});
+
+describe("partnerStatus", () => {
+  const at = (stage: string, updated = "2026-07-01 10:00:00") =>
+    deal({ stage: stage as Deal["stage"], updated_at: updated });
+
+  it("reads the relationship from the deals, newest state winning", () => {
+    expect(partnerStatus([])).toBe("prospect");
+    expect(partnerStatus([at("lead")])).toBe("prospect");
+    expect(partnerStatus([at("negotiating")])).toBe("negotiating");
+    expect(partnerStatus([at("analyzing")])).toBe("negotiating");
+    // Live delivery outranks an old negotiation.
+    expect(partnerStatus([at("negotiating"), at("agreed")])).toBe("delivering");
+  });
+
+  it("distinguishes a recent partner from a lapsed one", () => {
+    expect(partnerStatus([at("completed", "2026-06-01 10:00:00")], "2026-07-22")).toBe("past");
+    expect(partnerStatus([at("completed", "2025-11-01 10:00:00")], "2026-07-22")).toBe("lapsed");
+  });
+
+  it("does not call someone a partner on a declined deal alone", () => {
+    expect(partnerStatus([at("declined")])).toBe("prospect");
+  });
+});
+
+describe("priorDeals", () => {
+  it("returns only closed deals with a price, newest first, excluding the current one", () => {
+    const history = priorDeals(
+      [
+        deal({ id: 1, stage: "completed", agreed_price: 2100, first_ask: 2400, actual_views: 71_000, updated_at: "2026-04-01 10:00:00" }),
+        deal({ id: 2, stage: "agreed", agreed_price: 2450, updated_at: "2026-07-01 10:00:00" }),
+        deal({ id: 3, stage: "negotiating", agreed_price: null, updated_at: "2026-07-10 10:00:00" }),
+        deal({ id: 4, stage: "completed", agreed_price: 900, updated_at: "2026-01-01 10:00:00" }),
+      ],
+      4 // the deal being negotiated now
+    );
+
+    expect(history.map((h) => h.agreedPrice)).toEqual([2450, 2100]);
+    expect(history[1].actualCpm).toBeCloseTo(29.58, 1); // 2100 / 71k * 1000
+    expect(history[0].actualCpm).toBeNull(); // no actuals logged
+  });
+
+  it("is empty for a creator you have never closed with", () => {
+    expect(priorDeals([deal({ stage: "negotiating", agreed_price: null })])).toEqual([]);
   });
 });
