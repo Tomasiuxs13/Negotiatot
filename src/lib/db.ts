@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import type { Deal, Message } from "./types";
 import type { Campaign } from "./campaigns";
+import type { Partner, PartnerChannel } from "./partners";
 
 const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -86,6 +87,29 @@ CREATE TABLE IF NOT EXISTS usage_log (
   if (!cols.includes("job_error")) db.exec("ALTER TABLE deals ADD COLUMN job_error TEXT");
   if (!cols.includes("job_started_at")) db.exec("ALTER TABLE deals ADD COLUMN job_started_at TEXT");
   if (!cols.includes("campaign_id")) db.exec("ALTER TABLE deals ADD COLUMN campaign_id INTEGER");
+  if (!cols.includes("partner_id")) db.exec("ALTER TABLE deals ADD COLUMN partner_id INTEGER");
+  db.exec(`CREATE TABLE IF NOT EXISTS partners (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT,
+    notes TEXT,
+    tags TEXT NOT NULL DEFAULT '[]',
+    archived INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS partner_channels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    partner_id INTEGER NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+    platform TEXT NOT NULL,
+    handle TEXT,
+    url TEXT,
+    followers INTEGER,
+    avg_views INTEGER,
+    engagement_rate REAL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
   db.exec(`CREATE TABLE IF NOT EXISTS campaigns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -103,6 +127,58 @@ CREATE TABLE IF NOT EXISTS usage_log (
     output_tokens INTEGER NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
+}
+
+/**
+ * One-time backfill: deals used to store the creator as a plain string. Give every
+ * unlinked deal a real partner record (deduped by name) and seed its channels from
+ * whatever the deal already knows.
+ */
+function backfillPartners() {
+  const orphans = db
+    .prepare("SELECT * FROM deals WHERE partner_id IS NULL ORDER BY id")
+    .all() as Deal[];
+  if (orphans.length === 0) return;
+
+  const findByName = db.prepare("SELECT id FROM partners WHERE name = ? COLLATE NOCASE");
+  const insertPartner = db.prepare("INSERT INTO partners (name) VALUES (?)");
+  const linkDeal = db.prepare("UPDATE deals SET partner_id = ? WHERE id = ?");
+  const findChannel = db.prepare(
+    "SELECT id FROM partner_channels WHERE partner_id = ? AND platform = ?"
+  );
+  const insertChannel = db.prepare(
+    `INSERT INTO partner_channels (partner_id, platform, url, avg_views, engagement_rate)
+     VALUES (?, ?, ?, ?, ?)`
+  );
+
+  db.transaction(() => {
+    for (const deal of orphans) {
+      const existing = findByName.get(deal.creator) as { id: number } | undefined;
+      const partnerId =
+        existing?.id ?? Number(insertPartner.run(deal.creator).lastInsertRowid);
+      linkDeal.run(partnerId, deal.id);
+
+      let platforms: string[] = [deal.platform];
+      if (deal.platforms) {
+        try {
+          const parsed = JSON.parse(deal.platforms) as string[];
+          if (parsed.length > 0) platforms = parsed;
+        } catch {
+          /* keep the primary platform */
+        }
+      }
+      for (const platform of platforms) {
+        if (findChannel.get(partnerId, platform)) continue;
+        insertChannel.run(
+          partnerId,
+          platform,
+          platform === deal.platform ? deal.channel_url : null,
+          platform === deal.platform ? deal.avg_views : null,
+          platform === deal.platform ? deal.engagement_rate : null
+        );
+      }
+    }
+  })();
 }
 
 /** Jobs interrupted by a server restart would otherwise spin forever — fail them. */
@@ -317,6 +393,8 @@ function seedIfEmpty() {
   insertAll();
 }
 seedIfEmpty();
+// Runs after seeding so demo deals get partners too; no-ops once every deal is linked.
+backfillPartners();
 
 export function getDeals(): Deal[] {
   failStaleJobs();
@@ -326,6 +404,132 @@ export function getDeals(): Deal[] {
 export function getDeal(id: number): Deal | undefined {
   failStaleJobs();
   return db.prepare("SELECT * FROM deals WHERE id = ?").get(id) as Deal | undefined;
+}
+
+export function getPartners(includeArchived = false): Partner[] {
+  return db
+    .prepare(
+      `SELECT * FROM partners ${includeArchived ? "" : "WHERE archived = 0"} ORDER BY name COLLATE NOCASE`
+    )
+    .all() as Partner[];
+}
+
+export function getPartner(id: number): Partner | undefined {
+  return db.prepare("SELECT * FROM partners WHERE id = ?").get(id) as Partner | undefined;
+}
+
+export function findPartnerByName(name: string): Partner | undefined {
+  return db.prepare("SELECT * FROM partners WHERE name = ? COLLATE NOCASE").get(name) as
+    | Partner
+    | undefined;
+}
+
+export function getPartnerChannels(partnerId: number): PartnerChannel[] {
+  return db
+    .prepare("SELECT * FROM partner_channels WHERE partner_id = ? ORDER BY platform")
+    .all(partnerId) as PartnerChannel[];
+}
+
+export function getPartnerDeals(partnerId: number): Deal[] {
+  return db
+    .prepare("SELECT * FROM deals WHERE partner_id = ? ORDER BY updated_at DESC")
+    .all(partnerId) as Deal[];
+}
+
+export function createPartner(fields: {
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+  tags?: string[];
+}): number {
+  const info = db
+    .prepare("INSERT INTO partners (name, email, phone, notes, tags) VALUES (?, ?, ?, ?, ?)")
+    .run(
+      fields.name.trim(),
+      fields.email?.trim() || null,
+      fields.phone?.trim() || null,
+      fields.notes?.trim() || null,
+      JSON.stringify(fields.tags ?? [])
+    );
+  return Number(info.lastInsertRowid);
+}
+
+export function updatePartner(
+  id: number,
+  fields: {
+    name?: string;
+    email?: string | null;
+    phone?: string | null;
+    notes?: string | null;
+    tags?: string[];
+    archived?: 0 | 1;
+  }
+) {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  const push = (col: string, value: unknown) => {
+    sets.push(`${col} = ?`);
+    params.push(value);
+  };
+  if (fields.name !== undefined) push("name", fields.name.trim());
+  if (fields.email !== undefined) push("email", fields.email?.trim() || null);
+  if (fields.phone !== undefined) push("phone", fields.phone?.trim() || null);
+  if (fields.notes !== undefined) push("notes", fields.notes?.trim() || null);
+  if (fields.tags !== undefined) push("tags", JSON.stringify(fields.tags));
+  if (fields.archived !== undefined) push("archived", fields.archived);
+  if (sets.length === 0) return;
+  db.prepare(
+    `UPDATE partners SET ${sets.join(", ")}, updated_at = datetime('now') WHERE id = ?`
+  ).run(...params, id);
+}
+
+export function upsertPartnerChannel(fields: {
+  partnerId: number;
+  platform: string;
+  handle?: string | null;
+  url?: string | null;
+  followers?: number | null;
+  avgViews?: number | null;
+  engagementRate?: number | null;
+}) {
+  const existing = db
+    .prepare("SELECT id FROM partner_channels WHERE partner_id = ? AND platform = ?")
+    .get(fields.partnerId, fields.platform) as { id: number } | undefined;
+
+  if (existing) {
+    db.prepare(
+      `UPDATE partner_channels SET handle = ?, url = ?, followers = ?, avg_views = ?,
+         engagement_rate = ?, updated_at = datetime('now') WHERE id = ?`
+    ).run(
+      fields.handle ?? null,
+      fields.url ?? null,
+      fields.followers ?? null,
+      fields.avgViews ?? null,
+      fields.engagementRate ?? null,
+      existing.id
+    );
+    return existing.id;
+  }
+  const info = db
+    .prepare(
+      `INSERT INTO partner_channels (partner_id, platform, handle, url, followers, avg_views, engagement_rate)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      fields.partnerId,
+      fields.platform,
+      fields.handle ?? null,
+      fields.url ?? null,
+      fields.followers ?? null,
+      fields.avgViews ?? null,
+      fields.engagementRate ?? null
+    );
+  return Number(info.lastInsertRowid);
+}
+
+export function deletePartnerChannel(id: number) {
+  db.prepare("DELETE FROM partner_channels WHERE id = ?").run(id);
 }
 
 export function getCampaigns(includeArchived = false): Campaign[] {
@@ -449,6 +653,7 @@ export function createDeal(fields: {
   format?: string | null;
   campaign?: string | null;
   campaignId?: number | null;
+  partnerId?: number | null;
   stage?: string;
   first_ask?: number | null;
   status_label?: string;
@@ -457,9 +662,9 @@ export function createDeal(fields: {
 }): number {
   const info = db
     .prepare(
-      `INSERT INTO deals (creator, platform, platforms, deliverables, format, campaign, campaign_id, stage,
+      `INSERT INTO deals (creator, platform, platforms, deliverables, format, campaign, campaign_id, partner_id, stage,
         first_ask, current_ask, avg_views, engagement_rate, status_label, status_tone)
-       VALUES (@creator, @platform, @platforms, @deliverables, @format, @campaign, @campaign_id, @stage,
+       VALUES (@creator, @platform, @platforms, @deliverables, @format, @campaign, @campaign_id, @partner_id, @stage,
         @first_ask, @first_ask, @avg_views, @engagement_rate, @status_label, 'neutral')`
     )
     .run({
@@ -470,6 +675,7 @@ export function createDeal(fields: {
       format: fields.format ?? null,
       campaign: fields.campaign ?? null,
       campaign_id: fields.campaignId ?? null,
+      partner_id: fields.partnerId ?? null,
       stage: fields.stage ?? "analyzing",
       first_ask: fields.first_ask ?? null,
       avg_views: fields.avg_views ?? null,

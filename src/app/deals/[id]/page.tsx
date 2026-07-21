@@ -94,7 +94,16 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
           <div className="w-9 h-9 rounded-full bg-brand/10 text-brand-dark flex items-center justify-center font-bold text-sm">
             {deal.creator.charAt(0)}
           </div>
-          <h1 className="font-headline text-lg font-semibold text-slate-900">{deal.creator}</h1>
+          {deal.partner_id != null ? (
+            <Link
+              href={`/partners/${deal.partner_id}`}
+              className="font-headline text-lg font-semibold text-slate-900 hover:text-brand"
+            >
+              {deal.creator}
+            </Link>
+          ) : (
+            <h1 className="font-headline text-lg font-semibold text-slate-900">{deal.creator}</h1>
+          )}
           <span className="text-xs font-semibold bg-red-50 text-red-600 rounded-full px-2.5 py-1 flex items-center gap-1">
             {platforms.map((p) => (
               <span key={p} className="flex items-center gap-0.5">

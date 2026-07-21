@@ -3,7 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import sharp from "sharp";
-import { addMessage, createDeal, getCampaign, setJob, updateDeal } from "@/lib/db";
+import {
+  addMessage,
+  createDeal,
+  createPartner,
+  findPartnerByName,
+  getCampaign,
+  getPartner,
+  setJob,
+  updateDeal,
+  upsertPartnerChannel,
+} from "@/lib/db";
 import { hasApiKey, type ImageMediaType } from "@/lib/claude";
 import { performAnalysis } from "@/lib/engine";
 
@@ -57,6 +67,13 @@ export async function createDealAction(
   if (!creator) return { error: "Creator name is required." };
   if (platforms.length === 0) return { error: "Pick at least one platform." };
 
+  // Resolve the partner: an explicit pick, an existing name match, or a new record.
+  const partnerIdRaw = String(formData.get("partner_id") ?? "").trim();
+  const picked = partnerIdRaw ? getPartner(Number(partnerIdRaw)) : undefined;
+  const partner = picked ?? findPartnerByName(creator);
+  const partnerId = partner?.id ?? createPartner({ name: creator });
+  const partnerName = partner?.name ?? creator;
+
   let pdfBase64: string | undefined;
   let reportImage: { base64: string; mediaType: ImageMediaType } | undefined;
   const file = formData.get("report");
@@ -81,14 +98,26 @@ export async function createDealAction(
   }
 
   const id = createDeal({
-    creator,
+    creator: partnerName,
     platforms,
     deliverables,
     campaign: campaign || null,
     campaignId,
+    partnerId,
     avg_views: knownAvgViews,
     engagement_rate: knownEngagement,
   });
+
+  // Keep the partner's channel list in step with the deal's platforms.
+  for (const platform of platforms) {
+    upsertPartnerChannel({
+      partnerId,
+      platform,
+      url: platform === platforms[0] ? channelUrl || undefined : undefined,
+      avgViews: platform === platforms[0] ? knownAvgViews : undefined,
+      engagementRate: platform === platforms[0] ? knownEngagement : undefined,
+    });
+  }
   if (message) addMessage(id, "them", message);
   revalidatePath("/");
 

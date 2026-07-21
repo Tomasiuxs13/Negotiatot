@@ -15,8 +15,12 @@ const PLATFORMS = [
 
 export default function NewDealForm({
   campaigns = [],
+  partners = [],
+  presetPartner,
 }: {
   campaigns?: { id: number; name: string }[];
+  partners?: { id: number; name: string }[];
+  presetPartner?: { id: number; name: string };
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -54,8 +58,26 @@ export default function NewDealForm({
     <form ref={formRef} onSubmit={submit} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1.5">Creator name *</label>
-          <input name="creator" placeholder="e.g. TechWithMarta" className={inputClass} required />
+          <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+            Creator name *{" "}
+            {partners.length > 0 && (
+              <span className="font-normal text-slate-500">— existing partners autocomplete</span>
+            )}
+          </label>
+          {presetPartner && <input type="hidden" name="partner_id" value={presetPartner.id} />}
+          <input
+            name="creator"
+            list="partner-names"
+            defaultValue={presetPartner?.name}
+            placeholder="e.g. TechWithMarta"
+            className={inputClass}
+            required
+          />
+          <datalist id="partner-names">
+            {partners.map((p) => (
+              <option key={p.id} value={p.name} />
+            ))}
+          </datalist>
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1.5">
