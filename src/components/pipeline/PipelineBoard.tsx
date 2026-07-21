@@ -34,7 +34,8 @@ export default function PipelineBoard({ deals }: { deals: Deal[] }) {
   };
 
   return (
-    <div className="flex gap-4 h-[calc(100vh-280px)] pb-4">
+    // Full height minus the sticky header and page padding — the board is the page now.
+    <div className="flex gap-4 h-[calc(100vh-160px)] pb-4">
       {STAGES.map((stage) => {
         const stageDeals = items.filter((d) => d.stage === stage.key);
         const isOver = overStage === stage.key;
