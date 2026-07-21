@@ -8,6 +8,7 @@ const NAV = [
   { href: "/", label: "Pipeline", icon: "account_tree" },
   { href: "/deals", label: "Deals", icon: "handshake" },
   { href: "/partners", label: "Partners", icon: "group" },
+  { href: "/payments", label: "Payments", icon: "payments" },
   { href: "/playbook", label: "Playbook", icon: "menu_book" },
   { href: "/benchmarks", label: "Benchmarks", icon: "bar_chart" },
   { href: "/settings", label: "Settings", icon: "settings" },

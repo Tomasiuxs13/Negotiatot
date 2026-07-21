@@ -71,6 +71,14 @@ export function parseTerms(raw: string | null | undefined): ParsedTerms | null {
 
 /* ---------------------------------------------------------- content items */
 
+export function getAllContentItems(): ContentItem[] {
+  return db.prepare("SELECT * FROM content_items").all() as ContentItem[];
+}
+
+export function getAllShipments(): Shipment[] {
+  return db.prepare("SELECT * FROM shipments").all() as Shipment[];
+}
+
 export function getContentItems(dealId: number): ContentItem[] {
   return db
     .prepare("SELECT * FROM content_items WHERE deal_id = ? ORDER BY due_date IS NULL, due_date, id")

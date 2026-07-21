@@ -1,7 +1,10 @@
 import Link from "next/link";
 import PageHeader, { NewDealButton } from "@/components/PageHeader";
 import PipelineBoard from "@/components/pipeline/PipelineBoard";
+import AttentionPanel from "@/components/pipeline/AttentionPanel";
 import { getDeals, getPipelineKpis } from "@/lib/db";
+import { attentionItems } from "@/lib/attention";
+import { getAllContentItems, getAllPaymentItems, getAllShipments } from "@/lib/fulfillment";
 import { dealPlatforms } from "@/lib/types";
 import { euro, euroCpm } from "@/lib/format";
 
@@ -25,6 +28,12 @@ export default async function PipelinePage({
     ? allDeals.filter((d) => dealPlatforms(d).includes(platform as never))
     : allDeals;
   const kpis = getPipelineKpis();
+  const attention = attentionItems({
+    deals: allDeals,
+    contentItems: getAllContentItems(),
+    shipments: getAllShipments(),
+    payments: getAllPaymentItems(),
+  });
 
   return (
     <>
@@ -54,6 +63,8 @@ export default async function PipelinePage({
       />
 
       <main className="flex-1 overflow-x-auto overflow-y-auto p-8">
+        <AttentionPanel items={attention} />
+
         {/* KPI cards */}
         <div className="grid grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm flex flex-col">
