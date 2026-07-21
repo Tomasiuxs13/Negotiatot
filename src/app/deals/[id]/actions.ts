@@ -22,6 +22,7 @@ export async function markDraftAsSent(dealId: number, text: string, proposedOffe
   });
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/");
+  revalidatePath("/pipeline");
   return {};
 }
 
@@ -44,6 +45,7 @@ export async function addTheirReply(dealId: number, text: string) {
   if (!hasApiKey()) {
     revalidatePath(`/deals/${dealId}`);
     revalidatePath("/");
+  revalidatePath("/pipeline");
     return { error: `Message saved, but recommendations are unavailable: ${NO_KEY_ERROR}` };
   }
 
@@ -51,6 +53,7 @@ export async function addTheirReply(dealId: number, text: string) {
   after(() => performRecommendation(dealId));
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/");
+  revalidatePath("/pipeline");
   return {};
 }
 
@@ -75,6 +78,7 @@ export async function runAnalysis(dealId: number) {
   after(() => performAnalysis(dealId));
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/");
+  revalidatePath("/pipeline");
   return {};
 }
 
@@ -95,6 +99,7 @@ export async function saveActuals(
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/benchmarks");
   revalidatePath("/");
+  revalidatePath("/pipeline");
   return {};
 }
 
@@ -105,5 +110,6 @@ export async function deleteDeal(dealId: number) {
   db.prepare("DELETE FROM messages WHERE deal_id = ?").run(dealId);
   db.prepare("DELETE FROM deals WHERE id = ?").run(dealId);
   revalidatePath("/");
+  revalidatePath("/pipeline");
   return {};
 }

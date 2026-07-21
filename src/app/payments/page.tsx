@@ -15,7 +15,7 @@ export default function PaymentsPage() {
   const kpis = [
     { label: "Ready to approve", value: euro(sum("approvable")), tone: "text-amber-600" },
     { label: "Approved, unpaid", value: euro(sum("approved")), tone: "text-sky-600" },
-    { label: "Waiting on delivery", value: euro(sum("pending")), tone: "text-slate-900" },
+    { label: "Not yet earned", value: euro(sum("pending")), tone: "text-slate-900" },
     { label: "Paid", value: euro(sum("paid")), tone: "text-emerald-600" },
   ];
 

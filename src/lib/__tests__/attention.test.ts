@@ -13,6 +13,8 @@ const deal = (over: Partial<Deal>): Deal =>
     your_move: 0,
     round: 2,
     updated_at: "2026-07-22 09:00:00",
+    analysis: null,
+    job_status: null,
     ...over,
   }) as Deal;
 
@@ -110,6 +112,56 @@ describe("attentionItems", () => {
       contentItems: [content({ due_date: "2026-07-25", status: "posted" })],
     });
     expect(posted).toEqual([]);
+  });
+
+  it("surfaces a finished analysis nobody has acted on", () => {
+    const fresh = attentionItems({
+      ...base,
+      deals: [deal({ stage: "analyzing", analysis: "{}", job_status: null, updated_at: "2026-07-22 09:00:00" })],
+    });
+    expect(fresh[0].title).toContain("verdict ready to review");
+    expect(fresh[0].severity).toBe("info");
+
+    const stale = attentionItems({
+      ...base,
+      deals: [deal({ stage: "analyzing", analysis: "{}", job_status: null, updated_at: "2026-07-15 09:00:00" })],
+    });
+    expect(stale[0].severity).toBe("warning");
+    expect(stale[0].detail).toContain("7 days");
+  });
+
+  it("stays quiet while the analysis is still running", () => {
+    const items = attentionItems({
+      ...base,
+      deals: [deal({ stage: "analyzing", analysis: null, job_status: "analyzing" })],
+    });
+    expect(items).toEqual([]);
+  });
+
+  it("suggests wrapping up a deal once content is verified and money is paid", () => {
+    const done = attentionItems({
+      ...base,
+      deals: [deal({ stage: "agreed" })],
+      contentItems: [content({ status: "verified" })],
+      payments: [payment({ status: "paid" })],
+    });
+    expect(done[0].title).toContain("ready to wrap up");
+
+    const stillOwed = attentionItems({
+      ...base,
+      deals: [deal({ stage: "agreed" })],
+      contentItems: [content({ status: "verified" })],
+      payments: [payment({ status: "approved" })],
+    });
+    expect(stillOwed).toEqual([]);
+  });
+
+  it("tells you to chase the creator on overdue content", () => {
+    const items = attentionItems({
+      ...base,
+      contentItems: [content({ due_date: "2026-07-19", status: "planned" })],
+    });
+    expect(items[0].detail).toContain("check in with Marta");
   });
 
   it("nudges stale leads", () => {

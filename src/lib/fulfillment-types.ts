@@ -124,3 +124,27 @@ export const PAYMENT_TRIGGER_LABEL: Record<PaymentTrigger, string> = {
   on_verification: "On content verified",
   date: "On date",
 };
+
+export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
+  pending: "Waiting",
+  approvable: "Ready to approve",
+  approved: "Approved",
+  paid: "Paid",
+};
+
+/**
+ * Why a payment is still waiting, in the partner's terms. A single hardcoded reason
+ * misleads: a balance held for content verification is not a shipping problem.
+ */
+export function pendingReason(p: Pick<PaymentItem, "trigger" | "due_date">): string {
+  switch (p.trigger) {
+    case "on_verification":
+      return "waiting on content verification";
+    case "on_delivery":
+      return "waiting on product delivery";
+    case "date":
+      return p.due_date ? `due ${p.due_date}` : "waiting on a date";
+    case "on_signing":
+      return "waiting on signature";
+  }
+}

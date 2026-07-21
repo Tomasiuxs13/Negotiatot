@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useTransition } from "react";
 import type { PaymentItem } from "@/lib/fulfillment-types";
-import { PAYMENT_TRIGGER_LABEL } from "@/lib/fulfillment-types";
+import { PAYMENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL, pendingReason } from "@/lib/fulfillment-types";
 import { euro } from "@/lib/format";
 import { setPaymentStatusAction } from "@/app/deals/[id]/fulfillment-actions";
 
@@ -12,13 +12,6 @@ const TONE: Record<string, string> = {
   approvable: "bg-amber-50 text-amber-700",
   approved: "bg-sky-50 text-sky-700",
   paid: "bg-emerald-50 text-emerald-700",
-};
-
-const LABEL: Record<string, string> = {
-  pending: "Waiting",
-  approvable: "Ready to approve",
-  approved: "Approved",
-  paid: "Paid",
 };
 
 export default function PaymentsQueue({
@@ -58,7 +51,7 @@ export default function PaymentsQueue({
             <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
               <td className="px-4 py-3">
                 <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${TONE[p.status]}`}>
-                  {LABEL[p.status]}
+                  {PAYMENT_STATUS_LABEL[p.status]}
                 </span>
               </td>
               <td className="px-4 py-3">
@@ -84,20 +77,34 @@ export default function PaymentsQueue({
                   </button>
                 )}
                 {p.status === "approved" && (
-                  <button
-                    onClick={() =>
-                      startTransition(async () => {
-                        await setPaymentStatusAction(p.id, p.deal_id, "paid");
-                      })
-                    }
-                    disabled={isPending}
-                    className="border border-slate-200 hover:border-slate-400 text-slate-700 rounded-md py-1 px-3 text-xs font-medium transition-colors disabled:opacity-60"
-                  >
-                    Mark paid
-                  </button>
+                  <span className="inline-flex items-center gap-2">
+                    <button
+                      onClick={() =>
+                        startTransition(async () => {
+                          await setPaymentStatusAction(p.id, p.deal_id, "approvable");
+                        })
+                      }
+                      disabled={isPending}
+                      className="text-xs text-slate-400 hover:text-slate-700 disabled:opacity-50"
+                      title="Undo approval"
+                    >
+                      undo
+                    </button>
+                    <button
+                      onClick={() =>
+                        startTransition(async () => {
+                          await setPaymentStatusAction(p.id, p.deal_id, "paid");
+                        })
+                      }
+                      disabled={isPending}
+                      className="border border-slate-200 hover:border-slate-400 text-slate-700 rounded-md py-1 px-3 text-xs font-medium transition-colors disabled:opacity-60"
+                    >
+                      Mark paid
+                    </button>
+                  </span>
                 )}
                 {p.status === "pending" && (
-                  <span className="text-xs text-slate-400">content not verified</span>
+                  <span className="text-xs text-slate-400">{pendingReason(p)}</span>
                 )}
                 {p.status === "paid" && p.paid_at && (
                   <span className="text-xs text-slate-400 font-tabular">{p.paid_at.slice(0, 10)}</span>

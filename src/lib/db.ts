@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import type { Deal, Message } from "./types";
+import { ALL_STAGES } from "./types";
 import type { Campaign } from "./campaigns";
 import type { Partner, PartnerChannel } from "./partners";
 
@@ -192,17 +193,22 @@ CREATE TABLE IF NOT EXISTS usage_log (
  * added by earlier migrations) and only swap the constraint, so this stays correct as
  * the schema grows.
  */
+/**
+ * SQLite can't ALTER a CHECK constraint, so adding a stage means rebuilding the table
+ * from its own stored DDL with the constraint swapped. Driven by ALL_STAGES, so future
+ * stages migrate an existing database on next boot without another bespoke migration.
+ */
 function widenStageConstraint() {
   const row = db
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'deals'")
     .get() as { sql: string } | undefined;
-  if (!row || row.sql.includes("'lead'")) return;
+  if (!row) return;
+
+  const wanted = `CHECK (stage IN (${ALL_STAGES.map((s) => `'${s}'`).join(",")}))`;
+  if (row.sql.includes(wanted)) return;
 
   const rebuilt = row.sql
-    .replace(
-      /CHECK\s*\(\s*stage\s+IN\s*\([^)]*\)\s*\)/i,
-      "CHECK (stage IN ('lead','contacted','analyzing','offer_sent','negotiating','agreed','declined'))"
-    )
+    .replace(/CHECK\s*\(\s*stage\s+IN\s*\([^)]*\)\s*\)/i, wanted)
     .replace(/CREATE TABLE\s+"?deals"?/i, "CREATE TABLE deals_migrate");
 
   db.pragma("foreign_keys = OFF");
@@ -833,8 +839,11 @@ export interface PipelineKpis {
 
 export function getPipelineKpis(): PipelineKpis {
   const deals = getDeals();
-  const active = deals.filter((d) => d.stage !== "agreed" && d.stage !== "declined");
-  const agreed = deals.filter((d) => d.stage === "agreed");
+  const active = deals.filter(
+    (d) => d.stage !== "agreed" && d.stage !== "completed" && d.stage !== "declined"
+  );
+  // Won deals, whether still being delivered or fully wrapped up.
+  const agreed = deals.filter((d) => d.stage === "agreed" || d.stage === "completed");
 
   // SQLite datetime('now') stores "YYYY-MM-DD HH:MM:SS" in UTC.
   const currentMonth = new Date().toISOString().slice(0, 7);

@@ -4,8 +4,10 @@ import { getCampaign, getDeal, getMessages, getUsageTotals } from "@/lib/db";
 import { describeOverrides, parseOverrides } from "@/lib/campaigns";
 import { PLATFORM_META, STAGES, dealPlatforms, dealScope } from "@/lib/types";
 import PriceLadder from "@/components/deal/PriceLadder";
+import DealProgress from "@/components/deal/DealProgress";
 import DealTabs from "@/components/deal/DealTabs";
 import DeleteDealButton from "@/components/deal/DeleteDealButton";
+import CompleteDealButton from "@/components/deal/CompleteDealButton";
 import ActualsPanel from "@/components/deal/ActualsPanel";
 import JobPoller, { JobChip } from "@/components/deal/JobPoller";
 import ContractBlock from "@/components/deal/ContractBlock";
@@ -29,6 +31,7 @@ const STAGE_PILL: Record<string, string> = {
   offer_sent: "bg-sky-50 text-sky-700 border border-sky-200",
   negotiating: "bg-amber-50 text-amber-700 border border-amber-200",
   agreed: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+  completed: "bg-slate-100 text-slate-600 border border-slate-200",
   declined: "bg-red-50 text-red-700 border border-red-200",
 };
 
@@ -44,12 +47,26 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   const contentItems = getContentItems(deal.id);
   const paymentItems = getPaymentItems(deal.id);
   const shipments = getShipments(deal.id);
+  /** Price is settled — the header should report delivery, not the negotiation. */
+  const closed = deal.stage === "agreed" || deal.stage === "completed";
   const showFulfillment =
     deal.stage === "agreed" ||
     contract != null ||
     contentItems.length > 0 ||
     paymentItems.length > 0 ||
     shipments.length > 0;
+
+  const workDone = (() => {
+    const unverified = contentItems.filter((c) => c.status !== "verified").length;
+    const unpaid = paymentItems.filter((p) => p.status !== "paid").length;
+    const open: string[] = [];
+    if (unverified > 0) open.push(`${unverified} content item${unverified === 1 ? "" : "s"} not verified`);
+    if (unpaid > 0) open.push(`${unpaid} payment${unpaid === 1 ? "" : "s"} not paid`);
+    return {
+      ready: open.length === 0 && (contentItems.length > 0 || paymentItems.length > 0),
+      openWork: open.length > 0 ? `Still open: ${open.join(", ")}.` : "Nothing tracked on this deal yet.",
+    };
+  })();
 
   const campaign = deal.campaign_id != null ? getCampaign(deal.campaign_id) : undefined;
   const campaignOverrides = campaign ? describeOverrides(parseOverrides(campaign.overrides)) : [];
@@ -102,7 +119,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
       <div className="text-xs text-slate-500 mb-3">
-        <Link href="/" className="underline underline-offset-2 hover:text-slate-700">
+        <Link href="/pipeline" className="underline underline-offset-2 hover:text-slate-700">
           Pipeline
         </Link>{" "}
         / {deal.creator}
@@ -124,7 +141,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
           ) : (
             <h1 className="font-headline text-lg font-semibold text-slate-900">{deal.creator}</h1>
           )}
-          <span className="text-xs font-semibold bg-red-50 text-red-600 rounded-full px-2.5 py-1 flex items-center gap-1">
+          <span className="text-xs font-medium bg-slate-100 text-slate-600 rounded-full px-2.5 py-1 flex items-center gap-1">
             {platforms.map((p) => (
               <span key={p} className="flex items-center gap-0.5">
                 <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
@@ -137,7 +154,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
           </span>
           <span className={`text-xs font-semibold rounded-full px-2.5 py-1 ${STAGE_PILL[deal.stage]}`}>
             {STAGE_LABEL[deal.stage] ?? deal.stage}
-            {deal.round > 0 ? ` · Round ${deal.round}` : ""}
+            {deal.round > 0 && !closed ? ` · Round ${deal.round}` : ""}
           </span>
           {deal.job_status && (
             <JobChip
@@ -159,10 +176,21 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
               </span>
             )}
           </span>
+          {deal.stage === "agreed" && (
+            <CompleteDealButton
+              dealId={deal.id}
+              ready={workDone.ready}
+              openWork={workDone.openWork}
+            />
+          )}
           <DeleteDealButton dealId={deal.id} creator={deal.creator} />
         </div>
 
-        <PriceLadder deal={deal} />
+        {closed ? (
+          <DealProgress deal={deal} contentItems={contentItems} paymentItems={paymentItems} />
+        ) : (
+          <PriceLadder deal={deal} />
+        )}
       </div>
 
       <DealTabs

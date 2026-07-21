@@ -56,11 +56,12 @@ export function attentionItems({
   for (const c of contentItems) {
     if (!isOverdue(c, today)) continue;
     const late = c.due_date ? daysBetween(c.due_date, today) : 0;
+    const who = nameOf(c.deal_id);
     items.push({
       id: `content-overdue-${c.id}`,
       severity: "critical",
-      title: `${nameOf(c.deal_id)} — content overdue`,
-      detail: `${c.title} was due ${c.due_date} (${late} day${late === 1 ? "" : "s"} ago)`,
+      title: `${who} — content overdue`,
+      detail: `${c.title} was due ${late} day${late === 1 ? "" : "s"} ago — check in with ${who}`,
       href: `/deals/${c.deal_id}`,
     });
   }
@@ -118,6 +119,22 @@ export function attentionItems({
     }
   }
 
+  // Analysis finished and nobody has acted on the verdict.
+  for (const d of deals) {
+    if (d.stage !== "analyzing" || d.job_status != null || d.analysis == null) continue;
+    const waiting = daysBetween(d.updated_at, today);
+    items.push({
+      id: `verdict-${d.id}`,
+      severity: waiting >= silentDays ? "warning" : "info",
+      title: `${d.creator} — verdict ready to review`,
+      detail:
+        waiting >= 1
+          ? `Waiting ${waiting} day${waiting === 1 ? "" : "s"} — send an offer or decline`
+          : "Send an offer or decline",
+      href: `/deals/${d.id}`,
+    });
+  }
+
   // Your move in a live negotiation.
   for (const d of deals) {
     if (d.your_move !== 1) continue;
@@ -157,6 +174,25 @@ export function attentionItems({
         title: `${nameOf(c.deal_id)} — content due in ${days} day${days === 1 ? "" : "s"}`,
         detail: c.title,
         href: `/deals/${c.deal_id}`,
+      });
+    }
+  }
+
+  // Deals where the work and the money are both done — close them out so the board
+  // reflects live work rather than history.
+  for (const d of deals) {
+    if (d.stage !== "agreed") continue;
+    const content = contentItems.filter((c) => c.deal_id === d.id);
+    const dealPayments = payments.filter((p) => p.deal_id === d.id);
+    const contentDone = content.length > 0 && content.every((c) => c.status === "verified");
+    const paid = dealPayments.length > 0 && dealPayments.every((p) => p.status === "paid");
+    if (contentDone && paid) {
+      items.push({
+        id: `wrap-up-${d.id}`,
+        severity: "info",
+        title: `${d.creator} — ready to wrap up`,
+        detail: "All content verified and paid — mark the deal completed",
+        href: `/deals/${d.id}`,
       });
     }
   }

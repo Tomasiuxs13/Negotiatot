@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { ContentItem, PaymentItem, Shipment, ContentStatus, PaymentTrigger } from "@/lib/fulfillment-types";
-import { CONTENT_STATUS_FLOW, CONTENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL } from "@/lib/fulfillment-types";
+import { CONTENT_STATUS_FLOW, CONTENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL, pendingReason } from "@/lib/fulfillment-types";
 import { isOverdue } from "@/lib/fulfillment-rules";
 import { euro } from "@/lib/format";
 import {
@@ -421,7 +421,21 @@ export function PaymentItemsBlock({ dealId, payments }: { dealId: number; paymen
               </button>
             )}
             {p.status === "pending" && (
-              <span className="text-xs text-slate-400">waiting on delivery</span>
+              <span className="text-xs text-slate-400">{pendingReason(p)}</span>
+            )}
+            {p.status === "approved" && (
+              <button
+                onClick={() =>
+                  startTransition(async () => {
+                    await setPaymentStatusAction(p.id, dealId, "approvable");
+                  })
+                }
+                disabled={isPending}
+                className="text-xs text-slate-400 hover:text-slate-700 disabled:opacity-50"
+                title="Undo approval"
+              >
+                undo
+              </button>
             )}
             <button
               onClick={() =>

@@ -71,8 +71,11 @@ export default async function PartnersPage({
                   <th className="px-4 py-3 font-medium">Partner</th>
                   <th className="px-4 py-3 font-medium">Channels</th>
                   <th className="px-4 py-3 font-medium text-right">Deals</th>
-                  <th className="px-4 py-3 font-medium text-right">Total spend</th>
-                  <th className="px-4 py-3 font-medium text-right">Avg CPM</th>
+                  <th className="px-4 py-3 font-medium text-right">Committed</th>
+                  <th className="px-4 py-3 font-medium text-right">Paid</th>
+                  <th className="px-4 py-3 font-medium text-right" title="From deals with logged actuals only">
+                    Actual CPM
+                  </th>
                   <th className="px-4 py-3 font-medium text-right">Saved</th>
                 </tr>
               </thead>
@@ -115,15 +118,22 @@ export default async function PartnersPage({
                         {channels.length === 0 && <span className="text-xs text-slate-400">—</span>}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right font-tabular">
+                    <td className="px-4 py-3 text-right font-tabular whitespace-nowrap">
                       {stats.totalDeals}
                       {stats.activeDeals > 0 && (
-                        <span className="text-xs text-amber-600 ml-1">({stats.activeDeals} active)</span>
+                        <span className="text-xs text-amber-600 ml-1.5">
+                          · {stats.activeDeals} active
+                        </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right font-tabular">{euro(stats.totalSpend)}</td>
+                    <td className="px-4 py-3 text-right font-tabular">
+                      {stats.committed > 0 ? euro(stats.committed) : "—"}
+                    </td>
                     <td className="px-4 py-3 text-right font-tabular text-slate-500">
-                      {stats.avgClosedCpm != null ? euroCpm(stats.avgClosedCpm) : "—"}
+                      {stats.paid > 0 ? euro(stats.paid) : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right font-tabular text-slate-500">
+                      {stats.actualCpm != null ? euroCpm(stats.actualCpm) : "—"}
                     </td>
                     <td className="px-4 py-3 text-right font-tabular text-emerald-600">
                       {stats.savedVsAsk > 0 ? euro(stats.savedVsAsk) : "—"}

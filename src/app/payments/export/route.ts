@@ -1,5 +1,5 @@
 import { getAllPaymentItems } from "@/lib/fulfillment";
-import { PAYMENT_TRIGGER_LABEL } from "@/lib/fulfillment-types";
+import { PAYMENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL } from "@/lib/fulfillment-types";
 
 /** Escapes a value for CSV: quotes it and doubles any inner quotes. */
 function cell(value: unknown): string {
@@ -26,7 +26,7 @@ export async function GET() {
       p.description,
       p.amount,
       PAYMENT_TRIGGER_LABEL[p.trigger] ?? p.trigger,
-      p.status,
+      PAYMENT_STATUS_LABEL[p.status] ?? p.status,
       p.approved_at ?? "",
       p.paid_at ?? "",
       p.deal_id,

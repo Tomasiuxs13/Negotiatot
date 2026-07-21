@@ -22,11 +22,12 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
   const kpis = [
     { label: "Deals", value: String(stats.totalDeals), sub: `${stats.activeDeals} active` },
     { label: "Won", value: String(stats.wonDeals), sub: "closed deals" },
-    { label: "Total spend", value: euro(stats.totalSpend), sub: "agreed prices" },
+    { label: "Committed", value: euro(stats.committed), sub: "agreed fees" },
+    { label: "Paid", value: stats.paid > 0 ? euro(stats.paid) : "—", sub: "completed deals" },
     {
-      label: "Avg closed CPM",
-      value: stats.avgClosedCpm != null ? euroCpm(stats.avgClosedCpm) : "—",
-      sub: "across closed deals",
+      label: "Actual CPM",
+      value: stats.actualCpm != null ? euroCpm(stats.actualCpm) : "—",
+      sub: stats.actualCpm != null ? "from logged actuals" : "no actuals logged",
     },
     {
       label: "Saved vs ask",

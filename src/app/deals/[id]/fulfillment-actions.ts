@@ -39,6 +39,7 @@ function refresh(dealId: number) {
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/payments");
   revalidatePath("/");
+  revalidatePath("/pipeline");
 }
 
 /* ---------------------------------------------------------------- contract */

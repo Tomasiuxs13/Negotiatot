@@ -26,7 +26,6 @@ export default function AttentionPanel({ items }: { items: AttentionItem[] }) {
   }
 
   const critical = items.filter((i) => i.severity === "critical").length;
-  const shown = items.slice(0, 6);
 
   return (
     <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5 mb-6">
@@ -41,7 +40,7 @@ export default function AttentionPanel({ items }: { items: AttentionItem[] }) {
       </div>
 
       <div className="divide-y divide-slate-100">
-        {shown.map((item) => (
+        {items.map((item) => (
           <Link
             key={item.id}
             href={item.href}
@@ -64,11 +63,6 @@ export default function AttentionPanel({ items }: { items: AttentionItem[] }) {
         ))}
       </div>
 
-      {items.length > shown.length && (
-        <p className="text-xs text-slate-400 mt-2">
-          + {items.length - shown.length} more
-        </p>
-      )}
     </div>
   );
 }

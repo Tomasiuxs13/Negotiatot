@@ -8,6 +8,7 @@ function revalidateAll() {
   revalidatePath("/playbook");
   revalidatePath("/new");
   revalidatePath("/");
+  revalidatePath("/pipeline");
 }
 
 export async function saveCampaignAction(payload: {

@@ -6,6 +6,8 @@ import { STAGES } from "@/lib/types";
 import DealCard from "./DealCard";
 import { moveDealStage } from "@/app/pipeline-actions";
 
+const COMPLETED_PREVIEW = 5;
+
 export default function PipelineBoard({ deals }: { deals: Deal[] }) {
   // Optimistic local copy so cards move instantly on drop.
   const [items, setItems] = useState(deals);
@@ -36,6 +38,10 @@ export default function PipelineBoard({ deals }: { deals: Deal[] }) {
       {STAGES.map((stage) => {
         const stageDeals = items.filter((d) => d.stage === stage.key);
         const isOver = overStage === stage.key;
+        // Completed deals stay droppable but don't pile up forever — the column shows the
+        // most recent few and sends you to the list for the rest.
+        const capped = stage.key === "completed" && stageDeals.length > COMPLETED_PREVIEW;
+        const visible = capped ? stageDeals.slice(0, COMPLETED_PREVIEW) : stageDeals;
         return (
           <div
             key={stage.key}
@@ -69,7 +75,7 @@ export default function PipelineBoard({ deals }: { deals: Deal[] }) {
               </a>
             </div>
             <div className="flex-1 overflow-y-auto space-y-3 px-1 pt-3 custom-scrollbar">
-              {stageDeals.map((deal) => (
+              {visible.map((deal) => (
                 <div
                   key={deal.id}
                   draggable
@@ -83,6 +89,14 @@ export default function PipelineBoard({ deals }: { deals: Deal[] }) {
                   <DealCard deal={deal} />
                 </div>
               ))}
+              {capped && (
+                <a
+                  href={`/pipeline?view=list&stage=${stage.key}`}
+                  className="block text-xs text-slate-500 hover:text-slate-800 text-center py-2 border border-dashed border-slate-200 rounded-lg"
+                >
+                  View all {stageDeals.length} completed →
+                </a>
+              )}
               {stageDeals.length === 0 && (
                 <div className="text-xs text-slate-400 text-center py-8 border border-dashed border-slate-200 rounded-lg">
                   {isOver ? "Drop here" : "No deals in this stage"}

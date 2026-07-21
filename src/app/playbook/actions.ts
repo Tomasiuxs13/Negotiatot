@@ -19,6 +19,7 @@ export async function savePlaybookAction(payload: PlaybookPayload): Promise<{ er
     setSetting("negotiation_style", payload.negotiationStyle);
     revalidatePath("/playbook");
     revalidatePath("/");
+  revalidatePath("/pipeline");
     return {};
   } catch (err) {
     console.error("savePlaybookAction failed:", err);

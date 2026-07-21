@@ -58,7 +58,7 @@ export default function DealCard({ deal }: { deal: Deal }) {
     if (deal.current_offer != null) rows.push({ label: "Our offer:", value: euro(deal.current_offer) });
     if (deal.current_ask != null && deal.current_offer != null)
       rows.push({ label: "Gap:", value: euro(deal.current_ask - deal.current_offer), accent: "warn" });
-  } else if (deal.stage === "agreed") {
+  } else if (deal.stage === "agreed" || deal.stage === "completed") {
     if (deal.agreed_price != null) rows.push({ label: "Final:", value: euro(deal.agreed_price) });
     if (deal.first_ask != null && deal.agreed_price != null)
       rows.push({ label: "Saved:", value: euro(deal.first_ask - deal.agreed_price), accent: "good" });

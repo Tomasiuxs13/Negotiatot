@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 import { euro } from "@/lib/format";
 
 const NAV = [
-  { href: "/", label: "Pipeline", icon: "account_tree" },
-  { href: "/deals", label: "Deals", icon: "handshake" },
+  { href: "/", label: "Dashboard", icon: "space_dashboard" },
+  { href: "/pipeline", label: "Pipeline", icon: "account_tree" },
   { href: "/partners", label: "Partners", icon: "group" },
   { href: "/payments", label: "Payments", icon: "payments" },
   { href: "/playbook", label: "Playbook", icon: "menu_book" },

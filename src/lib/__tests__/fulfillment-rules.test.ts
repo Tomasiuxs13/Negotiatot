@@ -7,6 +7,7 @@ import {
   parseLinkedIds,
   paymentApprovable,
 } from "../fulfillment-rules";
+import { pendingReason } from "../fulfillment-types";
 
 const content = (id: number, status: string) => ({ id, status }) as never;
 const payment = (over: Record<string, unknown>) =>
@@ -102,5 +103,18 @@ describe("parseLinkedIds", () => {
     expect(parseLinkedIds("[1,2,3]")).toEqual([1, 2, 3]);
     expect(parseLinkedIds(null)).toEqual([]);
     expect(parseLinkedIds("nope")).toEqual([]);
+  });
+});
+
+describe("pendingReason", () => {
+  it("names the actual blocker rather than assuming a shipment", () => {
+    expect(pendingReason({ trigger: "on_verification", due_date: null })).toBe(
+      "waiting on content verification"
+    );
+    expect(pendingReason({ trigger: "on_delivery", due_date: null })).toBe(
+      "waiting on product delivery"
+    );
+    expect(pendingReason({ trigger: "date", due_date: "2026-08-04" })).toBe("due 2026-08-04");
+    expect(pendingReason({ trigger: "on_signing", due_date: null })).toBe("waiting on signature");
   });
 });

@@ -20,7 +20,7 @@ export default function SettingsPage() {
       label: "Claude API key",
       value: keyConfigured ? "Configured ✓" : "Missing",
       tone: keyConfigured ? "text-emerald-600" : "text-red-600",
-      note: "Set via ANTHROPIC_API_KEY in counterpart/.env.local — restart the dev server after changing it.",
+      note: "Set via ANTHROPIC_API_KEY in .env.local — restart the app after changing it.",
     },
     {
       label: "Model",
@@ -30,9 +30,9 @@ export default function SettingsPage() {
     },
     {
       label: "Database",
-      value: `SQLite · ${dealCount} deals`,
+      value: `SQLite · ${dealCount} deal${dealCount === 1 ? "" : "s"}`,
       tone: "text-slate-900",
-      note: "Stored locally at counterpart/data/counterpart.db — back this file up to keep your deal history.",
+      note: "Stored locally in the app's data/ folder — back up the whole folder (not just the .db file) to keep your deal history.",
     },
     {
       label: "Currency",
@@ -42,7 +42,7 @@ export default function SettingsPage() {
     },
     {
       label: "API usage",
-      value: `${usage.calls} calls · ≈ $${estCost.toFixed(2)}`,
+      value: `${usage.calls} call${usage.calls === 1 ? "" : "s"} · ≈ $${estCost.toFixed(2)}`,
       tone: "text-slate-900",
       note: `${usage.inputTokens.toLocaleString("en")} input + ${usage.outputTokens.toLocaleString("en")} output tokens across all analyses and recommendations. Estimate at $${INPUT_PER_M}/$${OUTPUT_PER_M} per million tokens; cached tokens make the real bill slightly lower.`,
     },

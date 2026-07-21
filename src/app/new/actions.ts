@@ -126,6 +126,7 @@ export async function createDealAction(
   if (message) addMessage(id, "them", message);
   if (channelUrl) updateDeal(id, { channel_url: channelUrl });
   revalidatePath("/");
+  revalidatePath("/pipeline");
 
   // Pre-analysis stages: capture the lead now, analyze when it's worth the spend.
   if (isPreAnalysis) {

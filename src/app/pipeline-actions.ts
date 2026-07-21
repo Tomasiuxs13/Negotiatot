@@ -3,16 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getDeal, updateDeal } from "@/lib/db";
 import type { Stage } from "@/lib/types";
-
-const VALID: Stage[] = [
-  "lead",
-  "contacted",
-  "analyzing",
-  "offer_sent",
-  "negotiating",
-  "agreed",
-  "declined",
-];
+import { ALL_STAGES } from "@/lib/types";
 
 const STAGE_STATUS: Record<Stage, { label: string; tone: "good" | "warn" | "neutral" }> = {
   lead: { label: "New lead", tone: "neutral" },
@@ -21,11 +12,12 @@ const STAGE_STATUS: Record<Stage, { label: string; tone: "good" | "warn" | "neut
   offer_sent: { label: "Offer sent · waiting", tone: "neutral" },
   negotiating: { label: "Negotiating", tone: "warn" },
   agreed: { label: "Agreed", tone: "good" },
+  completed: { label: "Completed", tone: "good" },
   declined: { label: "Declined", tone: "warn" },
 };
 
 export async function moveDealStage(dealId: number, stage: Stage) {
-  if (!VALID.includes(stage)) return { error: "Invalid stage" };
+  if (!ALL_STAGES.includes(stage)) return { error: "Invalid stage" };
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
   if (deal.stage === stage) return {};
@@ -42,6 +34,7 @@ export async function moveDealStage(dealId: number, stage: Stage) {
   }
   updateDeal(dealId, fields);
   revalidatePath("/");
+  revalidatePath("/pipeline");
   revalidatePath(`/deals/${dealId}`);
   return {};
 }

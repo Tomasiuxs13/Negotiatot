@@ -6,7 +6,23 @@ export type Stage =
   | "offer_sent"
   | "negotiating"
   | "agreed"
+  | "completed"
   | "declined";
+
+/** Single source of truth for the stage CHECK constraint and stage validation. */
+export const ALL_STAGES: Stage[] = [
+  "lead",
+  "contacted",
+  "analyzing",
+  "offer_sent",
+  "negotiating",
+  "agreed",
+  "completed",
+  "declined",
+];
+
+/** Deals that are finished — excluded from the working pipeline and active counts. */
+export const TERMINAL_STAGES: Stage[] = ["completed", "declined"];
 export type StatusTone = "good" | "warn" | "neutral";
 
 export interface Deal {
@@ -92,10 +108,13 @@ export interface CopilotReco {
 export const STAGES: { key: Stage; label: string }[] = [
   { key: "lead", label: "Lead" },
   { key: "contacted", label: "Contacted" },
-  { key: "analyzing", label: "Analyzing" },
+  // Named for the human's job, not the machine's: once analysis lands, the deal is
+  // sitting there waiting on a decision.
+  { key: "analyzing", label: "To review" },
   { key: "offer_sent", label: "Offer Sent" },
   { key: "negotiating", label: "Negotiating" },
   { key: "agreed", label: "Agreed" },
+  { key: "completed", label: "Completed" },
 ];
 
 export const PLATFORM_META: Record<Platform, { label: string; icon: string }> = {

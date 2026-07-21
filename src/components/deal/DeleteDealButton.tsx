@@ -14,7 +14,7 @@ export default function DeleteDealButton({ dealId, creator }: { dealId: number; 
     }
     startTransition(async () => {
       await deleteDeal(dealId);
-      router.push("/");
+      router.push("/pipeline");
     });
   };
 

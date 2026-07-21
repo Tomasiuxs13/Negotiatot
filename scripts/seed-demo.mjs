@@ -426,9 +426,11 @@ console.log("Seeding demo deals…");
 {
   const dataDives = db.prepare("SELECT id, partner_id FROM deals WHERE creator = 'DataDives'").get();
   if (dataDives) {
+    // Delivered, paid and logged — the end state of the lifecycle.
     db.prepare(
       `UPDATE deals SET actual_views = 61000, actual_clicks = 780, actual_orders = 24,
-         actual_revenue = 2880, actuals_logged_at = ?, deal_type = 'paid' WHERE id = ?`
+         actual_revenue = 2880, actuals_logged_at = ?, deal_type = 'paid',
+         stage = 'completed', status_label = 'Completed', status_tone = 'good' WHERE id = ?`
     ).run(stamp(-4), dataDives.id);
 
     const existingContent = db.prepare("SELECT COUNT(*) n FROM content_items WHERE deal_id = ?").get(dataDives.id).n;

@@ -1,127 +1,126 @@
 import Link from "next/link";
 import PageHeader, { NewDealButton } from "@/components/PageHeader";
-import PipelineBoard from "@/components/pipeline/PipelineBoard";
 import AttentionPanel from "@/components/pipeline/AttentionPanel";
 import { getDeals, getPipelineKpis } from "@/lib/db";
 import { attentionItems } from "@/lib/attention";
 import { getAllContentItems, getAllPaymentItems, getAllShipments } from "@/lib/fulfillment";
-import { dealPlatforms } from "@/lib/types";
+import { STAGES, TERMINAL_STAGES } from "@/lib/types";
 import { euro, euroCpm } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-const FILTERS = [
-  { key: "", label: "All" },
-  { key: "youtube", label: "YouTube" },
-  { key: "instagram", label: "Instagram" },
-  { key: "tiktok", label: "TikTok" },
-];
-
-export default async function PipelinePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ platform?: string }>;
-}) {
-  const { platform = "" } = await searchParams;
-  const allDeals = getDeals();
-  const deals = platform
-    ? allDeals.filter((d) => dealPlatforms(d).includes(platform as never))
-    : allDeals;
+export default function DashboardPage() {
+  const deals = getDeals();
+  const payments = getAllPaymentItems();
   const kpis = getPipelineKpis();
   const attention = attentionItems({
-    deals: allDeals,
+    deals,
     contentItems: getAllContentItems(),
     shipments: getAllShipments(),
-    payments: getAllPaymentItems(),
+    payments,
   });
+
+  const outstanding = payments
+    .filter((p) => p.status !== "paid")
+    .reduce((sum, p) => sum + p.amount, 0);
+  const toApprove = payments.filter((p) => p.status === "approvable");
+
+  const kpiCards = [
+    {
+      label: "Active deals",
+      value: String(kpis.activeDeals),
+      note:
+        kpis.waitingOnYou > 0
+          ? `${kpis.waitingOnYou} waiting on you`
+          : "none waiting on you",
+      noteTone: kpis.waitingOnYou > 0 ? "text-amber-600" : "text-slate-500",
+      href: "/pipeline",
+    },
+    {
+      label: "Committed / cap",
+      value: euro(kpis.committed),
+      note: `of ${euro(kpis.monthlyCap)} this month`,
+      noteTone: "text-slate-500",
+      href: "/pipeline",
+    },
+    {
+      label: "Owed to creators",
+      value: euro(outstanding),
+      note:
+        toApprove.length > 0
+          ? `${toApprove.length} ready to approve`
+          : "nothing to approve",
+      noteTone: toApprove.length > 0 ? "text-amber-600" : "text-slate-500",
+      href: "/payments",
+    },
+    {
+      label: "Avg closed CPM",
+      value: kpis.avgClosedCpm != null ? euroCpm(kpis.avgClosedCpm) : "—",
+      note: `target ≤ ${euro(kpis.targetCpm)}`,
+      noteTone: "text-slate-500",
+      href: "/benchmarks",
+    },
+  ];
+
+  // Stage counts, so the dashboard hints at the board without duplicating it.
+  const boardStages = STAGES.filter((s) => !TERMINAL_STAGES.includes(s.key));
+  const counts = boardStages.map((s) => ({
+    ...s,
+    count: deals.filter((d) => d.stage === s.key).length,
+  }));
 
   return (
     <>
       <PageHeader
-        title="Pipeline"
-        subtitle="Every deal, its stage, and what needs your attention"
-        actions={
-          <>
-            <div className="flex gap-1.5 mr-2">
-              {FILTERS.map((f) => (
+        title="Dashboard"
+        subtitle="What needs you today"
+        actions={<NewDealButton />}
+      />
+      <main className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-5xl space-y-6">
+          <AttentionPanel items={attention} />
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {kpiCards.map((k) => (
+              <Link
+                key={k.label}
+                href={k.href}
+                className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm hover:border-slate-300 transition-colors"
+              >
+                <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                  {k.label}
+                </div>
+                <div className="text-2xl font-semibold text-slate-900 font-tabular mt-1">
+                  {k.value}
+                </div>
+                <div className={`text-xs mt-0.5 ${k.noteTone}`}>{k.note}</div>
+              </Link>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
+            <div className="flex items-baseline justify-between mb-3">
+              <h2 className="font-headline text-sm font-semibold text-slate-900">Pipeline</h2>
+              <Link href="/pipeline" className="text-xs font-medium text-brand-dark hover:underline">
+                Open board →
+              </Link>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {counts.map((s) => (
                 <Link
-                  key={f.key}
-                  href={f.key ? `/?platform=${f.key}` : "/"}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
-                    platform === f.key
-                      ? "bg-slate-900 text-white border-slate-900"
-                      : "border-slate-200 text-slate-500 hover:text-slate-800"
-                  }`}
+                  key={s.key}
+                  href={`/pipeline?stage=${s.key}`}
+                  className="flex items-baseline gap-2 border border-slate-200 rounded-lg px-3 py-2 hover:border-slate-300 transition-colors"
                 >
-                  {f.label}
+                  <span className="text-lg font-semibold font-tabular text-slate-900">
+                    {s.count}
+                  </span>
+                  <span className="text-xs text-slate-500">{s.label}</span>
                 </Link>
               ))}
             </div>
-            <NewDealButton />
-          </>
-        }
-      />
-
-      <main className="flex-1 overflow-x-auto overflow-y-auto p-8">
-        <AttentionPanel items={attention} />
-
-        {/* KPI cards */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
-          <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm flex flex-col">
-            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
-              Active deals
-            </span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-semibold text-slate-900 font-tabular">
-                {kpis.activeDeals}
-              </span>
-              {kpis.waitingOnYou > 0 && (
-                <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                  {kpis.waitingOnYou} waiting on you
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm flex flex-col">
-            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
-              Committed / cap
-            </span>
-            <div className="flex items-baseline gap-1 mt-1 font-tabular">
-              <span className="text-2xl font-semibold text-slate-900">{euro(kpis.committed)}</span>
-              <span className="text-sm text-slate-500">/ {euro(kpis.monthlyCap)}</span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm flex flex-col">
-            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
-              Avg closed CPM
-            </span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-semibold text-slate-900 font-tabular">
-                {kpis.avgClosedCpm != null ? euroCpm(kpis.avgClosedCpm) : "—"}
-              </span>
-              <span className="text-xs font-medium text-slate-500">
-                target ≤ {euro(kpis.targetCpm)}
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm flex flex-col">
-            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
-              Saved vs first ask
-            </span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-semibold text-emerald-600 font-tabular">
-                {euro(kpis.savedVsFirstAsk)}
-              </span>
-              <span className="text-xs font-medium text-slate-500">this month</span>
-            </div>
           </div>
         </div>
-
-        {/* Kanban board — drag cards between stages */}
-        <PipelineBoard deals={deals} />
       </main>
     </>
   );
