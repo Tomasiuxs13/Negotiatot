@@ -17,11 +17,14 @@ export default function NewDealForm({
   campaigns = [],
   partners = [],
   presetPartner,
+  stage,
 }: {
   campaigns?: { id: number; name: string }[];
   partners?: { id: number; name: string }[];
   presetPartner?: { id: number; name: string };
+  stage?: string;
 }) {
+  const isLeadCapture = stage === "lead" || stage === "contacted";
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
@@ -56,6 +59,7 @@ export default function NewDealForm({
 
   return (
     <form ref={formRef} onSubmit={submit} className="space-y-4">
+      {stage && <input type="hidden" name="stage" value={stage} />}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -199,11 +203,18 @@ export default function NewDealForm({
         disabled={isPending || selected.length === 0}
         className="w-full bg-brand hover:bg-brand-dark text-white rounded-lg py-2.5 text-sm font-semibold transition-colors shadow-sm disabled:opacity-60"
       >
-        {isPending ? "Creating deal…" : "Create deal & run analysis"}
+        {isPending
+          ? isLeadCapture
+            ? "Adding…"
+            : "Creating deal…"
+          : isLeadCapture
+            ? `Add ${stage === "contacted" ? "contacted deal" : "lead"}`
+            : "Create deal & run analysis"}
       </button>
       <p className="text-xs text-slate-500 text-center">
-        No inputs at all? The analysis will be rough — add a channel URL so Counterpart can research
-        the creator, or fill in known stats.
+        {isLeadCapture
+          ? "Saved to the pipeline without spending an API call — run the analysis from the deal page when you're ready."
+          : "No inputs at all? The analysis will be rough — add a channel URL so Counterpart can research the creator, or fill in known stats."}
       </p>
 
       {error && <p className="text-xs text-red-600">{error}</p>}

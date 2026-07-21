@@ -1,5 +1,12 @@
 export type Platform = "youtube" | "instagram" | "tiktok";
-export type Stage = "analyzing" | "offer_sent" | "negotiating" | "agreed" | "declined";
+export type Stage =
+  | "lead"
+  | "contacted"
+  | "analyzing"
+  | "offer_sent"
+  | "negotiating"
+  | "agreed"
+  | "declined";
 export type StatusTone = "good" | "warn" | "neutral";
 
 export interface Deal {
@@ -83,6 +90,8 @@ export interface CopilotReco {
 }
 
 export const STAGES: { key: Stage; label: string }[] = [
+  { key: "lead", label: "Lead" },
+  { key: "contacted", label: "Contacted" },
   { key: "analyzing", label: "Analyzing" },
   { key: "offer_sent", label: "Offer Sent" },
   { key: "negotiating", label: "Negotiating" },

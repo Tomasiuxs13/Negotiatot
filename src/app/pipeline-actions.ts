@@ -4,9 +4,19 @@ import { revalidatePath } from "next/cache";
 import { getDeal, updateDeal } from "@/lib/db";
 import type { Stage } from "@/lib/types";
 
-const VALID: Stage[] = ["analyzing", "offer_sent", "negotiating", "agreed", "declined"];
+const VALID: Stage[] = [
+  "lead",
+  "contacted",
+  "analyzing",
+  "offer_sent",
+  "negotiating",
+  "agreed",
+  "declined",
+];
 
 const STAGE_STATUS: Record<Stage, { label: string; tone: "good" | "warn" | "neutral" }> = {
+  lead: { label: "New lead", tone: "neutral" },
+  contacted: { label: "Reached out · awaiting reply", tone: "neutral" },
   analyzing: { label: "Analyzing", tone: "neutral" },
   offer_sent: { label: "Offer sent · waiting", tone: "neutral" },
   negotiating: { label: "Negotiating", tone: "warn" },

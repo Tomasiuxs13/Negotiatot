@@ -7,9 +7,10 @@ export const dynamic = "force-dynamic";
 export default async function NewDealPage({
   searchParams,
 }: {
-  searchParams: Promise<{ partner?: string }>;
+  searchParams: Promise<{ partner?: string; stage?: string }>;
 }) {
-  const { partner: partnerParam } = await searchParams;
+  const { partner: partnerParam, stage } = await searchParams;
+  const isLeadCapture = stage === "lead" || stage === "contacted";
   const campaigns = getCampaigns().map((c) => ({ id: c.id, name: c.name }));
   const partners = getPartners().map((p) => ({ id: p.id, name: p.name }));
   const preset = partnerParam ? getPartner(Number(partnerParam)) : undefined;
@@ -17,8 +18,12 @@ export default async function NewDealPage({
   return (
     <>
       <PageHeader
-        title="New deal"
-        subtitle="Give Counterpart whatever you have — a report, a message, a link. More inputs, sharper numbers."
+        title={stage === "lead" ? "New lead" : stage === "contacted" ? "New contacted deal" : "New deal"}
+        subtitle={
+          isLeadCapture
+            ? "Capture who you want to work with — analyze later, when the conversation is real."
+            : "Give Counterpart whatever you have — a report, a message, a link. More inputs, sharper numbers."
+        }
       />
       <main className="flex-1 overflow-y-auto p-8">
         <div className="grid grid-cols-[1.3fr_0.7fr] gap-4 items-start max-w-5xl">
@@ -27,6 +32,7 @@ export default async function NewDealPage({
               campaigns={campaigns}
               partners={partners}
               presetPartner={presetPartner}
+              stage={stage}
             />
           </div>
 

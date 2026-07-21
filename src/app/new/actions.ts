@@ -63,6 +63,9 @@ export async function createDealAction(
   const channelUrl = String(formData.get("channel_url") ?? "").trim();
   const knownAvgViews = Number(formData.get("known_avg_views")) || null;
   const knownEngagement = Number(formData.get("known_engagement")) || null;
+  const stageRaw = String(formData.get("stage") ?? "").trim();
+  // Leads and contacted deals are captured now and analyzed later, so we skip the API call.
+  const isPreAnalysis = stageRaw === "lead" || stageRaw === "contacted";
 
   if (!creator) return { error: "Creator name is required." };
   if (platforms.length === 0) return { error: "Pick at least one platform." };
@@ -106,6 +109,8 @@ export async function createDealAction(
     partnerId,
     avg_views: knownAvgViews,
     engagement_rate: knownEngagement,
+    stage: isPreAnalysis ? stageRaw : "analyzing",
+    status_label: stageRaw === "contacted" ? "Reached out · awaiting reply" : undefined,
   });
 
   // Keep the partner's channel list in step with the deal's platforms.
@@ -119,7 +124,17 @@ export async function createDealAction(
     });
   }
   if (message) addMessage(id, "them", message);
+  if (channelUrl) updateDeal(id, { channel_url: channelUrl });
   revalidatePath("/");
+
+  // Pre-analysis stages: capture the lead now, analyze when it's worth the spend.
+  if (isPreAnalysis) {
+    updateDeal(id, {
+      status_label: stageRaw === "contacted" ? "Reached out · awaiting reply" : "New lead",
+      status_tone: "neutral",
+    });
+    return { id };
+  }
 
   if (!hasApiKey()) {
     updateDeal(id, { status_label: "Awaiting analysis (no API key)", status_tone: "warn" });

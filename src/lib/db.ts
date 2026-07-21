@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS deals (
   creator TEXT NOT NULL,
   platform TEXT NOT NULL CHECK (platform IN ('youtube','instagram','tiktok')),
   format TEXT,
-  stage TEXT NOT NULL DEFAULT 'analyzing' CHECK (stage IN ('analyzing','offer_sent','negotiating','agreed','declined')),
+  stage TEXT NOT NULL DEFAULT 'analyzing' CHECK (stage IN ('lead','contacted','analyzing','offer_sent','negotiating','agreed','declined')),
   round INTEGER NOT NULL DEFAULT 0,
   your_move INTEGER NOT NULL DEFAULT 0,
   first_ask INTEGER,
@@ -128,6 +128,36 @@ CREATE TABLE IF NOT EXISTS usage_log (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
 }
+
+/**
+ * SQLite can't alter a CHECK constraint in place, so widening the stage list means
+ * rebuilding the table. We reuse the stored DDL (which already includes every column
+ * added by earlier migrations) and only swap the constraint, so this stays correct as
+ * the schema grows.
+ */
+function widenStageConstraint() {
+  const row = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'deals'")
+    .get() as { sql: string } | undefined;
+  if (!row || row.sql.includes("'lead'")) return;
+
+  const rebuilt = row.sql
+    .replace(
+      /CHECK\s*\(\s*stage\s+IN\s*\([^)]*\)\s*\)/i,
+      "CHECK (stage IN ('lead','contacted','analyzing','offer_sent','negotiating','agreed','declined'))"
+    )
+    .replace(/CREATE TABLE\s+"?deals"?/i, "CREATE TABLE deals_migrate");
+
+  db.pragma("foreign_keys = OFF");
+  db.transaction(() => {
+    db.exec(rebuilt);
+    db.exec("INSERT INTO deals_migrate SELECT * FROM deals");
+    db.exec("DROP TABLE deals");
+    db.exec("ALTER TABLE deals_migrate RENAME TO deals");
+  })();
+  db.pragma("foreign_keys = ON");
+}
+widenStageConstraint();
 
 /**
  * One-time backfill: deals used to store the creator as a plain string. Give every
@@ -656,7 +686,7 @@ export function createDeal(fields: {
   partnerId?: number | null;
   stage?: string;
   first_ask?: number | null;
-  status_label?: string;
+  status_label?: string | undefined;
   avg_views?: number | null;
   engagement_rate?: number | null;
 }): number {

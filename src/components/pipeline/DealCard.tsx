@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Deal } from "@/lib/types";
 import { PLATFORM_META, dealPlatforms } from "@/lib/types";
-import { euro } from "@/lib/format";
+import { euro, views as fmtViews } from "@/lib/format";
 
 const AVATAR_COLORS = [
   "bg-indigo-100 text-indigo-700",
@@ -44,7 +44,10 @@ export default function DealCard({ deal }: { deal: Deal }) {
   const yourMove = deal.your_move === 1;
 
   const rows: { label: string; value: string; accent?: "warn" | "good" }[] = [];
-  if (deal.stage === "analyzing") {
+  if (deal.stage === "lead" || deal.stage === "contacted") {
+    if (deal.avg_views != null) rows.push({ label: "Avg views:", value: fmtViews(deal.avg_views) });
+    if (deal.current_ask != null) rows.push({ label: "Their ask:", value: euro(deal.current_ask) });
+  } else if (deal.stage === "analyzing") {
     if (deal.current_ask != null) rows.push({ label: "Ask:", value: euro(deal.current_ask) });
     if (deal.target != null) rows.push({ label: "Est. value:", value: euro(deal.target) });
   } else if (deal.stage === "offer_sent") {
