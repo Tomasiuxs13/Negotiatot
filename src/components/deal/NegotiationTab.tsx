@@ -1,6 +1,7 @@
 import type { Deal, Message, CopilotReco } from "@/lib/types";
 import { euro } from "@/lib/format";
 import { getSetting } from "@/lib/db";
+import { buildRounds, currentGap } from "@/lib/negotiation";
 import CopilotCard from "./CopilotCard";
 import ReplyForm from "./ReplyForm";
 import GenerateOfferButton from "./GenerateOfferButton";
@@ -28,40 +29,6 @@ function Bubble({ msg, creator }: { msg: Message; creator: string }) {
   );
 }
 
-interface Round {
-  round: string;
-  amount: number;
-  label: string;
-  detail: string;
-}
-
-function buildRounds(deal: Deal, messages: Message[], reco: CopilotReco | null): Round[] {
-  const rounds: Round[] = [];
-  let r = 1;
-  if (deal.first_ask != null) {
-    const cpm = deal.avg_views ? ` · €${((deal.first_ask / deal.avg_views) * 1000).toFixed(2)} CPM` : "";
-    rounds.push({ round: "R1", amount: deal.first_ask, label: "their ask", detail: cpm.replace(" · ", "") });
-  }
-  for (const m of messages) {
-    if (m.sender === "copilot" || !m.meta) continue;
-    const meta = JSON.parse(m.meta) as { offer?: number; counter?: number };
-    if (m.sender === "us" && meta.offer != null) {
-      const cpm = deal.avg_views ? `€${((meta.offer / deal.avg_views) * 1000).toFixed(2)} CPM` : "";
-      rounds.push({ round: `R${r}`, amount: meta.offer, label: "our offer", detail: cpm });
-    }
-    if (m.sender === "them" && meta.counter != null) {
-      r += 1;
-      const prev = rounds.filter((x) => x.label === "their ask" || x.label === "their counter").at(-1);
-      const moved = prev ? `moved ${euro(Math.abs(prev.amount - meta.counter))}` : "";
-      rounds.push({ round: `R${r}`, amount: meta.counter, label: "their counter", detail: moved });
-    }
-  }
-  if (reco) {
-    rounds.push({ round: `R${reco.round}`, amount: reco.proposedOffer, label: "proposed", detail: "pending" });
-  }
-  return rounds;
-}
-
 function playbookLevers(): { status: string; label: string }[] {
   const style = getSetting<{ concessionLadder?: string[] }>("negotiation_style");
   const ladder = style?.concessionLadder ?? [];
@@ -82,10 +49,7 @@ export default function NegotiationTab({ deal, messages }: { deal: Deal; message
   const reco = recoMsg?.meta ? (JSON.parse(recoMsg.meta) as CopilotReco) : null;
   const thread = messages.filter((m) => m.sender !== "copilot");
   const rounds = buildRounds(deal, messages, reco);
-
-  const lastTheirs = rounds.filter((x) => x.label.startsWith("their")).at(-1);
-  const lastOurs = rounds.filter((x) => x.label === "proposed" || x.label === "our offer").at(-1);
-  const gap = lastTheirs && lastOurs ? lastTheirs.amount - lastOurs.amount : null;
+  const gap = currentGap(rounds);
 
   return (
     <div className="grid grid-cols-[1.5fr_0.8fr] gap-4 items-start">
