@@ -1,65 +1,117 @@
-import Image from "next/image";
+import Link from "next/link";
+import PageHeader, { NewDealButton } from "@/components/PageHeader";
+import PipelineBoard from "@/components/pipeline/PipelineBoard";
+import { getDeals, getPipelineKpis } from "@/lib/db";
+import { dealPlatforms } from "@/lib/types";
+import { euro, euroCpm } from "@/lib/format";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+const FILTERS = [
+  { key: "", label: "All" },
+  { key: "youtube", label: "YouTube" },
+  { key: "instagram", label: "Instagram" },
+  { key: "tiktok", label: "TikTok" },
+];
+
+export default async function PipelinePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ platform?: string }>;
+}) {
+  const { platform = "" } = await searchParams;
+  const allDeals = getDeals();
+  const deals = platform
+    ? allDeals.filter((d) => dealPlatforms(d).includes(platform as never))
+    : allDeals;
+  const kpis = getPipelineKpis();
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      <PageHeader
+        title="Pipeline"
+        subtitle="Every deal, its stage, and what needs your attention"
+        actions={
+          <>
+            <div className="flex gap-1.5 mr-2">
+              {FILTERS.map((f) => (
+                <Link
+                  key={f.key}
+                  href={f.key ? `/?platform=${f.key}` : "/"}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                    platform === f.key
+                      ? "bg-slate-900 text-white border-slate-900"
+                      : "border-slate-200 text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {f.label}
+                </Link>
+              ))}
+            </div>
+            <NewDealButton />
+          </>
+        }
+      />
+
+      <main className="flex-1 overflow-x-auto overflow-y-auto p-8">
+        {/* KPI cards */}
+        <div className="grid grid-cols-4 gap-4 mb-8">
+          <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm flex flex-col">
+            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+              Active deals
+            </span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-semibold text-slate-900 font-tabular">
+                {kpis.activeDeals}
+              </span>
+              {kpis.waitingOnYou > 0 && (
+                <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                  {kpis.waitingOnYou} waiting on you
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm flex flex-col">
+            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+              Committed / cap
+            </span>
+            <div className="flex items-baseline gap-1 mt-1 font-tabular">
+              <span className="text-2xl font-semibold text-slate-900">{euro(kpis.committed)}</span>
+              <span className="text-sm text-slate-500">/ {euro(kpis.monthlyCap)}</span>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm flex flex-col">
+            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+              Avg closed CPM
+            </span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-semibold text-slate-900 font-tabular">
+                {kpis.avgClosedCpm != null ? euroCpm(kpis.avgClosedCpm) : "—"}
+              </span>
+              <span className="text-xs font-medium text-slate-500">
+                target ≤ {euro(kpis.targetCpm)}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm flex flex-col">
+            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+              Saved vs first ask
+            </span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-semibold text-emerald-600 font-tabular">
+                {euro(kpis.savedVsFirstAsk)}
+              </span>
+              <span className="text-xs font-medium text-slate-500">this month</span>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+
+        {/* Kanban board — drag cards between stages */}
+        <PipelineBoard deals={deals} />
       </main>
-    </div>
+    </>
   );
 }

@@ -1,0 +1,120 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getDeal, getMessages } from "@/lib/db";
+import { PLATFORM_META, STAGES, dealPlatforms, dealScope } from "@/lib/types";
+import PriceLadder from "@/components/deal/PriceLadder";
+import DealTabs from "@/components/deal/DealTabs";
+import DeleteDealButton from "@/components/deal/DeleteDealButton";
+import ActualsPanel from "@/components/deal/ActualsPanel";
+import AnalysisTab from "@/components/deal/AnalysisTab";
+import NegotiationTab from "@/components/deal/NegotiationTab";
+
+export const dynamic = "force-dynamic";
+
+const STAGE_LABEL = Object.fromEntries(STAGES.map((s) => [s.key, s.label]));
+
+const STAGE_PILL: Record<string, string> = {
+  analyzing: "bg-slate-100 text-slate-600 border border-slate-200",
+  offer_sent: "bg-sky-50 text-sky-700 border border-sky-200",
+  negotiating: "bg-amber-50 text-amber-700 border border-amber-200",
+  agreed: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+  declined: "bg-red-50 text-red-700 border border-red-200",
+};
+
+export default async function DealPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const found = getDeal(Number(id));
+  if (!found) notFound();
+  const deal = found;
+  const messages = getMessages(deal.id);
+  const platforms = dealPlatforms(deal);
+  const scope = dealScope(deal);
+
+  function HistoryTab() {
+    return (
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
+        <h3 className="font-headline text-sm font-semibold text-slate-900 mb-3">Deal history</h3>
+        <div className="divide-y divide-slate-100">
+          <div className="flex gap-3 py-2.5 text-xs first:pt-0">
+            <span className="text-slate-400 w-14 shrink-0">
+              {new Date(deal.created_at + "Z").toLocaleDateString("en", { month: "short", day: "numeric" })}
+            </span>
+            <span className="text-slate-700">Deal created · {deal.campaign ?? "no campaign"}</span>
+          </div>
+          {messages.map((m) => (
+            <div key={m.id} className="flex gap-3 py-2.5 text-xs last:pb-0">
+              <span className="text-slate-400 w-14 shrink-0">
+                {new Date(m.created_at + "Z").toLocaleDateString("en", { month: "short", day: "numeric" })}
+              </span>
+              <span className="text-slate-700">
+                {m.sender === "them"
+                  ? `Message received from ${deal.creator}`
+                  : m.sender === "us"
+                    ? "Offer sent"
+                    : `Copilot recommendation · ${m.body}`}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <main className="flex-1 overflow-y-auto p-8">
+      <div className="text-xs text-slate-500 mb-3">
+        <Link href="/" className="underline underline-offset-2 hover:text-slate-700">
+          Pipeline
+        </Link>{" "}
+        / {deal.creator}
+      </div>
+
+      {/* Deal header */}
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm px-6 pt-5 pb-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="w-9 h-9 rounded-full bg-brand/10 text-brand-dark flex items-center justify-center font-bold text-sm">
+            {deal.creator.charAt(0)}
+          </div>
+          <h1 className="font-headline text-lg font-semibold text-slate-900">{deal.creator}</h1>
+          <span className="text-xs font-semibold bg-red-50 text-red-600 rounded-full px-2.5 py-1 flex items-center gap-1">
+            {platforms.map((p) => (
+              <span key={p} className="flex items-center gap-0.5">
+                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
+                  {PLATFORM_META[p].icon}
+                </span>
+                {PLATFORM_META[p].label}
+              </span>
+            ))}
+            {scope ? ` · ${scope}` : ""}
+          </span>
+          <span className={`text-xs font-semibold rounded-full px-2.5 py-1 ${STAGE_PILL[deal.stage]}`}>
+            {STAGE_LABEL[deal.stage] ?? deal.stage}
+            {deal.round > 0 ? ` · Round ${deal.round}` : ""}
+          </span>
+          <span className="text-xs text-slate-500 ml-auto">
+            Campaign: {deal.campaign ?? "—"}
+          </span>
+          <DeleteDealButton dealId={deal.id} creator={deal.creator} />
+        </div>
+
+        <PriceLadder deal={deal} />
+      </div>
+
+      <DealTabs
+        defaultTab={
+          deal.stage === "agreed"
+            ? "Actuals"
+            : deal.stage === "negotiating" || deal.stage === "offer_sent"
+              ? "Negotiation"
+              : "Analysis"
+        }
+        analysis={<AnalysisTab deal={deal} />}
+        negotiation={<NegotiationTab deal={deal} messages={messages} />}
+        actuals={
+          deal.stage === "agreed" || deal.agreed_price != null ? <ActualsPanel deal={deal} /> : undefined
+        }
+        history={<HistoryTab />}
+      />
+    </main>
+  );
+}

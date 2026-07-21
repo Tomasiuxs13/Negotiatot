@@ -1,0 +1,177 @@
+import type { Deal, Message, CopilotReco } from "@/lib/types";
+import { euro } from "@/lib/format";
+import { getSetting } from "@/lib/db";
+import CopilotCard from "./CopilotCard";
+import ReplyForm from "./ReplyForm";
+import GenerateOfferButton from "./GenerateOfferButton";
+
+function Bubble({ msg, creator }: { msg: Message; creator: string }) {
+  const them = msg.sender === "them";
+  const date = new Date(msg.created_at + "Z").toLocaleDateString("en", {
+    month: "short",
+    day: "numeric",
+  });
+  return (
+    <div
+      className={`max-w-[82%] px-4 py-3 rounded-xl text-sm ${
+        them
+          ? "bg-white border border-slate-200 rounded-bl-sm self-start"
+          : "bg-brand/10 border border-brand/25 rounded-br-sm self-end"
+      }`}
+    >
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
+        {them ? creator : "You"} · {date}
+        {!them && " · sent"}
+      </div>
+      <p className="whitespace-pre-line text-slate-800">{msg.body}</p>
+    </div>
+  );
+}
+
+interface Round {
+  round: string;
+  amount: number;
+  label: string;
+  detail: string;
+}
+
+function buildRounds(deal: Deal, messages: Message[], reco: CopilotReco | null): Round[] {
+  const rounds: Round[] = [];
+  let r = 1;
+  if (deal.first_ask != null) {
+    const cpm = deal.avg_views ? ` · €${((deal.first_ask / deal.avg_views) * 1000).toFixed(2)} CPM` : "";
+    rounds.push({ round: "R1", amount: deal.first_ask, label: "their ask", detail: cpm.replace(" · ", "") });
+  }
+  for (const m of messages) {
+    if (m.sender === "copilot" || !m.meta) continue;
+    const meta = JSON.parse(m.meta) as { offer?: number; counter?: number };
+    if (m.sender === "us" && meta.offer != null) {
+      const cpm = deal.avg_views ? `€${((meta.offer / deal.avg_views) * 1000).toFixed(2)} CPM` : "";
+      rounds.push({ round: `R${r}`, amount: meta.offer, label: "our offer", detail: cpm });
+    }
+    if (m.sender === "them" && meta.counter != null) {
+      r += 1;
+      const prev = rounds.filter((x) => x.label === "their ask" || x.label === "their counter").at(-1);
+      const moved = prev ? `moved ${euro(Math.abs(prev.amount - meta.counter))}` : "";
+      rounds.push({ round: `R${r}`, amount: meta.counter, label: "their counter", detail: moved });
+    }
+  }
+  if (reco) {
+    rounds.push({ round: `R${reco.round}`, amount: reco.proposedOffer, label: "proposed", detail: "pending" });
+  }
+  return rounds;
+}
+
+function playbookLevers(): { status: string; label: string }[] {
+  const style = getSetting<{ concessionLadder?: string[] }>("negotiation_style");
+  const ladder = style?.concessionLadder ?? [];
+  return ladder.map((label, i) => ({
+    status:
+      i === ladder.length - 1 && /price/i.test(label)
+        ? "LAST"
+        : i === 0
+          ? "NEXT"
+          : "AVAIL",
+    label,
+  }));
+}
+
+export default function NegotiationTab({ deal, messages }: { deal: Deal; messages: Message[] }) {
+  const levers = playbookLevers();
+  const recoMsg = [...messages].reverse().find((m) => m.sender === "copilot");
+  const reco = recoMsg?.meta ? (JSON.parse(recoMsg.meta) as CopilotReco) : null;
+  const thread = messages.filter((m) => m.sender !== "copilot");
+  const rounds = buildRounds(deal, messages, reco);
+
+  const lastTheirs = rounds.filter((x) => x.label.startsWith("their")).at(-1);
+  const lastOurs = rounds.filter((x) => x.label === "proposed" || x.label === "our offer").at(-1);
+  const gap = lastTheirs && lastOurs ? lastTheirs.amount - lastOurs.amount : null;
+
+  return (
+    <div className="grid grid-cols-[1.5fr_0.8fr] gap-4 items-start">
+      {/* Thread */}
+      <div className="flex flex-col gap-3.5">
+        {thread.map((m) => (
+          <Bubble key={m.id} msg={m} creator={deal.creator} />
+        ))}
+
+        {reco ? (
+          <CopilotCard dealId={deal.id} reco={reco} />
+        ) : thread.length === 0 ? (
+          <GenerateOfferButton dealId={deal.id} />
+        ) : (
+          <div className="bg-white rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+            No recommendation yet — paste their latest message below and run the analysis.
+          </div>
+        )}
+
+        <ReplyForm dealId={deal.id} />
+      </div>
+
+      {/* Rail */}
+      <div className="flex flex-col gap-4">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
+          <h3 className="font-headline text-sm font-semibold text-slate-900 mb-2.5">Offer tracker</h3>
+          <div className="divide-y divide-slate-100">
+            {rounds.map((r, i) => (
+              <div key={i} className="flex gap-3 py-2 text-xs first:pt-0">
+                <span className="font-tabular text-slate-400 w-6 pt-0.5">{r.round}</span>
+                <div>
+                  <span className="font-tabular font-semibold text-slate-900">{euro(r.amount)}</span>{" "}
+                  <span className="text-slate-600">— {r.label}</span>
+                  {r.detail && <span className="text-slate-400"> · {r.detail}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+          {gap != null && (
+            <div className="mt-2.5 flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+              <span className="text-xs text-slate-600">Current gap</span>
+              <span className="font-tabular font-semibold text-sm text-slate-900">{euro(gap)}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
+          <h3 className="font-headline text-sm font-semibold text-slate-900 mb-2.5">
+            Concession ladder
+          </h3>
+          <div className="divide-y divide-slate-100">
+            {levers.length === 0 && (
+              <p className="text-xs text-slate-400 py-1">
+                No concession ladder configured — set one in the Playbook.
+              </p>
+            )}
+            {levers.map((l) => (
+              <div key={l.label} className="flex items-center gap-2.5 py-2 text-xs first:pt-0 last:pb-0">
+                <span
+                  className={`text-[10px] font-bold tracking-wide rounded px-1.5 py-0.5 ${
+                    l.status === "NEXT"
+                      ? "bg-emerald-50 text-emerald-700"
+                      : l.status === "AVAIL"
+                        ? "bg-slate-100 text-slate-500"
+                        : "bg-slate-100 text-slate-400 border border-slate-200"
+                  }`}
+                >
+                  {l.status}
+                </span>
+                <span className="text-slate-700">{l.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {deal.walkaway != null && (
+          <div className="bg-amber-50 border border-amber-300/60 rounded-lg p-4">
+            <p className="text-xs font-bold text-amber-700 mb-1">Guardrail</p>
+            <p className="text-xs text-slate-600">
+              Walk-away is{" "}
+              <span className="font-tabular font-semibold text-slate-900">{euro(deal.walkaway)}</span>.
+              Counterpart warns before any draft that crosses it, and won&apos;t draft above it.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

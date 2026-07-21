@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    serverActions: {
+      // Report PDFs up to 20 MB + multipart overhead
+      bodySizeLimit: "25mb",
+    },
+  },
 };
 
 export default nextConfig;
