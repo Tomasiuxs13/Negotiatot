@@ -41,6 +41,11 @@ export interface ContentItem {
   due_days_after_delivery: number | null;
   status: ContentStatus;
   posted_url: string | null;
+  /** What this specific deliverable returned, so bundles can be split by platform. */
+  actual_views: number | null;
+  actual_clicks: number | null;
+  actual_orders: number | null;
+  actual_revenue: number | null;
   notes: string | null;
   created_at: string;
   updated_at: string;

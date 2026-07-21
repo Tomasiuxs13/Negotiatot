@@ -111,6 +111,66 @@ export function createContentItem(fields: {
   return Number(info.lastInsertRowid);
 }
 
+export interface ContentActuals {
+  views: number | null;
+  clicks: number | null;
+  orders: number | null;
+  revenue: number | null;
+}
+
+/**
+ * Records what one deliverable returned, then rolls the deal's totals up from its
+ * items. Keeping the deal-level sum in sync means every existing view — pipeline CPM,
+ * partner stats, the deal's own Actuals tab — keeps working unchanged.
+ */
+export function setContentActuals(id: number, actuals: ContentActuals) {
+  db.prepare(
+    `UPDATE content_items
+     SET actual_views = ?, actual_clicks = ?, actual_orders = ?, actual_revenue = ?,
+         updated_at = datetime('now')
+     WHERE id = ?`
+  ).run(actuals.views, actuals.clicks, actuals.orders, actuals.revenue, id);
+
+  const item = db.prepare("SELECT deal_id FROM content_items WHERE id = ?").get(id) as
+    | { deal_id: number }
+    | undefined;
+  if (item) recomputeDealActuals(item.deal_id);
+}
+
+/** Sums per-item results onto the deal. A column stays null until some item reports it. */
+export function recomputeDealActuals(dealId: number) {
+  const totals = db
+    .prepare(
+      `SELECT SUM(actual_views) AS views, SUM(actual_clicks) AS clicks,
+              SUM(actual_orders) AS orders, SUM(actual_revenue) AS revenue,
+              COUNT(actual_views) AS measured
+       FROM content_items WHERE deal_id = ?`
+    )
+    .get(dealId) as {
+    views: number | null;
+    clicks: number | null;
+    orders: number | null;
+    revenue: number | null;
+    measured: number;
+  };
+
+  if (totals.measured === 0) return;
+
+  db.prepare(
+    `UPDATE deals
+     SET actual_views = ?, actual_clicks = ?, actual_orders = ?, actual_revenue = ?,
+         actuals_logged_at = ?, updated_at = datetime('now')
+     WHERE id = ?`
+  ).run(
+    totals.views,
+    totals.clicks,
+    totals.orders,
+    totals.revenue,
+    new Date().toISOString(),
+    dealId
+  );
+}
+
 export function updateContentItem(
   id: number,
   fields: { status?: ContentStatus; postedUrl?: string | null; dueDate?: string | null; notes?: string | null }

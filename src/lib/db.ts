@@ -187,12 +187,22 @@ CREATE TABLE IF NOT EXISTS usage_log (
   )`);
 }
 
-/**
- * SQLite can't alter a CHECK constraint in place, so widening the stage list means
- * rebuilding the table. We reuse the stored DDL (which already includes every column
- * added by earlier migrations) and only swap the constraint, so this stays correct as
- * the schema grows.
- */
+// Per-deliverable results. A bundle deal spans platforms, so deal-level totals can't
+// say which platform delivered what — these can.
+{
+  const cols = (db.prepare("PRAGMA table_info(content_items)").all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  if (!cols.includes("actual_views"))
+    db.exec("ALTER TABLE content_items ADD COLUMN actual_views INTEGER");
+  if (!cols.includes("actual_clicks"))
+    db.exec("ALTER TABLE content_items ADD COLUMN actual_clicks INTEGER");
+  if (!cols.includes("actual_orders"))
+    db.exec("ALTER TABLE content_items ADD COLUMN actual_orders INTEGER");
+  if (!cols.includes("actual_revenue"))
+    db.exec("ALTER TABLE content_items ADD COLUMN actual_revenue INTEGER");
+}
+
 /**
  * SQLite can't ALTER a CHECK constraint, so adding a stage means rebuilding the table
  * from its own stored DDL with the constraint swapped. Driven by ALL_STAGES, so future
@@ -521,6 +531,16 @@ export function getPartnerChannels(partnerId: number): PartnerChannel[] {
   return db
     .prepare("SELECT * FROM partner_channels WHERE partner_id = ? ORDER BY platform")
     .all(partnerId) as PartnerChannel[];
+}
+
+/** Typical reach per platform for every partner, for allocating bundle fees. */
+export function getExpectedReach(): Map<string, number> {
+  const rows = db
+    .prepare(
+      "SELECT partner_id, platform, avg_views FROM partner_channels WHERE avg_views IS NOT NULL"
+    )
+    .all() as { partner_id: number; platform: string; avg_views: number }[];
+  return new Map(rows.map((r) => [`${r.partner_id}:${r.platform}`, r.avg_views]));
 }
 
 export function getPartnerDeals(partnerId: number): Deal[] {

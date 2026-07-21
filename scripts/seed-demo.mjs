@@ -29,6 +29,7 @@ const DEMO_CREATORS = [
   "PixelPeter",
   "GamerGitta",
   "HomeWithHanna",
+  "ReiseRobin",
 ];
 
 console.log("Clearing previous demo data…");
@@ -120,11 +121,24 @@ function addContent(dealId, partnerId, items) {
       Number(
         db
           .prepare(
-            `INSERT INTO content_items (deal_id, partner_id, title, platform, due_date, due_days_after_delivery, status, posted_url)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO content_items (deal_id, partner_id, title, platform, due_date, due_days_after_delivery, status, posted_url,
+                                        actual_views, actual_clicks, actual_orders, actual_revenue)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
-          .run(dealId, partnerId, it.title, it.platform ?? null, it.due ?? null, it.afterDelivery ?? null, it.status, it.url ?? null)
-          .lastInsertRowid
+          .run(
+            dealId,
+            partnerId,
+            it.title,
+            it.platform ?? null,
+            it.due ?? null,
+            it.afterDelivery ?? null,
+            it.status,
+            it.url ?? null,
+            it.views ?? null,
+            it.clicks ?? null,
+            it.orders ?? null,
+            it.revenue ?? null
+          ).lastInsertRowid
       )
     );
   }
@@ -420,6 +434,84 @@ console.log("Seeding demo deals…");
     updatedAt: stamp(-11),
   });
   console.log("  ✓ PixelPeter — stale lead (11 days)");
+}
+
+/* 5b. ReiseRobin — a finished multi-platform bundle with per-deliverable results, so
+       Benchmarks can calibrate YouTube and TikTok separately from one deal. */
+{
+  const partnerId = addPartner({
+    name: "ReiseRobin",
+    email: "robin@reiserobin.de",
+    tags: ["travel", "DACH", "bundle"],
+    notes: "Bundles well — quotes YouTube + TikTok together and discounts the pair.",
+    channels: [
+      { platform: "youtube", handle: "@reiserobin", url: "https://youtube.com/@reiserobin", followers: 143000, avgViews: 52000, er: 5.2 },
+      { platform: "tiktok", handle: "@reiserobin", followers: 310000, avgViews: 145000, er: 8.4 },
+    ],
+  });
+  const dealId = addDeal({
+    creator: "ReiseRobin",
+    partnerId,
+    platforms: ["youtube", "tiktok"],
+    deliverables: "1× YouTube integration + 2× TikToks",
+    campaign: "Q3 DACH launch",
+    stage: "completed",
+    dealType: "paid",
+    round: 2,
+    firstAsk: 3000,
+    currentAsk: 2500,
+    currentOffer: 2400,
+    agreedPrice: 2400,
+    anchor: 2000,
+    target: 2300,
+    walkaway: 2600,
+    breakeven: 3400,
+    avgViews: 52000,
+    er: 5.2,
+    statusLabel: "Completed",
+    statusTone: "good",
+    updatedAt: stamp(-8),
+  });
+  addContract(
+    dealId,
+    partnerId,
+    {
+      brand: "reiserobin-agreement",
+      deliverables: [
+        { description: "YouTube integration", platform: "youtube", quantity: 1, dueDate: day(-30), dueDaysAfterDelivery: null, dueRule: null },
+        { description: "TikTok short", platform: "tiktok", quantity: 2, dueDate: day(-28), dueDaysAfterDelivery: null, dueRule: null },
+      ],
+      payments: [{ description: "Full fee", amount: 2400, trigger: "on_verification", dueDate: null }],
+      product: null,
+      usageRights: "Organic + paid, 30 days",
+      exclusivity: null,
+      paymentTerms: "Net-30",
+      totalFee: 2400,
+      notes: [],
+    },
+    day(-40)
+  );
+  // The TikToks out-delivered the video 2:1 — the reason a single blended number lies.
+  const content = addContent(dealId, partnerId, [
+    { title: "YouTube integration", platform: "youtube", due: day(-30), status: "verified", url: "https://youtube.com/watch?v=robin1", views: 58000, clicks: 690, orders: 21, revenue: 2520 },
+    { title: "TikTok short (1/2)", platform: "tiktok", due: day(-28), status: "verified", url: "https://tiktok.com/@reiserobin/1", views: 96000, clicks: 540, orders: 14, revenue: 1680 },
+    { title: "TikTok short (2/2)", platform: "tiktok", due: day(-28), status: "verified", url: "https://tiktok.com/@reiserobin/2", views: 61000, clicks: 320, orders: 9, revenue: 1080 },
+  ]);
+  addPayment(dealId, partnerId, {
+    description: "Full fee",
+    amount: 2400,
+    trigger: "on_verification",
+    linked: content,
+    status: "paid",
+    approvedAt: stamp(-26),
+    paidAt: stamp(-20),
+  });
+  // Deal-level totals are the roll-up of the items.
+  db.prepare(
+    `UPDATE deals SET actual_views = 215000, actual_clicks = 1550, actual_orders = 44,
+       actual_revenue = 5280, actuals_logged_at = ? WHERE id = ?`
+  ).run(stamp(-18), dealId);
+  console.log("  ✓ ReiseRobin — completed YouTube+TikTok bundle with per-platform actuals");
 }
 
 /* 6. Give the existing closed deal real actuals so Benchmarks has something. */

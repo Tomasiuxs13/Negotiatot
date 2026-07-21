@@ -1,75 +1,18 @@
 import PageHeader from "@/components/PageHeader";
-import { getDeals } from "@/lib/db";
-import { PLATFORM_META, dealPlatforms, type Platform } from "@/lib/types";
+import { getDeals, getExpectedReach } from "@/lib/db";
+import { getAllContentItems } from "@/lib/fulfillment";
+import { benchmarkRows, platformAverages } from "@/lib/benchmark-rows";
+import { PLATFORM_META } from "@/lib/types";
 import { euro, euroCpm, views as fmtViews } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-interface Row {
-  id: number;
-  creator: string;
-  platform: Platform;
-  price: number;
-  predictedViews: number | null;
-  actualViews: number;
-  predictedCpm: number | null;
-  actualCpm: number;
-  orders: number | null;
-  revenue: number | null;
-  roas: number | null;
-}
-
 export default function BenchmarksPage() {
   const deals = getDeals();
-  const withActuals = deals.filter(
-    (d) => d.actual_views != null && (d.agreed_price ?? d.current_offer) != null
-  );
-
-  const rows: Row[] = withActuals.map((d) => {
-    const price = (d.agreed_price ?? d.current_offer)!;
-    const actualViews = d.actual_views!;
-    const actualCpm = (price / actualViews) * 1000;
-    const predictedCpm = d.avg_views ? (price / d.avg_views) * 1000 : null;
-    const revenue = d.actual_revenue;
-    return {
-      id: d.id,
-      creator: d.creator,
-      platform: dealPlatforms(d)[0],
-      price,
-      predictedViews: d.avg_views,
-      actualViews,
-      predictedCpm,
-      actualCpm,
-      orders: d.actual_orders,
-      revenue,
-      roas: revenue != null && price > 0 ? revenue / price : null,
-    };
-  });
-
-  // Per-platform calibrated averages from real delivery.
-  const platforms: Platform[] = ["youtube", "instagram", "tiktok"];
-  const calibrated = platforms
-    .map((p) => {
-      const rs = rows.filter((r) => r.platform === p);
-      if (rs.length === 0) return null;
-      const avgActualCpm = rs.reduce((s, r) => s + r.actualCpm, 0) / rs.length;
-      const withRoas = rs.filter((r) => r.roas != null);
-      const avgRoas =
-        withRoas.length > 0 ? withRoas.reduce((s, r) => s + (r.roas ?? 0), 0) / withRoas.length : null;
-      const withBoth = rs.filter((r) => r.predictedViews != null);
-      const avgDelivery =
-        withBoth.length > 0
-          ? withBoth.reduce((s, r) => s + r.actualViews / (r.predictedViews ?? 1), 0) / withBoth.length
-          : null;
-      return { platform: p, count: rs.length, avgActualCpm, avgRoas, avgDelivery };
-    })
-    .filter(Boolean) as {
-    platform: Platform;
-    count: number;
-    avgActualCpm: number;
-    avgRoas: number | null;
-    avgDelivery: number | null;
-  }[];
+  // Bundle deals split into one row per platform, so a YouTube + TikTok deal
+  // calibrates both baselines instead of inflating whichever came first.
+  const rows = benchmarkRows(deals, getAllContentItems(), getExpectedReach());
+  const calibrated = platformAverages(rows);
 
   return (
     <>
@@ -136,6 +79,7 @@ export default function BenchmarksPage() {
                 <thead>
                   <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
                     <th className="px-4 py-3 font-medium">Creator</th>
+                    <th className="px-4 py-3 font-medium">Platform</th>
                     <th className="px-4 py-3 font-medium text-right">Paid</th>
                     <th className="px-4 py-3 font-medium text-right">Pred. views</th>
                     <th className="px-4 py-3 font-medium text-right">Actual views</th>
@@ -146,8 +90,20 @@ export default function BenchmarksPage() {
                 </thead>
                 <tbody>
                   {rows.map((r) => (
-                    <tr key={r.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                    <tr
+                      key={`${r.dealId}-${r.platform}`}
+                      className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
+                    >
                       <td className="px-4 py-3 font-medium text-slate-900">{r.creator}</td>
+                      <td className="px-4 py-3 text-slate-500">
+                        <span className="flex items-center gap-1.5">
+                          <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
+                            {PLATFORM_META[r.platform].icon}
+                          </span>
+                          <span className="text-xs">{PLATFORM_META[r.platform].label}</span>
+                          {r.label && <span className="text-xs text-slate-400">· {r.label}</span>}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 text-right font-tabular">{euro(r.price)}</td>
                       <td className="px-4 py-3 text-right font-tabular text-slate-500">
                         {r.predictedViews != null ? fmtViews(r.predictedViews) : "—"}

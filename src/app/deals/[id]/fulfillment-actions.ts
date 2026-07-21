@@ -22,9 +22,11 @@ import {
   parseTerms,
   refreshPaymentStatuses,
   resolveDueDatesAfterDelivery,
+  setContentActuals,
   setContractError,
   setContractTerms,
   updateContentItem,
+  type ContentActuals,
   updatePaymentItem,
   updateShipment,
   type ContentStatus,
@@ -345,4 +347,15 @@ export async function saveTermsAction(contractId: number, terms: ParsedTerms) {
 export async function getParsedTerms(contractId: number) {
   const contract = getContractById(contractId);
   return contract ? parseTerms(contract.parsed_terms) : null;
+}
+
+export async function saveContentActualsAction(
+  itemId: number,
+  dealId: number,
+  actuals: ContentActuals
+) {
+  setContentActuals(itemId, actuals);
+  refresh(dealId);
+  revalidatePath("/benchmarks");
+  return {};
 }

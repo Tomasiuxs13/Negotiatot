@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCampaign, getDeal, getMessages, getUsageTotals } from "@/lib/db";
+import { getCampaign, getDeal, getMessages, getPartnerChannels, getUsageTotals } from "@/lib/db";
 import { describeOverrides, parseOverrides } from "@/lib/campaigns";
 import { PLATFORM_META, STAGES, dealPlatforms, dealScope } from "@/lib/types";
 import PriceLadder from "@/components/deal/PriceLadder";
@@ -55,6 +55,13 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
     contentItems.length > 0 ||
     paymentItems.length > 0 ||
     shipments.length > 0;
+
+  // This creator's typical reach per platform — how a bundle fee gets attributed.
+  const expectedReach = Object.fromEntries(
+    (deal.partner_id != null ? getPartnerChannels(deal.partner_id) : [])
+      .filter((c) => c.avg_views != null)
+      .map((c) => [c.platform, c.avg_views as number])
+  );
 
   const workDone = (() => {
     const unverified = contentItems.filter((c) => c.status !== "verified").length;
@@ -218,7 +225,13 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
           ) : undefined
         }
         actuals={
-          deal.stage === "agreed" || deal.agreed_price != null ? <ActualsPanel deal={deal} /> : undefined
+          closed || deal.agreed_price != null ? (
+            <ActualsPanel
+              deal={deal}
+              contentItems={contentItems}
+              expectedReach={expectedReach}
+            />
+          ) : undefined
         }
         history={<HistoryTab />}
       />

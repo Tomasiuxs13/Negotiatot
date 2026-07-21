@@ -94,7 +94,12 @@ export async function saveActuals(
     actual_orders: actuals.orders ?? null,
     actual_revenue: actuals.revenue ?? null,
     actuals_logged_at: new Date().toISOString(),
-    stage: deal.stage === "agreed" || deal.agreed_price != null ? "agreed" : deal.stage,
+    // Logging results implies the deal closed — but never drag a wrapped-up deal
+    // back out of Completed.
+    stage:
+      deal.stage === "completed" || deal.stage === "agreed" || deal.agreed_price == null
+        ? deal.stage
+        : "agreed",
   });
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/benchmarks");
