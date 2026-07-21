@@ -39,6 +39,10 @@ export interface ContentItem {
   due_days_after_delivery: number | null;
   status: ContentStatus;
   posted_url: string | null;
+  /** When it went live — the clock every view count is measured against. */
+  posted_at: string | null;
+  /** When the results below were read, so an early number can't pose as a final one. */
+  actuals_measured_at: string | null;
   /** What this specific deliverable returned, so bundles can be split by platform. */
   actual_views: number | null;
   actual_clicks: number | null;

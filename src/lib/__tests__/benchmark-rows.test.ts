@@ -179,3 +179,73 @@ describe("platformAverages", () => {
     expect(yt.avgActualCpm).toBeCloseTo(20); // half of €2,000 over 50k views
   });
 });
+
+describe("measurement maturity", () => {
+  const live = (over: Partial<ContentItem>): ContentItem =>
+    item({ status: "verified", platform: "youtube", ...over });
+
+  it("keeps a half-measured deal out of the averages entirely", () => {
+    // Only the Instagram story has results; the YouTube video is live but unmeasured,
+    // so Instagram would otherwise carry the whole fee at an absurd CPM.
+    const rows = benchmarkRows(
+      [deal({ agreed_price: 2450, platforms: '["youtube","instagram"]' })],
+      [
+        live({ id: 1, platform: "youtube", actual_views: null }),
+        live({
+          id: 2,
+          platform: "instagram",
+          actual_views: 9_000,
+          posted_at: "2026-06-01",
+          actuals_measured_at: "2026-07-05",
+        }),
+      ]
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].isFinal).toBe(false);
+    expect(platformAverages(rows)).toEqual([]);
+  });
+
+  it("counts a deal once every live deliverable has a settled reading", () => {
+    const measured = {
+      actual_views: 50_000,
+      posted_at: "2026-06-01",
+      actuals_measured_at: "2026-07-05",
+    };
+    const rows = benchmarkRows(
+      [deal({ agreed_price: 2000, platforms: '["youtube"]' })],
+      [live({ id: 1, ...measured }), live({ id: 2, ...measured })]
+    );
+    expect(rows[0].isFinal).toBe(true);
+    expect(platformAverages(rows)).toHaveLength(1);
+  });
+
+  it("marks a reading taken before the window closed as provisional", () => {
+    const rows = benchmarkRows(
+      [deal({ agreed_price: 2000, platforms: '["youtube"]' })],
+      [
+        live({
+          id: 1,
+          actual_views: 20_000,
+          posted_at: "2026-07-18",
+          actuals_measured_at: "2026-07-20",
+        }),
+      ],
+      new Map(),
+      {},
+      "2026-07-22"
+    );
+    expect(rows[0].isFinal).toBe(false);
+    expect(rows[0].actualCpm).toBeCloseTo(100); // the misleading number, quarantined
+  });
+
+  it("still ignores unposted deliverables when judging completeness", () => {
+    const rows = benchmarkRows(
+      [deal({ agreed_price: 2000, platforms: '["youtube"]' })],
+      [
+        live({ id: 1, actual_views: 50_000, posted_at: "2026-06-01", actuals_measured_at: "2026-07-05" }),
+        item({ id: 2, status: "planned", actual_views: null }), // not live yet
+      ]
+    );
+    expect(rows[0].isFinal).toBe(true);
+  });
+});

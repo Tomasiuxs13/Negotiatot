@@ -19,7 +19,18 @@ const deal = (over: Partial<Deal>): Deal =>
   }) as Deal;
 
 const content = (over: Partial<ContentItem>): ContentItem =>
-  ({ id: 1, deal_id: 1, title: "YouTube integration", status: "planned", due_date: null, ...over }) as ContentItem;
+  ({
+    id: 1,
+    deal_id: 1,
+    title: "YouTube integration",
+    status: "planned",
+    due_date: null,
+    platform: "youtube",
+    posted_at: null,
+    actual_views: null,
+    actuals_measured_at: null,
+    ...over,
+  }) as ContentItem;
 
 const payment = (over: Partial<PaymentItem>): PaymentItem =>
   ({ id: 1, deal_id: 1, description: "Final fee", amount: 1500, status: "pending", ...over }) as PaymentItem;
@@ -111,7 +122,7 @@ describe("attentionItems", () => {
       ...base,
       contentItems: [content({ due_date: "2026-07-25", status: "posted" })],
     });
-    expect(posted).toEqual([]);
+    expect(posted.some((i) => i.title.includes("due in"))).toBe(false);
   });
 
   it("surfaces a finished analysis nobody has acted on", () => {
@@ -145,7 +156,7 @@ describe("attentionItems", () => {
       contentItems: [content({ status: "verified" })],
       payments: [payment({ status: "paid" })],
     });
-    expect(done[0].title).toContain("ready to wrap up");
+    expect(done.some((i) => i.title.includes("ready to wrap up"))).toBe(true);
 
     const stillOwed = attentionItems({
       ...base,
@@ -153,7 +164,7 @@ describe("attentionItems", () => {
       contentItems: [content({ status: "verified" })],
       payments: [payment({ status: "approved" })],
     });
-    expect(stillOwed).toEqual([]);
+    expect(stillOwed.some((i) => i.title.includes("ready to wrap up"))).toBe(false);
   });
 
   it("tells you to chase the creator on overdue content", () => {
@@ -170,5 +181,72 @@ describe("attentionItems", () => {
       deals: [deal({ stage: "lead", updated_at: "2026-07-10 09:00:00" })],
     });
     expect(items[0].title).toContain("untouched for 12 days");
+  });
+});
+
+describe("measurement nudges", () => {
+  const posted = (over: Partial<ContentItem>) =>
+    content({ status: "verified", due_date: null, ...over });
+
+  it("stays quiet while a platform's views are still settling", () => {
+    const items = attentionItems({
+      ...base,
+      // YouTube needs 30 days; this went live 10 days ago.
+      contentItems: [posted({ platform: "youtube", posted_at: "2026-07-12" })],
+    });
+    expect(items.some((i) => i.title.includes("ready to measure"))).toBe(false);
+  });
+
+  it("asks for results once the window closes", () => {
+    const items = attentionItems({
+      ...base,
+      contentItems: [posted({ platform: "youtube", posted_at: "2026-06-01" })],
+    });
+    const nudge = items.find((i) => i.title.includes("ready to measure"))!;
+    expect(nudge.detail).toContain("30-day window");
+  });
+
+  it("asks again when only a provisional number was logged", () => {
+    const items = attentionItems({
+      ...base,
+      contentItems: [
+        posted({
+          platform: "youtube",
+          posted_at: "2026-06-01",
+          actual_views: 20_000,
+          actuals_measured_at: "2026-06-04", // read 3 days in
+        }),
+      ],
+    });
+    const nudge = items.find((i) => i.title.includes("ready to measure"))!;
+    expect(nudge.detail).toContain("provisional");
+  });
+
+  it("leaves a settled reading alone", () => {
+    const items = attentionItems({
+      ...base,
+      contentItems: [
+        posted({
+          platform: "youtube",
+          posted_at: "2026-06-01",
+          actual_views: 71_000,
+          actuals_measured_at: "2026-07-05",
+        }),
+      ],
+    });
+    expect(items.some((i) => i.title.includes("ready to measure"))).toBe(false);
+  });
+
+  it("honours a configured window", () => {
+    const args = {
+      ...base,
+      contentItems: [posted({ platform: "youtube", posted_at: "2026-06-15" })], // 37 days ago
+    };
+    expect(attentionItems(args).some((i) => i.title.includes("ready to measure"))).toBe(true);
+    expect(
+      attentionItems({ ...args, windows: { youtube: 90 } }).some((i) =>
+        i.title.includes("ready to measure")
+      )
+    ).toBe(false);
   });
 });

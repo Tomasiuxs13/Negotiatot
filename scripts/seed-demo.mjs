@@ -122,8 +122,9 @@ function addContent(dealId, partnerId, items) {
         db
           .prepare(
             `INSERT INTO content_items (deal_id, title, platform, due_date, due_days_after_delivery, status, posted_url,
+                                        posted_at, actuals_measured_at,
                                         actual_views, actual_clicks, actual_orders, actual_revenue)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .run(
             dealId,
@@ -133,6 +134,8 @@ function addContent(dealId, partnerId, items) {
             it.afterDelivery ?? null,
             it.status,
             it.url ?? null,
+            it.postedAt ?? null,
+            it.measuredAt ?? null,
             it.views ?? null,
             it.clicks ?? null,
             it.orders ?? null,
@@ -241,8 +244,8 @@ console.log("Seeding demo deals…");
   );
   const content = addContent(dealId, partnerId, [
     { title: "YouTube integration, 60–90s", platform: "youtube", due: day(-4), status: "planned" }, // OVERDUE
-    { title: "Instagram story with link (1/2)", platform: "instagram", due: day(3), status: "posted", url: "https://instagram.com/stories/nordicniklas/1" },
-    { title: "Instagram story with link (2/2)", platform: "instagram", due: day(3), status: "verified", url: "https://instagram.com/stories/nordicniklas/2" },
+    { title: "Instagram story with link (1/2)", platform: "instagram", due: day(3), status: "posted", url: "https://instagram.com/stories/nordicniklas/1", postedAt: day(-16) },
+    { title: "Instagram story with link (2/2)", platform: "instagram", due: day(3), status: "verified", url: "https://instagram.com/stories/nordicniklas/2", postedAt: day(-3), measuredAt: day(-1), views: 9000, clicks: 120, orders: 4, revenue: 480 },
   ]);
   addShipment(dealId, partnerId, {
     product: "NordicGear Alpha 3 headset",
@@ -294,6 +297,8 @@ console.log("Seeding demo deals…");
       due: day(-110),
       status: "verified",
       url: "https://youtube.com/watch?v=niklas-spring",
+      postedAt: day(-110),
+      measuredAt: day(-75),
       views: 71000,
       clicks: 910,
       orders: 28,
@@ -365,8 +370,8 @@ console.log("Seeding demo deals…");
     day(-20)
   );
   const content = addContent(dealId, partnerId, [
-    { title: "Instagram reel (1/2)", platform: "instagram", due: day(-8), status: "verified", url: "https://instagram.com/reel/hanna1" },
-    { title: "Instagram reel (2/2)", platform: "instagram", due: day(-5), status: "verified", url: "https://instagram.com/reel/hanna2" },
+    { title: "Instagram reel (1/2)", platform: "instagram", due: day(-8), status: "verified", url: "https://instagram.com/reel/hanna1", postedAt: day(-8) },
+    { title: "Instagram reel (2/2)", platform: "instagram", due: day(-5), status: "verified", url: "https://instagram.com/reel/hanna2", postedAt: day(-5) },
   ]);
   addPayment(dealId, partnerId, { description: "Full fee after publication", amount: 1150, trigger: "on_verification", linked: content, status: "approvable" });
   console.log("  ✓ HomeWithHanna — all verified, €1,150 ready to approve");
@@ -547,9 +552,9 @@ console.log("Seeding demo deals…");
   );
   // The TikToks out-delivered the video 2:1 — the reason a single blended number lies.
   const content = addContent(dealId, partnerId, [
-    { title: "YouTube integration", platform: "youtube", due: day(-30), status: "verified", url: "https://youtube.com/watch?v=robin1", views: 58000, clicks: 690, orders: 21, revenue: 2520 },
-    { title: "TikTok short (1/2)", platform: "tiktok", due: day(-28), status: "verified", url: "https://tiktok.com/@reiserobin/1", views: 96000, clicks: 540, orders: 14, revenue: 1680 },
-    { title: "TikTok short (2/2)", platform: "tiktok", due: day(-28), status: "verified", url: "https://tiktok.com/@reiserobin/2", views: 61000, clicks: 320, orders: 9, revenue: 1080 },
+    { title: "YouTube integration", platform: "youtube", due: day(-30), status: "verified", url: "https://youtube.com/watch?v=robin1", postedAt: day(-30), measuredAt: day(-2), views: 58000, clicks: 690, orders: 21, revenue: 2520 },
+    { title: "TikTok short (1/2)", platform: "tiktok", due: day(-28), status: "verified", url: "https://tiktok.com/@reiserobin/1", postedAt: day(-28), measuredAt: day(-2), views: 96000, clicks: 540, orders: 14, revenue: 1680 },
+    { title: "TikTok short (2/2)", platform: "tiktok", due: day(-28), status: "verified", url: "https://tiktok.com/@reiserobin/2", postedAt: day(-28), measuredAt: day(-2), views: 61000, clicks: 320, orders: 9, revenue: 1080 },
   ]);
   addPayment(dealId, partnerId, {
     description: "Full fee",

@@ -1,6 +1,7 @@
 import type { Deal } from "./types";
 import type { ContentItem, PaymentItem, Shipment } from "./fulfillment-types";
 import { isOverdue } from "./fulfillment-rules";
+import { measurementState, type MeasurementWindows } from "./measurement";
 
 export type AttentionSeverity = "critical" | "warning" | "info";
 
@@ -23,6 +24,8 @@ export interface AttentionInput {
   silentDays?: number;
   /** Days in transit before a shipment looks stuck. */
   stuckDays?: number;
+  /** How long each platform's views need to settle before they're worth reading. */
+  windows?: MeasurementWindows;
 }
 
 /**
@@ -47,6 +50,7 @@ export function attentionItems({
   today = new Date().toISOString().slice(0, 10),
   silentDays = 3,
   stuckDays = 7,
+  windows = {},
 }: AttentionInput): AttentionItem[] {
   const items: AttentionItem[] = [];
   const dealById = new Map(deals.map((d) => [d.id, d]));
@@ -176,6 +180,24 @@ export function attentionItems({
         href: `/deals/${c.deal_id}`,
       });
     }
+  }
+
+  // Content that has had time to settle and still has no final reading. Nobody
+  // remembers that a video posted five weeks ago is now worth measuring.
+  for (const c of contentItems) {
+    const m = measurementState(c, windows, today);
+    if (m.state !== "due" && m.state !== "provisional") continue;
+    if (m.state === "provisional" && (m.daysUntilMature ?? 0) > 0) continue;
+    items.push({
+      id: `measure-${c.id}`,
+      severity: "info",
+      title: `${nameOf(c.deal_id)} — ready to measure`,
+      detail:
+        m.state === "provisional"
+          ? `${c.title} has settled — replace the provisional number with final results`
+          : `${c.title} passed its ${m.windowDays}-day window — log final results`,
+      href: `/deals/${c.deal_id}`,
+    });
   }
 
   // Deals where the work and the money are both done — close them out so the board

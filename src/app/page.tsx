@@ -1,7 +1,8 @@
 import Link from "next/link";
 import PageHeader, { NewDealButton } from "@/components/PageHeader";
 import AttentionPanel from "@/components/pipeline/AttentionPanel";
-import { getDeals, getPipelineKpis } from "@/lib/db";
+import { getDeals, getPipelineKpis, getSetting } from "@/lib/db";
+import type { MeasurementWindows } from "@/lib/measurement";
 import { attentionItems } from "@/lib/attention";
 import { getAllContentItems, getAllPaymentItems, getAllShipments } from "@/lib/fulfillment";
 import { STAGES, TERMINAL_STAGES } from "@/lib/types";
@@ -18,6 +19,7 @@ export default function DashboardPage() {
     contentItems: getAllContentItems(),
     shipments: getAllShipments(),
     payments,
+    windows: getSetting<MeasurementWindows>("measurement_windows") ?? {},
   });
 
   const outstanding = payments

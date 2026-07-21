@@ -1,5 +1,6 @@
 import PageHeader from "@/components/PageHeader";
-import { getDeals, getExpectedReach } from "@/lib/db";
+import { getDeals, getExpectedReach, getSetting } from "@/lib/db";
+import type { MeasurementWindows } from "@/lib/measurement";
 import { getAllContentItems } from "@/lib/fulfillment";
 import { benchmarkRows, platformAverages } from "@/lib/benchmark-rows";
 import { PLATFORM_META } from "@/lib/types";
@@ -11,7 +12,8 @@ export default function BenchmarksPage() {
   const deals = getDeals();
   // Bundle deals split into one row per platform, so a YouTube + TikTok deal
   // calibrates both baselines instead of inflating whichever came first.
-  const rows = benchmarkRows(deals, getAllContentItems(), getExpectedReach());
+  const windows = getSetting<MeasurementWindows>("measurement_windows") ?? {};
+  const rows = benchmarkRows(deals, getAllContentItems(), getExpectedReach(), windows);
   const calibrated = platformAverages(rows);
 
   return (
@@ -102,6 +104,14 @@ export default function BenchmarksPage() {
                           </span>
                           <span className="text-xs">{PLATFORM_META[r.platform].label}</span>
                           {r.label && <span className="text-xs text-slate-400">· {r.label}</span>}
+                          {!r.isFinal && (
+                            <span
+                              className="text-[10px] font-semibold bg-amber-50 text-amber-700 rounded-full px-1.5 py-0.5"
+                              title="Measured before the platform's views had settled — shown here, but excluded from the averages above"
+                            >
+                              provisional
+                            </span>
+                          )}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right font-tabular">{euro(r.price)}</td>
@@ -136,6 +146,14 @@ export default function BenchmarksPage() {
               Actual CPM in green means the deal delivered at or below what you predicted (you got
               equal or better reach per euro); amber means it under-delivered. As this table grows,
               the per-platform averages above become your calibrated fair-price baseline.
+              {rows.some((r) => !r.isFinal) && (
+                <>
+                  {" "}
+                  Rows marked <span className="font-medium text-amber-700">provisional</span>{" "}
+                  were read before that platform&apos;s views had settled — they&apos;re listed but
+                  left out of the averages, so an early number can&apos;t drag your baseline down.
+                </>
+              )}
             </p>
           </div>
         )}

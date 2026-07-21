@@ -1,6 +1,7 @@
 import type { Deal, Platform } from "./types";
 import { dealPlatforms } from "./types";
 import type { ContentItem } from "./fulfillment-types";
+import { countsTowardBenchmarks, measurementState, type MeasurementWindows } from "./measurement";
 
 /** Typical reach per deliverable, keyed `partnerId:platform` — the creator's channel averages. */
 export type ExpectedReach = Map<string, number>;
@@ -45,6 +46,12 @@ export interface BenchmarkRow {
   dealId: number;
   creator: string;
   platform: Platform;
+  /**
+   * True when every reading behind this row was taken after the platform's window
+   * closed. Provisional rows are shown but never averaged — one early number would
+   * otherwise drag down the baseline every future deal is priced against.
+   */
+  isFinal: boolean;
   /** Portion of the fee attributed to this platform. */
   price: number;
   label: string | null;
@@ -82,7 +89,9 @@ function sum(values: (number | null)[]): number | null {
 export function benchmarkRows(
   deals: Deal[],
   contentItems: ContentItem[],
-  expectedReach: ExpectedReach = new Map()
+  expectedReach: ExpectedReach = new Map(),
+  windows: MeasurementWindows = {},
+  today?: string
 ): BenchmarkRow[] {
   const rows: BenchmarkRow[] = [];
 
@@ -104,6 +113,16 @@ export function benchmarkRows(
     }
 
     if (byPlatform.size > 0) {
+      // While part of a deal is still unmeasured, the fee piles onto whichever platform
+      // reported first — so nothing from this deal calibrates anything until the whole
+      // deal is in.
+      const dealFullyMeasured = !contentItems.some(
+        (c) =>
+          c.deal_id === deal.id &&
+          (c.status === "posted" || c.status === "verified") &&
+          (c.actual_views == null || c.actual_views <= 0)
+      );
+
       const groups = [...byPlatform].map(([platform, group]) => ({
         platform,
         itemCount: group.length,
@@ -122,6 +141,9 @@ export function benchmarkRows(
           dealId: deal.id,
           creator: deal.creator,
           platform,
+          isFinal:
+            dealFullyMeasured &&
+            group.every((c) => countsTowardBenchmarks(measurementState(c, windows, today))),
           price: platformPrice,
           label: byPlatform.size > 1 ? `${group.length} item${group.length === 1 ? "" : "s"}` : null,
           // Predicted views are recorded per deal, not per platform, so only a
@@ -147,6 +169,8 @@ export function benchmarkRows(
       dealId: deal.id,
       creator: deal.creator,
       platform: dealPlatforms(deal)[0],
+      // Deal-level totals predate per-item measurement; take them at face value.
+      isFinal: true,
       price,
       label: dealPlatforms(deal).length > 1 ? "deal total" : null,
       predictedViews: deal.avg_views,
@@ -166,7 +190,7 @@ export function benchmarkRows(
 /** Calibrated averages per platform, from real delivery. */
 export function platformAverages(rows: BenchmarkRow[]) {
   return KNOWN.map((platform) => {
-    const rs = rows.filter((r) => r.platform === platform);
+    const rs = rows.filter((r) => r.platform === platform && r.isFinal);
     if (rs.length === 0) return null;
 
     const withRoas = rs.filter((r) => r.roas != null);

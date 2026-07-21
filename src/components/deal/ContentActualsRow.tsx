@@ -5,6 +5,13 @@ import type { ContentItem } from "@/lib/fulfillment-types";
 import { PLATFORM_META, type Platform } from "@/lib/types";
 import { euroCpm } from "@/lib/format";
 import { saveContentActualsAction } from "@/app/deals/[id]/fulfillment-actions";
+import {
+  MEASUREMENT_LABEL,
+  measurementState,
+  type Measurement,
+  type MeasurementState,
+  type MeasurementWindows,
+} from "@/lib/measurement";
 
 const inputClass =
   "w-24 border border-slate-200 rounded-md bg-white px-2 py-1 text-sm text-right font-tabular text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand";
@@ -15,16 +22,51 @@ const num = (s: string) => (s.trim() === "" ? null : Number(s));
  * One deliverable's results. Editing per item is what lets a YouTube + TikTok deal
  * calibrate both platforms instead of collapsing into a single number.
  */
+const BADGE: Record<MeasurementState, string> = {
+  not_posted: "bg-slate-100 text-slate-500",
+  maturing: "bg-sky-50 text-sky-700",
+  due: "bg-amber-50 text-amber-700",
+  provisional: "bg-amber-50 text-amber-700",
+  final: "bg-emerald-50 text-emerald-700",
+};
+
+/** Says whether a number can be trusted yet, and when it can. */
+function MeasurementBadge({ measurement }: { measurement: Measurement }) {
+  const { state, matureOn, daysUntilMature } = measurement;
+  const hint =
+    state === "maturing"
+      ? `Views still settling — final reading from ${matureOn} (${daysUntilMature} days)`
+      : state === "provisional"
+        ? `Read before ${matureOn}, so it doesn't count toward your benchmarks yet`
+        : state === "due"
+          ? "Past its window — this reading will count as final"
+          : state === "final"
+            ? "Settled: this calibrates your benchmarks"
+            : "Not live yet";
+
+  return (
+    <span
+      className={`text-[10px] font-semibold rounded-full px-1.5 py-0.5 ${BADGE[state]}`}
+      title={hint}
+    >
+      {MEASUREMENT_LABEL[state]}
+    </span>
+  );
+}
+
 export default function ContentActualsRow({
   item,
   dealId,
   sharePrice,
+  windows,
 }: {
   item: ContentItem;
   dealId: number;
   /** This item's share of the fee, for a per-item CPM readout. */
   sharePrice: number | null;
+  windows: MeasurementWindows;
 }) {
+  const measurement = measurementState(item, windows);
   const [views, setViews] = useState(item.actual_views?.toString() ?? "");
   const [clicks, setClicks] = useState(item.actual_clicks?.toString() ?? "");
   const [orders, setOrders] = useState(item.actual_orders?.toString() ?? "");
@@ -84,11 +126,7 @@ export default function ContentActualsRow({
           </span>
         )}
         <span className="text-sm font-medium text-slate-800">{item.title}</span>
-        {item.status !== "verified" && (
-          <span className="text-[10px] font-semibold bg-slate-100 text-slate-500 rounded-full px-1.5 py-0.5">
-            not verified
-          </span>
-        )}
+        <MeasurementBadge measurement={measurement} />
         {cpm != null && (
           <span className="ml-auto text-xs font-tabular text-slate-500">{euroCpm(cpm)} CPM</span>
         )}

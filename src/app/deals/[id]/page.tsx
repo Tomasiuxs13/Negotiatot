@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCampaign, getDeal, getMessages, getPartnerChannels, getUsageTotals } from "@/lib/db";
+import { getCampaign, getDeal, getMessages, getPartnerChannels, getSetting, getUsageTotals } from "@/lib/db";
+import type { MeasurementWindows } from "@/lib/measurement";
 import { describeOverrides, parseOverrides } from "@/lib/campaigns";
 import { PLATFORM_META, STAGES, dealPlatforms, dealScope } from "@/lib/types";
 import PriceLadder from "@/components/deal/PriceLadder";
@@ -230,6 +231,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
               deal={deal}
               contentItems={contentItems}
               expectedReach={expectedReach}
+              windows={getSetting<MeasurementWindows>("measurement_windows") ?? {}}
             />
           ) : undefined
         }

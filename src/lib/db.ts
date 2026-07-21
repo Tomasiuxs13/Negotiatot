@@ -215,6 +215,17 @@ for (const table of ["content_items", "payment_items", "shipments", "contracts"]
     db.exec("ALTER TABLE content_items ADD COLUMN actual_orders INTEGER");
   if (!cols.includes("actual_revenue"))
     db.exec("ALTER TABLE content_items ADD COLUMN actual_revenue INTEGER");
+  // A view count without an age can't be compared to another one.
+  if (!cols.includes("posted_at")) db.exec("ALTER TABLE content_items ADD COLUMN posted_at TEXT");
+  if (!cols.includes("actuals_measured_at"))
+    db.exec("ALTER TABLE content_items ADD COLUMN actuals_measured_at TEXT");
+
+  // Items that went live before posting was timestamped: the last edit is the closest
+  // honest estimate of when they were published.
+  db.exec(
+    `UPDATE content_items SET posted_at = date(updated_at)
+     WHERE posted_at IS NULL AND status IN ('posted', 'verified')`
+  );
 }
 
 /**

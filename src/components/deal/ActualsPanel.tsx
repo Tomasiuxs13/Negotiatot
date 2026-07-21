@@ -6,6 +6,7 @@ import { PLATFORM_META, dealPlatforms, type Platform } from "@/lib/types";
 import type { ContentItem } from "@/lib/fulfillment-types";
 import { euro, euroCpm, views as fmtViews } from "@/lib/format";
 import { allocateFee } from "@/lib/benchmark-rows";
+import type { MeasurementWindows } from "@/lib/measurement";
 import { saveActuals } from "@/app/deals/[id]/actions";
 import ContentActualsRow from "./ContentActualsRow";
 
@@ -16,11 +17,13 @@ export default function ActualsPanel({
   deal,
   contentItems,
   expectedReach,
+  windows,
 }: {
   deal: Deal;
   contentItems: ContentItem[];
   /** Channel averages per platform, keyed by platform — mirrors the benchmark split. */
   expectedReach?: Record<string, number>;
+  windows?: MeasurementWindows;
 }) {
   const price = deal.agreed_price ?? deal.current_offer;
 
@@ -33,6 +36,7 @@ export default function ActualsPanel({
         contentItems={contentItems}
         price={price}
         expectedReach={expectedReach ?? {}}
+        windows={windows ?? {}}
       />
     );
   }
@@ -44,11 +48,13 @@ function PerItemActuals({
   contentItems,
   price,
   expectedReach,
+  windows,
 }: {
   deal: Deal;
   contentItems: ContentItem[];
   price: number | null;
   expectedReach: Record<string, number>;
+  windows: MeasurementWindows;
 }) {
   const measured = contentItems.filter((c) => c.actual_views != null && c.actual_views > 0);
   const totalViews = measured.reduce((s, c) => s + (c.actual_views ?? 0), 0);
@@ -115,6 +121,7 @@ function PerItemActuals({
             item={item}
             dealId={deal.id}
             sharePrice={shareOf(item)}
+            windows={windows}
           />
         ))}
       </div>

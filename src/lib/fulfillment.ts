@@ -121,12 +121,15 @@ export interface ContentActuals {
  * partner stats, the deal's own Actuals tab — keeps working unchanged.
  */
 export function setContentActuals(id: number, actuals: ContentActuals) {
+  // Stamping when the reading was taken is what separates a provisional number from
+  // one the playbook can be calibrated against.
   db.prepare(
     `UPDATE content_items
      SET actual_views = ?, actual_clicks = ?, actual_orders = ?, actual_revenue = ?,
+         actuals_measured_at = CASE WHEN ? IS NULL THEN NULL ELSE date('now') END,
          updated_at = datetime('now')
      WHERE id = ?`
-  ).run(actuals.views, actuals.clicks, actuals.orders, actuals.revenue, id);
+  ).run(actuals.views, actuals.clicks, actuals.orders, actuals.revenue, actuals.views, id);
 
   const item = db.prepare("SELECT deal_id FROM content_items WHERE id = ?").get(id) as
     | { deal_id: number }
@@ -177,6 +180,11 @@ export function updateContentItem(
   if (fields.status !== undefined) {
     sets.push("status = ?");
     params.push(fields.status);
+    // Stamp the publication date the first time it goes live — it starts the clock
+    // every view count is later judged against.
+    if (fields.status === "posted" || fields.status === "verified") {
+      sets.push("posted_at = COALESCE(posted_at, date('now'))");
+    }
   }
   if (fields.postedUrl !== undefined) {
     sets.push("posted_url = ?");

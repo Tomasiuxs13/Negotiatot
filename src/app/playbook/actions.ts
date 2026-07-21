@@ -7,6 +7,7 @@ export interface PlaybookPayload {
   platforms: Record<string, Record<string, unknown>>;
   unitEconomics: Record<string, unknown>;
   negotiationStyle: Record<string, unknown>;
+  measurementWindows?: Record<string, number>;
 }
 
 export async function savePlaybookAction(payload: PlaybookPayload): Promise<{ error?: string }> {
@@ -17,6 +18,8 @@ export async function savePlaybookAction(payload: PlaybookPayload): Promise<{ er
     }
     setSetting("unit_economics", payload.unitEconomics);
     setSetting("negotiation_style", payload.negotiationStyle);
+    if (payload.measurementWindows) setSetting("measurement_windows", payload.measurementWindows);
+    revalidatePath("/benchmarks");
     revalidatePath("/playbook");
     revalidatePath("/");
   revalidatePath("/pipeline");
