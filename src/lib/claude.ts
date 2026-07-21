@@ -2,7 +2,12 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { Deal, DealAnalysis, Message } from "./types";
 
-const MODEL = "claude-opus-4-8";
+export const MODEL = "claude-opus-4-8";
+
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
 
 export function hasApiKey(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
@@ -137,6 +142,7 @@ export interface AnalysisResult {
   estimatedEngagementRate: number | null;
   theirAsk: number | null;
   extractedChannelUrl: string | null;
+  usage: TokenUsage;
 }
 
 export type ImageMediaType = "image/png" | "image/jpeg" | "image/webp" | "image/gif";
@@ -230,10 +236,17 @@ export async function analyzeDeal(params: {
     },
   };
 
+  const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+  const track = (r: Anthropic.Message) => {
+    usage.inputTokens += r.usage.input_tokens;
+    usage.outputTokens += r.usage.output_tokens;
+  };
+
   let response = await client.messages.create({
     ...baseRequest,
     messages: [{ role: "user", content: userContent }],
   });
+  track(response);
 
   // Server-side tools (web search) can pause the turn; resume until done.
   let pauseGuard = 0;
@@ -246,6 +259,7 @@ export async function analyzeDeal(params: {
         { role: "assistant", content: response.content },
       ],
     });
+    track(response);
   }
 
   if (response.stop_reason === "refusal") {
@@ -284,6 +298,7 @@ export async function analyzeDeal(params: {
     estimatedEngagementRate: parsed.estimatedEngagementRate,
     theirAsk: parsed.theirAsk,
     extractedChannelUrl: parsed.extractedChannelUrl,
+    usage,
   };
 }
 
@@ -344,6 +359,7 @@ export interface RecoResult {
   reasoning: string[];
   drafts: { balanced: string; warm: string; firm: string };
   theirCurrentPosition: number | null;
+  usage: TokenUsage;
 }
 
 export async function recommendNextMove(params: {
@@ -408,7 +424,13 @@ export async function recommendNextMove(params: {
   }
   const text = response.content.find((b) => b.type === "text")?.text;
   if (!text) throw new Error("Empty recommendation response from Claude.");
-  const parsed = JSON.parse(text) as RecoResult;
-  parsed.proposedOffer = Math.round(parsed.proposedOffer);
-  return parsed;
+  const parsed = JSON.parse(text) as Omit<RecoResult, "usage">;
+  return {
+    ...parsed,
+    proposedOffer: Math.round(parsed.proposedOffer),
+    usage: {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+    },
+  };
 }

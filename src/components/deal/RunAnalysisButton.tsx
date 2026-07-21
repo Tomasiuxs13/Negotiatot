@@ -32,7 +32,7 @@ export default function RunAnalysisButton({
           className="flex items-center gap-1.5 border border-slate-200 hover:border-slate-400 text-slate-600 rounded-md py-1 px-2.5 text-xs font-medium transition-colors disabled:opacity-60"
         >
           <span className="material-symbols-outlined" style={{ fontSize: 14 }}>refresh</span>
-          {isPending ? "Re-analyzing…" : "Re-run analysis"}
+          {isPending ? "Starting…" : "Re-run analysis"}
         </button>
       </div>
     );
@@ -45,7 +45,7 @@ export default function RunAnalysisButton({
         disabled={isPending}
         className="bg-brand hover:bg-brand-dark text-white rounded-md py-2 px-4 text-sm font-medium transition-colors shadow-sm disabled:opacity-60"
       >
-        {isPending ? "Analyzing… (can take a minute)" : "Run analysis"}
+        {isPending ? "Starting…" : "Run analysis"}
       </button>
       {error && <p className="text-xs text-red-600 mt-2 max-w-md mx-auto">{error}</p>}
     </div>

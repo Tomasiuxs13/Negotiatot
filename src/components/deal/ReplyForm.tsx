@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { addTheirReply } from "@/app/deals/[id]/actions";
 
-export default function ReplyForm({ dealId }: { dealId: number }) {
+export default function ReplyForm({ dealId, busy = false }: { dealId: number; busy?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -38,10 +38,10 @@ export default function ReplyForm({ dealId }: { dealId: number }) {
       />
       <button
         onClick={submit}
-        disabled={isPending}
+        disabled={isPending || busy}
         className="mt-2 bg-brand hover:bg-brand-dark text-white rounded-md py-1.5 px-4 text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
       >
-        {isPending ? "Analyzing… (the Copilot is thinking, this can take a minute)" : "Analyze reply"}
+        {busy ? "Copilot is busy…" : isPending ? "Sending…" : "Send to Copilot"}
       </button>
       {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
     </div>

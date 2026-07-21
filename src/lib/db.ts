@@ -54,6 +54,18 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS usage_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  deal_id INTEGER,
+  kind TEXT NOT NULL,
+  model TEXT NOT NULL,
+  input_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `);
 
 // Lightweight migrations for existing databases
@@ -69,6 +81,27 @@ CREATE TABLE IF NOT EXISTS settings (
   if (!cols.includes("actual_orders")) db.exec("ALTER TABLE deals ADD COLUMN actual_orders INTEGER");
   if (!cols.includes("actual_revenue")) db.exec("ALTER TABLE deals ADD COLUMN actual_revenue INTEGER");
   if (!cols.includes("actuals_logged_at")) db.exec("ALTER TABLE deals ADD COLUMN actuals_logged_at TEXT");
+  if (!cols.includes("job_status")) db.exec("ALTER TABLE deals ADD COLUMN job_status TEXT");
+  if (!cols.includes("job_error")) db.exec("ALTER TABLE deals ADD COLUMN job_error TEXT");
+  if (!cols.includes("job_started_at")) db.exec("ALTER TABLE deals ADD COLUMN job_started_at TEXT");
+  db.exec(`CREATE TABLE IF NOT EXISTS usage_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    deal_id INTEGER,
+    kind TEXT NOT NULL,
+    model TEXT NOT NULL,
+    input_tokens INTEGER NOT NULL,
+    output_tokens INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+}
+
+/** Jobs interrupted by a server restart would otherwise spin forever — fail them. */
+function failStaleJobs() {
+  db.prepare(
+    `UPDATE deals SET job_status = NULL, job_started_at = NULL,
+       job_error = 'The job was interrupted (server restarted?). Run it again.'
+     WHERE job_status IS NOT NULL AND job_started_at < datetime('now', '-15 minutes')`
+  ).run();
 }
 
 function seedIfEmpty() {
@@ -276,11 +309,54 @@ function seedIfEmpty() {
 seedIfEmpty();
 
 export function getDeals(): Deal[] {
+  failStaleJobs();
   return db.prepare("SELECT * FROM deals ORDER BY updated_at DESC").all() as Deal[];
 }
 
 export function getDeal(id: number): Deal | undefined {
+  failStaleJobs();
   return db.prepare("SELECT * FROM deals WHERE id = ?").get(id) as Deal | undefined;
+}
+
+export function setJob(dealId: number, status: "analyzing" | "recommending") {
+  db.prepare(
+    "UPDATE deals SET job_status = ?, job_error = NULL, job_started_at = datetime('now') WHERE id = ?"
+  ).run(status, dealId);
+}
+
+export function clearJob(dealId: number, error?: string) {
+  db.prepare(
+    "UPDATE deals SET job_status = NULL, job_started_at = NULL, job_error = ? WHERE id = ?"
+  ).run(error ?? null, dealId);
+}
+
+export function logUsage(
+  dealId: number | null,
+  kind: "analysis" | "recommendation",
+  model: string,
+  inputTokens: number,
+  outputTokens: number
+) {
+  db.prepare(
+    "INSERT INTO usage_log (deal_id, kind, model, input_tokens, output_tokens) VALUES (?, ?, ?, ?, ?)"
+  ).run(dealId, kind, model, inputTokens, outputTokens);
+}
+
+export interface UsageTotals {
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export function getUsageTotals(dealId?: number): UsageTotals {
+  const where = dealId != null ? "WHERE deal_id = ?" : "";
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS calls, COALESCE(SUM(input_tokens),0) AS inputTokens,
+              COALESCE(SUM(output_tokens),0) AS outputTokens FROM usage_log ${where}`
+    )
+    .get(...(dealId != null ? [dealId] : [])) as UsageTotals;
+  return row;
 }
 
 export function getMessages(dealId: number): Message[] {
@@ -369,6 +445,7 @@ export function updateDeal(dealId: number, fields: Record<string, unknown>) {
     "agreed_price", "anchor", "target", "walkaway", "breakeven", "avg_views",
     "engagement_rate", "status_label", "status_tone", "campaign", "analysis", "channel_url",
     "actual_views", "actual_clicks", "actual_orders", "actual_revenue", "actuals_logged_at",
+    "job", "job_error",
   ];
   const keys = Object.keys(fields).filter((k) => allowed.includes(k));
   if (keys.length === 0) return;

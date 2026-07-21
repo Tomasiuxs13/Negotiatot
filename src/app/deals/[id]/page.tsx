@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getDeal, getMessages } from "@/lib/db";
+import { getDeal, getMessages, getUsageTotals } from "@/lib/db";
 import { PLATFORM_META, STAGES, dealPlatforms, dealScope } from "@/lib/types";
 import PriceLadder from "@/components/deal/PriceLadder";
 import DealTabs from "@/components/deal/DealTabs";
 import DeleteDealButton from "@/components/deal/DeleteDealButton";
 import ActualsPanel from "@/components/deal/ActualsPanel";
+import JobPoller, { JobChip } from "@/components/deal/JobPoller";
 import AnalysisTab from "@/components/deal/AnalysisTab";
 import NegotiationTab from "@/components/deal/NegotiationTab";
 
@@ -31,9 +32,18 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   const scope = dealScope(deal);
 
   function HistoryTab() {
+    const usage = getUsageTotals(deal.id);
+    const estCost = (usage.inputTokens / 1_000_000) * 5 + (usage.outputTokens / 1_000_000) * 25;
     return (
       <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
-        <h3 className="font-headline text-sm font-semibold text-slate-900 mb-3">Deal history</h3>
+        <div className="flex items-baseline justify-between mb-3">
+          <h3 className="font-headline text-sm font-semibold text-slate-900">Deal history</h3>
+          {usage.calls > 0 && (
+            <span className="text-xs text-slate-400 font-tabular">
+              Copilot usage: {usage.calls} calls · ≈ ${estCost.toFixed(2)}
+            </span>
+          )}
+        </div>
         <div className="divide-y divide-slate-100">
           <div className="flex gap-3 py-2.5 text-xs first:pt-0">
             <span className="text-slate-400 w-14 shrink-0">
@@ -62,6 +72,12 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
 
   return (
     <main className="flex-1 overflow-y-auto p-8">
+      <JobPoller active={deal.job_status != null} />
+      {deal.job_error && !deal.job_status && (
+        <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 max-w-2xl">
+          {deal.job_error}
+        </div>
+      )}
       <div className="text-xs text-slate-500 mb-3">
         <Link href="/" className="underline underline-offset-2 hover:text-slate-700">
           Pipeline
@@ -91,6 +107,11 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
             {STAGE_LABEL[deal.stage] ?? deal.stage}
             {deal.round > 0 ? ` · Round ${deal.round}` : ""}
           </span>
+          {deal.job_status && (
+            <JobChip
+              label={deal.job_status === "analyzing" ? "Analyzing…" : "Copilot drafting…"}
+            />
+          )}
           <span className="text-xs text-slate-500 ml-auto">
             Campaign: {deal.campaign ?? "—"}
           </span>

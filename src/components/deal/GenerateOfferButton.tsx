@@ -27,7 +27,7 @@ export default function GenerateOfferButton({ dealId }: { dealId: number }) {
         disabled={isPending}
         className="bg-brand hover:bg-brand-dark text-white rounded-md py-2 px-4 text-sm font-medium transition-colors shadow-sm disabled:opacity-60"
       >
-        {isPending ? "Drafting opening offer… (can take a minute)" : "Generate opening offer"}
+        {isPending ? "Starting…" : "Generate opening offer"}
       </button>
       {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
     </div>

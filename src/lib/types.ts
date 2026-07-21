@@ -32,6 +32,9 @@ export interface Deal {
   actual_orders: number | null;
   actual_revenue: number | null;
   actuals_logged_at: string | null;
+  job_status: "analyzing" | "recommending" | null;
+  job_error: string | null;
+  job_started_at: string | null;
   created_at: string;
   updated_at: string;
 }

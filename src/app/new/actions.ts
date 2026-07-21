@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { addMessage, createDeal, getDeal, getPlaybook, getSetting, updateDeal } from "@/lib/db";
+import { after } from "next/server";
 import sharp from "sharp";
-import { analyzeDeal, hasApiKey, type ImageMediaType } from "@/lib/claude";
+import { addMessage, createDeal, setJob, updateDeal } from "@/lib/db";
+import { hasApiKey, type ImageMediaType } from "@/lib/claude";
+import { performAnalysis } from "@/lib/engine";
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
@@ -31,7 +33,6 @@ async function prepareImage(
   }
   return { base64: buffer.toString("base64"), mediaType: originalType };
 }
-const VALID_PLATFORMS = ["youtube", "instagram", "tiktok"];
 
 export async function createDealAction(
   formData: FormData
@@ -40,7 +41,7 @@ export async function createDealAction(
   const platforms = formData
     .getAll("platforms")
     .map(String)
-    .filter((p) => VALID_PLATFORMS.includes(p));
+    .filter((p) => ["youtube", "instagram", "tiktok"].includes(p));
   const deliverables = String(formData.get("deliverables") ?? "").trim() || null;
   const campaign = String(formData.get("campaign") ?? "").trim() || null;
   const message = String(formData.get("message") ?? "").trim();
@@ -93,56 +94,17 @@ export async function createDealAction(
     };
   }
 
-  try {
-    const deal = getDeal(id)!;
-    const result = await analyzeDeal({
-      deal,
-      playbook: {
-        rulesByPlatform: Object.fromEntries(platforms.map((p) => [p, getPlaybook(p)])),
-        unitEconomics: getSetting<Record<string, unknown>>("unit_economics"),
-        negotiationStyle: getSetting<Record<string, unknown>>("negotiation_style"),
-      },
+  // The analysis runs in the background; the deal page shows live progress.
+  setJob(id, "analyzing");
+  updateDeal(id, { status_label: "Analyzing…", status_tone: "neutral" });
+  after(() =>
+    performAnalysis(id, {
       reportPdfBase64: pdfBase64,
       reportImage,
-      theirMessage: message || undefined,
       channelUrl: channelUrl || undefined,
-    });
-
-    updateDeal(id, {
-      channel_url: channelUrl || result.extractedChannelUrl,
-      analysis: JSON.stringify(result.analysis),
-      anchor: result.numbers.anchor ?? null,
-      target: result.numbers.target ?? null,
-      walkaway: result.numbers.walkaway ?? null,
-      breakeven: result.numbers.breakeven ?? null,
-      avg_views: knownAvgViews ?? result.estimatedAvgViews,
-      engagement_rate: knownEngagement ?? result.estimatedEngagementRate,
-      first_ask: result.theirAsk,
-      current_ask: result.theirAsk,
-      status_label:
-        result.analysis.verdict === "accept"
-          ? "Good deal"
-          : result.analysis.verdict === "decline"
-            ? result.theirAsk != null
-              ? "Above walk-away"
-              : "Verdict: walk away"
-            : "Analyzed · negotiable",
-      status_tone:
-        result.analysis.verdict === "accept"
-          ? "good"
-          : result.analysis.verdict === "decline"
-            ? "warn"
-            : "neutral",
-    });
-    revalidatePath("/");
-    revalidatePath(`/deals/${id}`);
-    return { id };
-  } catch (err) {
-    console.error("createDealAction analysis failed:", err);
-    updateDeal(id, { status_label: "Analysis failed — retry from the deal page", status_tone: "warn" });
-    return {
-      id,
-      warning: `Deal created, but analysis failed: ${err instanceof Error ? err.message : "unknown error"}. You can retry from the deal page.`,
-    };
-  }
+      knownAvgViews,
+      knownEngagement,
+    })
+  );
+  return { id };
 }

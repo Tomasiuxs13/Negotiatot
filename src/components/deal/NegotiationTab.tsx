@@ -95,7 +95,20 @@ export default function NegotiationTab({ deal, messages }: { deal: Deal; message
           <Bubble key={m.id} msg={m} creator={deal.creator} />
         ))}
 
-        {reco ? (
+        {deal.job_status === "recommending" ? (
+          <div className="bg-white rounded-lg border border-brand/30 p-6 text-center">
+            <div className="inline-flex items-center gap-2.5 text-sm font-medium text-slate-700">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand opacity-60" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand" />
+              </span>
+              The Copilot is working out your next move…
+            </div>
+            <p className="text-xs text-slate-500 mt-2">
+              Usually 30–90 seconds — you can leave this page; the recommendation will be here.
+            </p>
+          </div>
+        ) : reco ? (
           <CopilotCard dealId={deal.id} reco={reco} />
         ) : thread.length === 0 ? (
           <GenerateOfferButton dealId={deal.id} />
@@ -105,7 +118,7 @@ export default function NegotiationTab({ deal, messages }: { deal: Deal; message
           </div>
         )}
 
-        <ReplyForm dealId={deal.id} />
+        <ReplyForm dealId={deal.id} busy={deal.job_status != null} />
       </div>
 
       {/* Rail */}

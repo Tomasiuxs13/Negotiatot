@@ -153,9 +153,7 @@ export default function NewDealForm() {
         disabled={isPending || selected.length === 0}
         className="w-full bg-brand hover:bg-brand-dark text-white rounded-lg py-2.5 text-sm font-semibold transition-colors shadow-sm disabled:opacity-60"
       >
-        {isPending
-          ? "Creating deal & running analysis… (can take a minute or two)"
-          : "Create deal & run analysis"}
+        {isPending ? "Creating deal…" : "Create deal & run analysis"}
       </button>
       <p className="text-xs text-slate-500 text-center">
         No inputs at all? The analysis will be rough — add a channel URL so Counterpart can research
