@@ -1,7 +1,11 @@
 import PageHeader from "@/components/PageHeader";
 import NewDealForm from "@/components/new/NewDealForm";
+import { getCampaigns } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
 
 export default function NewDealPage() {
+  const campaigns = getCampaigns().map((c) => ({ id: c.id, name: c.name }));
   return (
     <>
       <PageHeader
@@ -11,7 +15,7 @@ export default function NewDealPage() {
       <main className="flex-1 overflow-y-auto p-8">
         <div className="grid grid-cols-[1.3fr_0.7fr] gap-4 items-start max-w-5xl">
           <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
-            <NewDealForm />
+            <NewDealForm campaigns={campaigns} />
           </div>
 
           <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">

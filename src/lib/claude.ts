@@ -24,6 +24,7 @@ function getClient(): Anthropic {
 
 interface PlaybookContext {
   rulesByPlatform: Record<string, Record<string, unknown> | null>;
+  campaignName?: string;
   unitEconomics: Record<string, unknown> | null;
   negotiationStyle: Record<string, unknown> | null;
 }
@@ -34,10 +35,15 @@ function playbookBlock(ctx: PlaybookContext): string {
     .join("\n");
   return [
     `## The manager's Playbook (hard rules — every number you produce must respect these)`,
+    ctx.campaignName
+      ? `These rules are already resolved for the campaign "${ctx.campaignName}" — campaign-specific overrides (e.g. a different target geo or CPM ceiling) are baked into the values below. Judge this deal only against these numbers.`
+      : ``,
     perPlatform,
     `Unit economics (for breakeven math): ${JSON.stringify(ctx.unitEconomics)}`,
     `Negotiation style & concession rules: ${JSON.stringify(ctx.negotiationStyle)}`,
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function dealPlatformList(deal: Deal): string[] {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getDeal, getMessages, getUsageTotals } from "@/lib/db";
+import { getCampaign, getDeal, getMessages, getUsageTotals } from "@/lib/db";
+import { describeOverrides, parseOverrides } from "@/lib/campaigns";
 import { PLATFORM_META, STAGES, dealPlatforms, dealScope } from "@/lib/types";
 import PriceLadder from "@/components/deal/PriceLadder";
 import DealTabs from "@/components/deal/DealTabs";
@@ -30,6 +31,8 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   const messages = getMessages(deal.id);
   const platforms = dealPlatforms(deal);
   const scope = dealScope(deal);
+  const campaign = deal.campaign_id != null ? getCampaign(deal.campaign_id) : undefined;
+  const campaignOverrides = campaign ? describeOverrides(parseOverrides(campaign.overrides)) : [];
 
   function HistoryTab() {
     const usage = getUsageTotals(deal.id);
@@ -112,8 +115,20 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
               label={deal.job_status === "analyzing" ? "Analyzing…" : "Copilot drafting…"}
             />
           )}
-          <span className="text-xs text-slate-500 ml-auto">
-            Campaign: {deal.campaign ?? "—"}
+          <span
+            className="text-xs text-slate-500 ml-auto"
+            title={
+              campaignOverrides.length > 0
+                ? `Campaign overrides — ${campaignOverrides.join(" · ")}`
+                : undefined
+            }
+          >
+            Campaign: {campaign?.name ?? deal.campaign ?? "—"}
+            {campaignOverrides.length > 0 && (
+              <span className="ml-1.5 text-brand-dark font-medium">
+                · {campaignOverrides.length} override{campaignOverrides.length > 1 ? "s" : ""}
+              </span>
+            )}
           </span>
           <DeleteDealButton dealId={deal.id} creator={deal.creator} />
         </div>

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import sharp from "sharp";
-import { addMessage, createDeal, setJob, updateDeal } from "@/lib/db";
+import { addMessage, createDeal, getCampaign, setJob, updateDeal } from "@/lib/db";
 import { hasApiKey, type ImageMediaType } from "@/lib/claude";
 import { performAnalysis } from "@/lib/engine";
 
@@ -43,7 +43,12 @@ export async function createDealAction(
     .map(String)
     .filter((p) => ["youtube", "instagram", "tiktok"].includes(p));
   const deliverables = String(formData.get("deliverables") ?? "").trim() || null;
-  const campaign = String(formData.get("campaign") ?? "").trim() || null;
+  const campaignIdRaw = String(formData.get("campaign_id") ?? "").trim();
+  const campaignId = campaignIdRaw ? Number(campaignIdRaw) : null;
+  const campaign =
+    (campaignId != null ? getCampaign(campaignId)?.name : null) ??
+    String(formData.get("campaign") ?? "").trim() ??
+    null;
   const message = String(formData.get("message") ?? "").trim();
   const channelUrl = String(formData.get("channel_url") ?? "").trim();
   const knownAvgViews = Number(formData.get("known_avg_views")) || null;
@@ -79,7 +84,8 @@ export async function createDealAction(
     creator,
     platforms,
     deliverables,
-    campaign,
+    campaign: campaign || null,
+    campaignId,
     avg_views: knownAvgViews,
     engagement_rate: knownEngagement,
   });

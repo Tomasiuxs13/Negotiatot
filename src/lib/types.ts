@@ -25,6 +25,7 @@ export interface Deal {
   status_label: string | null;
   status_tone: StatusTone;
   campaign: string | null;
+  campaign_id: number | null;
   analysis: string | null;
   channel_url: string | null;
   actual_views: number | null;

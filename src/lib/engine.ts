@@ -2,6 +2,7 @@ import "server-only";
 import {
   addMessage,
   clearJob,
+  getCampaign,
   getDeal,
   getMessages,
   getPlaybook,
@@ -9,6 +10,7 @@ import {
   logUsage,
   updateDeal,
 } from "./db";
+import { applyCampaignOverrides, parseOverrides } from "./campaigns";
 import {
   analyzeDeal,
   recommendNextMove,
@@ -29,9 +31,27 @@ export function platformsOf(deal: Pick<Deal, "platform" | "platforms">): string[
   return [deal.platform];
 }
 
-export function playbookContext(platforms: string[]) {
+/**
+ * Builds the rules the engine negotiates by: the global Playbook for each
+ * platform, with the deal's campaign overrides layered on top.
+ */
+export function playbookContext(platforms: string[], campaignId?: number | null) {
+  let rulesByPlatform: Record<string, Record<string, unknown> | null> = Object.fromEntries(
+    platforms.map((p) => [p, getPlaybook(p)])
+  );
+
+  let campaignName: string | undefined;
+  if (campaignId != null) {
+    const campaign = getCampaign(campaignId);
+    if (campaign) {
+      campaignName = campaign.name;
+      rulesByPlatform = applyCampaignOverrides(rulesByPlatform, parseOverrides(campaign.overrides));
+    }
+  }
+
   return {
-    rulesByPlatform: Object.fromEntries(platforms.map((p) => [p, getPlaybook(p)])),
+    rulesByPlatform,
+    campaignName,
     unitEconomics: getSetting<Record<string, unknown>>("unit_economics"),
     negotiationStyle: getSetting<Record<string, unknown>>("negotiation_style"),
   };
@@ -62,7 +82,7 @@ export async function performAnalysis(
 
     const result = await analyzeDeal({
       deal,
-      playbook: playbookContext(platformsOf(deal)),
+      playbook: playbookContext(platformsOf(deal), deal.campaign_id),
       reportPdfBase64: inputs.reportPdfBase64,
       reportImage: inputs.reportImage,
       theirMessage: theirMessage || undefined,
@@ -119,7 +139,7 @@ export async function performRecommendation(dealId: number) {
     const reco = await recommendNextMove({
       deal,
       messages,
-      playbook: playbookContext(platformsOf(deal)),
+      playbook: playbookContext(platformsOf(deal), deal.campaign_id),
     });
 
     logUsage(dealId, "recommendation", MODEL, reco.usage.inputTokens, reco.usage.outputTokens);

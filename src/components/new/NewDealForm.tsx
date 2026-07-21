@@ -13,7 +13,11 @@ const PLATFORMS = [
   { value: "tiktok", label: "TikTok" },
 ];
 
-export default function NewDealForm() {
+export default function NewDealForm({
+  campaigns = [],
+}: {
+  campaigns?: { id: number; name: string }[];
+}) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
@@ -88,8 +92,28 @@ export default function NewDealForm() {
       </div>
 
       <div>
-        <label className="block text-xs font-semibold text-slate-700 mb-1.5">Campaign</label>
-        <input name="campaign" placeholder="e.g. Q3 DACH launch" className={inputClass} />
+        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+          Campaign{" "}
+          <span className="font-normal text-slate-500">
+            — its rule overrides apply to this deal
+          </span>
+        </label>
+        {campaigns.length > 0 ? (
+          <select name="campaign_id" className={inputClass} defaultValue="">
+            <option value="">No campaign — use the global Playbook</option>
+            {campaigns.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            name="campaign"
+            placeholder="e.g. Q3 DACH launch"
+            className={inputClass}
+          />
+        )}
       </div>
 
       <div>

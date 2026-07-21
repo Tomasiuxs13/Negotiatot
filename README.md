@@ -14,6 +14,7 @@ Built with Next.js (App Router), SQLite, and the Claude API (`claude-opus-4-8` w
 - **New Deal intake** — multi-platform deals with a free-text deliverables list ("1× YouTube integration + 2× IG reels"); every input optional, including outbound deals where you make the first offer. Uploads (PDF or screenshot) are parsed by Claude; oversized images are auto-resized server-side.
 - **Deal workspace** — price-ladder visualization, analysis tab with verdict + reasoning, threaded negotiation with the Copilot card, offer tracker, concession ladder, and guardrails (never drafts above walk-away).
 - **Playbook** — per-platform economics targets, unit economics (drives breakeven), negotiation style, concession ladder, and non-negotiables. Every number and draft traces back to this page.
+- **Campaigns** — optional per-campaign overrides of any Playbook rule (target geo, CPM ceilings, engagement floor, max per deal) plus a campaign budget. Run a SE-Asia push at a different geo target without touching your global rules; blank fields inherit.
 - **Actuals & Benchmarks** — log views/clicks/orders/revenue on closed deals; see predicted vs actual CPM, delivery %, and ROAS per platform.
 
 ## Setup
@@ -27,7 +28,9 @@ npm run dev
 
 Open http://localhost:3000. The SQLite database is created and seeded with demo deals on first run at `data/counterpart.db` (gitignored — back it up to keep your deal history).
 
-For production: `npm run build && npm start`.
+For production: `npm run build && npm start`. Tests: `npm test` (vitest).
+
+Requires Node 22+ (`better-sqlite3` is compiled against it — if you switch Node versions, run `npm rebuild better-sqlite3`).
 
 ## Notes
 

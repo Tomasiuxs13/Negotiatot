@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import type { Deal, Message } from "./types";
+import type { Campaign } from "./campaigns";
 
 const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -84,6 +85,15 @@ CREATE TABLE IF NOT EXISTS usage_log (
   if (!cols.includes("job_status")) db.exec("ALTER TABLE deals ADD COLUMN job_status TEXT");
   if (!cols.includes("job_error")) db.exec("ALTER TABLE deals ADD COLUMN job_error TEXT");
   if (!cols.includes("job_started_at")) db.exec("ALTER TABLE deals ADD COLUMN job_started_at TEXT");
+  if (!cols.includes("campaign_id")) db.exec("ALTER TABLE deals ADD COLUMN campaign_id INTEGER");
+  db.exec(`CREATE TABLE IF NOT EXISTS campaigns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    overrides TEXT NOT NULL DEFAULT '{}',
+    budget INTEGER,
+    archived INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
   db.exec(`CREATE TABLE IF NOT EXISTS usage_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     deal_id INTEGER,
@@ -318,6 +328,65 @@ export function getDeal(id: number): Deal | undefined {
   return db.prepare("SELECT * FROM deals WHERE id = ?").get(id) as Deal | undefined;
 }
 
+export function getCampaigns(includeArchived = false): Campaign[] {
+  return db
+    .prepare(
+      `SELECT * FROM campaigns ${includeArchived ? "" : "WHERE archived = 0"} ORDER BY created_at DESC`
+    )
+    .all() as Campaign[];
+}
+
+export function getCampaign(id: number): Campaign | undefined {
+  return db.prepare("SELECT * FROM campaigns WHERE id = ?").get(id) as Campaign | undefined;
+}
+
+export function createCampaign(name: string, overrides: object, budget: number | null): number {
+  const info = db
+    .prepare("INSERT INTO campaigns (name, overrides, budget) VALUES (?, ?, ?)")
+    .run(name, JSON.stringify(overrides), budget);
+  return Number(info.lastInsertRowid);
+}
+
+export function updateCampaign(
+  id: number,
+  fields: { name?: string; overrides?: object; budget?: number | null }
+) {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  if (fields.name !== undefined) {
+    sets.push("name = ?");
+    params.push(fields.name);
+  }
+  if (fields.overrides !== undefined) {
+    sets.push("overrides = ?");
+    params.push(JSON.stringify(fields.overrides));
+  }
+  if (fields.budget !== undefined) {
+    sets.push("budget = ?");
+    params.push(fields.budget);
+  }
+  if (sets.length === 0) return;
+  db.prepare(`UPDATE campaigns SET ${sets.join(", ")} WHERE id = ?`).run(...params, id);
+}
+
+export function archiveCampaign(id: number) {
+  db.prepare("UPDATE campaigns SET archived = 1 WHERE id = ?").run(id);
+}
+
+/** Money committed to a campaign: closed deals + offers currently on the table. */
+export function getCampaignSpend(campaignId: number): number {
+  const row = db
+    .prepare(
+      `SELECT COALESCE(SUM(
+         CASE WHEN stage = 'agreed' THEN COALESCE(agreed_price, 0)
+              WHEN stage IN ('offer_sent','negotiating') THEN COALESCE(current_offer, 0)
+              ELSE 0 END), 0) AS spend
+       FROM deals WHERE campaign_id = ?`
+    )
+    .get(campaignId) as { spend: number };
+  return row.spend;
+}
+
 export function setJob(dealId: number, status: "analyzing" | "recommending") {
   db.prepare(
     "UPDATE deals SET job_status = ?, job_error = NULL, job_started_at = datetime('now') WHERE id = ?"
@@ -379,6 +448,7 @@ export function createDeal(fields: {
   deliverables?: string | null;
   format?: string | null;
   campaign?: string | null;
+  campaignId?: number | null;
   stage?: string;
   first_ask?: number | null;
   status_label?: string;
@@ -387,9 +457,9 @@ export function createDeal(fields: {
 }): number {
   const info = db
     .prepare(
-      `INSERT INTO deals (creator, platform, platforms, deliverables, format, campaign, stage,
+      `INSERT INTO deals (creator, platform, platforms, deliverables, format, campaign, campaign_id, stage,
         first_ask, current_ask, avg_views, engagement_rate, status_label, status_tone)
-       VALUES (@creator, @platform, @platforms, @deliverables, @format, @campaign, @stage,
+       VALUES (@creator, @platform, @platforms, @deliverables, @format, @campaign, @campaign_id, @stage,
         @first_ask, @first_ask, @avg_views, @engagement_rate, @status_label, 'neutral')`
     )
     .run({
@@ -399,6 +469,7 @@ export function createDeal(fields: {
       deliverables: fields.deliverables ?? null,
       format: fields.format ?? null,
       campaign: fields.campaign ?? null,
+      campaign_id: fields.campaignId ?? null,
       stage: fields.stage ?? "analyzing",
       first_ask: fields.first_ask ?? null,
       avg_views: fields.avg_views ?? null,
