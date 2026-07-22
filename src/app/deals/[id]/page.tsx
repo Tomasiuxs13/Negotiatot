@@ -14,10 +14,12 @@ import ReopenDealButton from "@/components/deal/ReopenDealButton";
 import ActualsPanel from "@/components/deal/ActualsPanel";
 import JobPoller, { JobChip } from "@/components/deal/JobPoller";
 import ContractBlock from "@/components/deal/ContractBlock";
+import OnboardingBlock from "@/components/deal/OnboardingBlock";
 import { ContentItemsBlock, PaymentItemsBlock, ShipmentsBlock } from "@/components/deal/WorkBlocks";
 import {
   getContentItems,
   getContract,
+  getOnboardingForDeal,
   getPaymentItems,
   getShipments,
   parseTerms,
@@ -50,6 +52,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   const contentItems = getContentItems(deal.id);
   const paymentItems = getPaymentItems(deal.id);
   const shipments = getShipments(deal.id);
+  const onboarding = getOnboardingForDeal(deal.id, deal.partner_id);
   /** Price is settled — the header should report delivery, not the negotiation. */
   const closed = deal.stage === "agreed" || deal.stage === "completed";
   const showFulfillment =
@@ -253,6 +256,12 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                 dealId={deal.id}
                 contract={contract}
                 terms={parseTerms(contract?.parsed_terms)}
+              />
+              <OnboardingBlock
+                dealId={deal.id}
+                creator={deal.creator}
+                tasks={onboarding}
+                hasPartner={deal.partner_id != null}
               />
               <ContentItemsBlock dealId={deal.id} items={contentItems} />
               <ShipmentsBlock dealId={deal.id} shipments={shipments} />

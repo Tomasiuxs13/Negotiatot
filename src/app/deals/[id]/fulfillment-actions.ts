@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import sharp from "sharp";
-import { getDeal, logUsage, updateDeal } from "@/lib/db";
+import { getDeal, getSetting, logUsage, updateDeal } from "@/lib/db";
 import { hasApiKey, parseContract, MODEL, type ImageMediaType } from "@/lib/claude";
 import { saveFile, deleteFile } from "@/lib/files";
 import {
@@ -22,8 +22,17 @@ import {
   parseTerms,
   refreshPaymentStatuses,
   resolveDueDatesAfterDelivery,
+  createOnboardingTask,
+  deleteOnboardingTask,
+  seedOnboarding,
   setContentActuals,
   setContractError,
+  updateOnboardingTask,
+  DEFAULT_ONBOARDING,
+  type OnboardingStatus,
+  type OnboardingScope,
+  type OnboardingTemplateStep,
+  type TaskOwner,
   setContractTerms,
   updateContentItem,
   type ContentActuals,
@@ -179,6 +188,16 @@ export async function confirmContractAction(
       value: terms.product.value,
     });
     shipmentCount = 1;
+  }
+
+  // Lay down the setup checklist too. A returning creator keeps whatever they already
+  // completed, so nobody is asked to register twice.
+  if (deal.partner_id != null) {
+    seedOnboarding(
+      dealId,
+      deal.partner_id,
+      getSetting<OnboardingTemplateStep[]>("onboarding_template") ?? DEFAULT_ONBOARDING
+    );
   }
 
   confirmContract(contractId, terms, signedAt);
@@ -352,4 +371,72 @@ export async function saveContentActualsAction(
   refresh(dealId);
   revalidatePath("/benchmarks");
   return {};
+}
+
+/* --------------------------------------------------------------- onboarding */
+
+export async function setOnboardingStatusAction(
+  taskId: number,
+  dealId: number,
+  status: OnboardingStatus
+) {
+  updateOnboardingTask(taskId, { status });
+  refresh(dealId);
+  revalidatePath("/partners", "layout");
+  return {};
+}
+
+export async function setOnboardingValueAction(
+  taskId: number,
+  dealId: number,
+  value: string
+) {
+  const trimmed = value.trim();
+  // Capturing the link or code is the task — record it and tick it in one move.
+  updateOnboardingTask(taskId, {
+    value: trimmed || null,
+    ...(trimmed ? { status: "done" as const } : {}),
+  });
+  refresh(dealId);
+  revalidatePath("/partners", "layout");
+  return {};
+}
+
+export async function addOnboardingTaskAction(
+  dealId: number,
+  fields: { label: string; owner: TaskOwner; scope: OnboardingScope }
+) {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  if (deal.partner_id == null) return { error: "This deal has no partner yet" };
+  if (!fields.label.trim()) return { error: "Give the step a name" };
+
+  createOnboardingTask({
+    partnerId: deal.partner_id,
+    dealId: fields.scope === "partner" ? null : dealId,
+    kind: "custom",
+    label: fields.label.trim(),
+    owner: fields.owner,
+  });
+  refresh(dealId);
+  return {};
+}
+
+export async function deleteOnboardingTaskAction(taskId: number, dealId: number) {
+  deleteOnboardingTask(taskId);
+  refresh(dealId);
+  return {};
+}
+
+/** Applies the configured checklist to a deal that doesn't have one yet. */
+export async function startOnboardingAction(dealId: number) {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  if (deal.partner_id == null) return { error: "This deal has no partner yet" };
+
+  const template =
+    getSetting<OnboardingTemplateStep[]>("onboarding_template") ?? DEFAULT_ONBOARDING;
+  const result = seedOnboarding(dealId, deal.partner_id, template);
+  refresh(dealId);
+  return result;
 }

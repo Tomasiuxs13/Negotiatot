@@ -1,5 +1,6 @@
 import type { Deal } from "./types";
-import type { ContentItem, PaymentItem, Shipment } from "./fulfillment-types";
+import type { ContentItem, OnboardingTask, PaymentItem, Shipment } from "./fulfillment-types";
+import { BLOCKING_KINDS } from "./fulfillment-types";
 import { isOverdue } from "./fulfillment-rules";
 import { measurementState, type MeasurementWindows } from "./measurement";
 
@@ -19,6 +20,7 @@ export interface AttentionInput {
   contentItems: ContentItem[];
   shipments: Shipment[];
   payments: PaymentItem[];
+  onboarding?: OnboardingTask[];
   today?: string;
   /** Days of silence before we suggest nudging the creator. */
   silentDays?: number;
@@ -47,6 +49,7 @@ export function attentionItems({
   contentItems,
   shipments,
   payments,
+  onboarding = [],
   today = new Date().toISOString().slice(0, 10),
   silentDays = 3,
   stuckDays = 7,
@@ -197,6 +200,32 @@ export function attentionItems({
           ? `${c.title} has settled — replace the provisional number with final results`
           : `${c.title} passed its ${m.windowDays}-day window — log final results`,
       href: `/deals/${c.deal_id}`,
+    });
+  }
+
+  // Setup that other work is already outrunning. A creator filming against a link that
+  // doesn't exist yet is the failure this checklist exists to prevent.
+  for (const d of deals) {
+    if (d.stage !== "agreed") continue;
+    const blocking = onboarding.filter(
+      (t) =>
+        t.status !== "done" &&
+        BLOCKING_KINDS.includes(t.kind) &&
+        (t.deal_id === d.id || (t.deal_id == null && t.partner_id === d.partner_id))
+    );
+    if (blocking.length === 0) continue;
+
+    const started = contentItems.some(
+      (c) => c.deal_id === d.id && c.status !== "planned"
+    );
+    items.push({
+      id: `onboarding-${d.id}`,
+      severity: started ? "warning" : "info",
+      title: `${d.creator} — ${blocking.map((t) => t.label.toLowerCase()).join(" and ")} still missing`,
+      detail: started
+        ? "Content is already in production — without this the results can't be tracked"
+        : "Set this up before the content goes live",
+      href: `/deals/${d.id}`,
     });
   }
 

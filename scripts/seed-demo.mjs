@@ -38,13 +38,22 @@ console.log("Clearing previous demo data…");
 const clearDeal = db.prepare("SELECT id FROM deals WHERE creator = ?");
 for (const name of DEMO_CREATORS) {
   for (const { id } of clearDeal.all(name)) {
-    for (const table of ["content_items", "payment_items", "shipments", "contracts", "messages"]) {
+    for (const table of [
+      "content_items",
+      "payment_items",
+      "shipments",
+      "contracts",
+      "messages",
+      "onboarding_tasks",
+    ]) {
       db.prepare(`DELETE FROM ${table} WHERE deal_id = ?`).run(id);
     }
     db.prepare("DELETE FROM deals WHERE id = ?").run(id);
   }
   const partner = db.prepare("SELECT id FROM partners WHERE name = ?").get(name);
   if (partner) {
+    // Partner-scoped onboarding has no deal_id, so it needs clearing by partner.
+    db.prepare("DELETE FROM onboarding_tasks WHERE partner_id = ?").run(partner.id);
     db.prepare("DELETE FROM partner_channels WHERE partner_id = ?").run(partner.id);
     db.prepare("DELETE FROM partners WHERE id = ?").run(partner.id);
   }

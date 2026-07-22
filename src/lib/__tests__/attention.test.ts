@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { attentionItems } from "../attention";
 import type { Deal } from "../types";
-import type { ContentItem, PaymentItem, Shipment } from "../fulfillment-types";
+import type { ContentItem, OnboardingTask, PaymentItem, Shipment } from "../fulfillment-types";
 
 const TODAY = "2026-07-22";
 
@@ -282,5 +282,80 @@ describe("revisit nudges", () => {
       deals: [deal({ stage: "declined", decline_reason: "too_expensive", revisit_on: null })],
     });
     expect(priced).toEqual([]);
+  });
+});
+
+describe("onboarding gaps", () => {
+  const task = (over: Partial<OnboardingTask>): OnboardingTask =>
+    ({
+      id: 1,
+      partner_id: 7,
+      deal_id: null,
+      kind: "tracking_link",
+      label: "Affiliate tracking link issued",
+      owner: "us",
+      value: null,
+      status: "todo",
+      position: 0,
+      completed_at: null,
+      created_at: "2026-07-01",
+      ...over,
+    }) as OnboardingTask;
+
+  const agreed = deal({ stage: "agreed", partner_id: 7 });
+
+  it("escalates when content is already in production without a link", () => {
+    const items = attentionItems({
+      ...base,
+      deals: [agreed],
+      contentItems: [content({ status: "in_production" })],
+      onboarding: [task({})],
+    });
+    const gap = items.find((i) => i.title.includes("still missing"))!;
+    expect(gap.severity).toBe("warning");
+    expect(gap.detail).toContain("already in production");
+  });
+
+  it("mentions it quietly while nothing has started", () => {
+    const items = attentionItems({
+      ...base,
+      deals: [agreed],
+      contentItems: [content({ status: "planned" })],
+      onboarding: [task({})],
+    });
+    expect(items.find((i) => i.title.includes("still missing"))!.severity).toBe("info");
+  });
+
+  it("stays quiet once the blocking setup is done", () => {
+    const items = attentionItems({
+      ...base,
+      deals: [agreed],
+      contentItems: [content({ status: "in_production" })],
+      onboarding: [task({ status: "done" })],
+    });
+    expect(items.some((i) => i.title.includes("still missing"))).toBe(false);
+  });
+
+  it("ignores steps that don't block tracking", () => {
+    const items = attentionItems({
+      ...base,
+      deals: [agreed],
+      contentItems: [content({ status: "in_production" })],
+      onboarding: [task({ kind: "onboarding_email", label: "Send onboarding email" })],
+    });
+    expect(items.some((i) => i.title.includes("still missing"))).toBe(false);
+  });
+
+  it("applies a partner-level gap to that partner's deal only", () => {
+    const other = deal({ id: 2, creator: "Other", stage: "agreed", partner_id: 99 });
+    const items = attentionItems({
+      ...base,
+      deals: [agreed, other],
+      contentItems: [],
+      onboarding: [task({})],
+    });
+    const gaps = items.filter((i) => i.title.includes("still missing"));
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0].title).toContain("Marta");
   });
 });

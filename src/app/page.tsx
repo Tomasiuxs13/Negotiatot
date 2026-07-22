@@ -4,7 +4,12 @@ import AttentionPanel from "@/components/pipeline/AttentionPanel";
 import { getDeals, getPipelineKpis, getSetting } from "@/lib/db";
 import type { MeasurementWindows } from "@/lib/measurement";
 import { attentionItems } from "@/lib/attention";
-import { getAllContentItems, getAllPaymentItems, getAllShipments } from "@/lib/fulfillment";
+import {
+  getAllContentItems,
+  getAllOnboardingTasks,
+  getAllPaymentItems,
+  getAllShipments,
+} from "@/lib/fulfillment";
 import { STAGES, TERMINAL_STAGES } from "@/lib/types";
 import { euro, euroCpm } from "@/lib/format";
 
@@ -19,6 +24,7 @@ export default function DashboardPage() {
     contentItems: getAllContentItems(),
     shipments: getAllShipments(),
     payments,
+    onboarding: getAllOnboardingTasks(),
     windows: getSetting<MeasurementWindows>("measurement_windows") ?? {},
   });
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import PartnerProfile from "@/components/partners/PartnerProfile";
 import { getPartner, getPartnerChannels, getPartnerDeals } from "@/lib/db";
+import { getPartnerOnboarding } from "@/lib/fulfillment";
 import { partnerStats, partnerStatus } from "@/lib/partners";
 import PartnerStatusPill from "@/components/partners/PartnerStatusPill";
 import { dealPlatforms, PLATFORM_META, STAGE_LABELS } from "@/lib/types";
@@ -18,6 +19,7 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
   const channels = getPartnerChannels(partner.id);
   const deals = getPartnerDeals(partner.id);
   const stats = partnerStats(deals);
+  const onboarding = getPartnerOnboarding(partner.id);
 
   const kpis = [
     { label: "Deals", value: String(stats.totalDeals), sub: `${stats.activeDeals} active` },
@@ -69,6 +71,51 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
             </div>
           ))}
         </div>
+
+        {onboarding.length > 0 && (
+          <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
+            <h3 className="font-headline text-sm font-semibold text-slate-900 mb-1">
+              Program setup
+            </h3>
+            <p className="text-xs text-slate-500 mb-3">
+              Done once for {partner.name} — every future deal inherits this.
+            </p>
+            <div className="divide-y divide-slate-100">
+              {onboarding.map((t) => (
+                <div key={t.id} className="flex items-center gap-2.5 py-2">
+                  <span
+                    className={`material-symbols-outlined ${
+                      t.status === "done" ? "text-emerald-600" : "text-slate-300"
+                    }`}
+                    style={{ fontSize: 16 }}
+                  >
+                    {t.status === "done" ? "check_circle" : "radio_button_unchecked"}
+                  </span>
+                  <span
+                    className={`text-sm ${t.status === "done" ? "text-slate-500" : "text-slate-800"}`}
+                  >
+                    {t.label}
+                  </span>
+                  {t.value && (
+                    <code className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 truncate max-w-64">
+                      {t.value}
+                    </code>
+                  )}
+                  {t.owner === "creator" && t.status !== "done" && (
+                    <span className="text-[10px] font-semibold bg-sky-50 text-sky-700 rounded-full px-1.5 py-0.5">
+                      on creator
+                    </span>
+                  )}
+                  {t.completed_at && (
+                    <span className="ml-auto text-xs text-slate-400 font-tabular">
+                      {t.completed_at}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">

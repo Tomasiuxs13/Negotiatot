@@ -67,6 +67,102 @@ export interface PaymentItem {
   created_at: string;
 }
 
+/**
+ * Who has to act. A creator-owned task can only be chased, not ticked off by you —
+ * worth distinguishing, because "waiting on them" and "waiting on me" are different
+ * kinds of stuck.
+ */
+export type TaskOwner = "us" | "creator";
+export type OnboardingStatus = "todo" | "done";
+
+/** The setup steps that make a collaboration trackable. */
+export type OnboardingKind =
+  | "account"
+  | "tracking_link"
+  | "coupon_code"
+  | "onboarding_email"
+  | "custom";
+
+/**
+ * Whether a step is done once for the creator or repeated for each collaboration.
+ * Getting this wrong is what makes onboarding feel like busywork — nobody wants to be
+ * asked whether a creator registered when they've delivered three campaigns already.
+ */
+export type OnboardingScope = "partner" | "deal";
+
+export interface OnboardingTask {
+  id: number;
+  partner_id: number;
+  /** Null for a one-time partner step; set for anything specific to one collaboration. */
+  deal_id: number | null;
+  kind: OnboardingKind;
+  label: string;
+  owner: TaskOwner;
+  /** The link or code itself — the task's output, needed long after it's ticked. */
+  value: string | null;
+  status: OnboardingStatus;
+  position: number;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface OnboardingTemplateStep {
+  kind: OnboardingKind;
+  label: string;
+  owner: TaskOwner;
+  scope: OnboardingScope;
+  /** Whether ticking it off should capture a value (a link, a code). */
+  needsValue?: boolean;
+}
+
+/**
+ * The default checklist.
+ *
+ * Registration and the affiliate link are partner-scoped: most networks issue one
+ * account and one link per creator, reused across campaigns. Coupon codes and briefs
+ * are campaign-specific, so they repeat. Any of this can be re-scoped in Settings —
+ * some programs do generate a link per campaign.
+ */
+export const DEFAULT_ONBOARDING: OnboardingTemplateStep[] = [
+  {
+    kind: "account",
+    label: "Creator registers on the affiliate platform",
+    owner: "creator",
+    scope: "partner",
+  },
+  {
+    kind: "tracking_link",
+    label: "Affiliate tracking link issued",
+    owner: "us",
+    scope: "partner",
+    needsValue: true,
+  },
+  {
+    kind: "onboarding_email",
+    label: "Send onboarding email and program brief",
+    owner: "us",
+    scope: "partner",
+  },
+  {
+    kind: "coupon_code",
+    label: "Send campaign coupon code",
+    owner: "us",
+    scope: "deal",
+    needsValue: true,
+  },
+];
+
+export const ONBOARDING_ICON: Record<OnboardingKind, string> = {
+  account: "person_add",
+  tracking_link: "link",
+  coupon_code: "sell",
+  onboarding_email: "mail",
+  custom: "check_circle",
+};
+
+/** Tasks whose output other work depends on — content can't be tracked without them. */
+export const BLOCKING_KINDS: OnboardingKind[] = ["tracking_link", "coupon_code"];
+
 export interface Shipment {
   id: number;
   deal_id: number;

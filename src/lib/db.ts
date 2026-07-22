@@ -145,6 +145,50 @@ CREATE TABLE IF NOT EXISTS usage_log (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
+  /*
+   * Setup that makes a collaboration trackable, at the level it actually belongs to.
+   *
+   * Registering on the affiliate platform happens once per creator, not once per
+   * campaign — so a task with deal_id NULL is partner-scoped and carries across every
+   * future deal. A coupon code is campaign-specific, so it hangs off the deal. This is
+   * the one place a partner genuinely owns a record directly rather than through a
+   * deal, which is why partner_id is required and deal_id is not.
+   */
+  db.exec(`CREATE TABLE IF NOT EXISTS onboarding_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    partner_id INTEGER NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+    deal_id INTEGER REFERENCES deals(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    label TEXT NOT NULL,
+    owner TEXT NOT NULL DEFAULT 'us',
+    value TEXT,
+    status TEXT NOT NULL DEFAULT 'todo',
+    position INTEGER NOT NULL DEFAULT 0,
+    completed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  // The first shape of this table keyed everything to a deal. It never shipped, so
+  // rebuilding it empty is safe and simpler than migrating rows that don't exist.
+  {
+    const cols = (db.prepare("PRAGMA table_info(onboarding_tasks)").all() as { name: string }[])
+      .map((c) => c.name);
+    if (!cols.includes("partner_id")) {
+      db.exec("DROP TABLE onboarding_tasks");
+      db.exec(`CREATE TABLE onboarding_tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        partner_id INTEGER NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+        deal_id INTEGER REFERENCES deals(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        label TEXT NOT NULL,
+        owner TEXT NOT NULL DEFAULT 'us',
+        value TEXT,
+        status TEXT NOT NULL DEFAULT 'todo',
+        position INTEGER NOT NULL DEFAULT 0,
+        completed_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`);
+    }
+  }
   db.exec(`CREATE TABLE IF NOT EXISTS payment_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     deal_id INTEGER NOT NULL REFERENCES deals(id) ON DELETE CASCADE,

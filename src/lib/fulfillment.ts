@@ -10,6 +10,11 @@ import type {
   PaymentTrigger,
   Shipment,
   ShipmentStatus,
+  OnboardingTask,
+  OnboardingKind,
+  OnboardingStatus,
+  OnboardingTemplateStep,
+  TaskOwner,
 } from "./fulfillment-types";
 
 // Re-exported so server code can import shapes and queries from one place.
@@ -374,4 +379,132 @@ export function refreshPaymentStatuses(dealId: number) {
     const next = nextPaymentStatus(payment, contentItems, productDelivered);
     if (next !== payment.status) update.run(next, payment.id);
   }
+}
+
+/* ------------------------------------------------------------- onboarding */
+
+/**
+ * A deal's checklist: the partner's one-time setup plus anything specific to this
+ * collaboration. The partner rows are shared, so a creator who registered last spring
+ * shows up already done rather than being asked again.
+ */
+export function getOnboardingForDeal(dealId: number, partnerId: number | null): OnboardingTask[] {
+  if (partnerId == null) {
+    return db
+      .prepare("SELECT * FROM onboarding_tasks WHERE deal_id = ? ORDER BY position, id")
+      .all(dealId) as OnboardingTask[];
+  }
+  return db
+    .prepare(
+      `SELECT * FROM onboarding_tasks
+       WHERE (partner_id = ? AND deal_id IS NULL) OR deal_id = ?
+       ORDER BY deal_id IS NOT NULL, position, id`
+    )
+    .all(partnerId, dealId) as OnboardingTask[];
+}
+
+/** The creator's one-time setup, independent of any campaign. */
+export function getPartnerOnboarding(partnerId: number): OnboardingTask[] {
+  return db
+    .prepare(
+      "SELECT * FROM onboarding_tasks WHERE partner_id = ? AND deal_id IS NULL ORDER BY position, id"
+    )
+    .all(partnerId) as OnboardingTask[];
+}
+
+export function getAllOnboardingTasks(): OnboardingTask[] {
+  return db.prepare("SELECT * FROM onboarding_tasks").all() as OnboardingTask[];
+}
+
+export function createOnboardingTask(fields: {
+  partnerId: number;
+  dealId: number | null;
+  kind: OnboardingKind;
+  label: string;
+  owner: TaskOwner;
+  position?: number;
+}): number {
+  const info = db
+    .prepare(
+      `INSERT INTO onboarding_tasks (partner_id, deal_id, kind, label, owner, position)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      fields.partnerId,
+      fields.dealId,
+      fields.kind,
+      fields.label,
+      fields.owner,
+      fields.position ?? 99
+    );
+  return Number(info.lastInsertRowid);
+}
+
+export function updateOnboardingTask(
+  id: number,
+  fields: { status?: OnboardingStatus; value?: string | null; label?: string }
+) {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  if (fields.status !== undefined) {
+    sets.push("status = ?", "completed_at = ?");
+    params.push(fields.status, fields.status === "done" ? new Date().toISOString().slice(0, 10) : null);
+  }
+  if (fields.value !== undefined) {
+    sets.push("value = ?");
+    params.push(fields.value);
+  }
+  if (fields.label !== undefined) {
+    sets.push("label = ?");
+    params.push(fields.label);
+  }
+  if (sets.length === 0) return;
+  db.prepare(`UPDATE onboarding_tasks SET ${sets.join(", ")} WHERE id = ?`).run(...params, id);
+}
+
+export function deleteOnboardingTask(id: number) {
+  db.prepare("DELETE FROM onboarding_tasks WHERE id = ?").run(id);
+}
+
+/**
+ * Lays down a deal's checklist. Partner-scoped steps are created only if the creator
+ * doesn't already have them — that's what stops a returning partner being asked to
+ * register a second time — and deal steps are created once per deal.
+ */
+export function seedOnboarding(
+  dealId: number,
+  partnerId: number,
+  template: OnboardingTemplateStep[]
+): { created: number; inherited: number } {
+  const partnerKinds = new Set(getPartnerOnboarding(partnerId).map((t) => t.kind));
+  const dealKinds = new Set(
+    (
+      db
+        .prepare("SELECT kind FROM onboarding_tasks WHERE deal_id = ?")
+        .all(dealId) as { kind: string }[]
+    ).map((t) => t.kind)
+  );
+
+  let created = 0;
+  let inherited = 0;
+
+  template.forEach((step, i) => {
+    const isPartnerScope = step.scope === "partner";
+    const seen = isPartnerScope ? partnerKinds : dealKinds;
+    if (step.kind !== "custom" && seen.has(step.kind)) {
+      if (isPartnerScope) inherited += 1;
+      return;
+    }
+    createOnboardingTask({
+      partnerId,
+      dealId: isPartnerScope ? null : dealId,
+      kind: step.kind,
+      label: step.label,
+      owner: step.owner,
+      position: i,
+    });
+    created += 1;
+  });
+
+  return { created, inherited };
 }
