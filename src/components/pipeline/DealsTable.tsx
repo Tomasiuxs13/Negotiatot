@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Deal } from "@/lib/types";
 import { PLATFORM_META, STAGE_LABELS, dealPlatforms } from "@/lib/types";
 import { euro } from "@/lib/format";
+import type { DealPhase } from "@/lib/deal-phase";
 
 
 const STAGE_PILL: Record<string, string> = {
@@ -31,7 +32,13 @@ function ago(timestamp: string): string {
  * The scan-everything view of the same deals the board shows. Carries the numbers and
  * last-activity the cards can't fit, so it earns its place next to the board.
  */
-export default function DealsTable({ deals }: { deals: Deal[] }) {
+export default function DealsTable({
+  deals,
+  phases = {},
+}: {
+  deals: Deal[];
+  phases?: Record<number, DealPhase>;
+}) {
   if (deals.length === 0) {
     return (
       <div className="bg-white rounded-lg border border-dashed border-slate-300 p-10 text-center">
@@ -96,7 +103,12 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
                 {d.agreed_price ?? d.current_offer ? euro(d.agreed_price ?? d.current_offer) : "—"}
               </td>
               <td className="px-4 py-3 text-slate-500 text-xs">
-                {d.status_label ?? "—"}
+                {phases[d.id] && phases[d.id].key !== "nothing_tracked"
+                  ? phases[d.id].label
+                  : (d.status_label ?? "—")}
+                {phases[d.id]?.behind && (
+                  <span className="block text-amber-600">{phases[d.id].behind}</span>
+                )}
                 {d.decline_note && (
                   <span className="block text-slate-400 truncate max-w-56" title={d.decline_note}>
                     {d.decline_note}

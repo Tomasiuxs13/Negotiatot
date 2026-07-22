@@ -2,13 +2,20 @@
 
 import { useEffect, useState, useTransition } from "react";
 import type { Deal, Stage } from "@/lib/types";
+import type { DealPhase } from "@/lib/deal-phase";
 import { STAGES } from "@/lib/types";
 import DealCard from "./DealCard";
 import { moveDealStage } from "@/app/pipeline-actions";
 
 const COMPLETED_PREVIEW = 5;
 
-export default function PipelineBoard({ deals }: { deals: Deal[] }) {
+export default function PipelineBoard({
+  deals,
+  phases = {},
+}: {
+  deals: Deal[];
+  phases?: Record<number, DealPhase>;
+}) {
   // Optimistic local copy so cards move instantly on drop.
   const [items, setItems] = useState(deals);
   const [dragId, setDragId] = useState<number | null>(null);
@@ -87,7 +94,7 @@ export default function PipelineBoard({ deals }: { deals: Deal[] }) {
                   }}
                   className={dragId === deal.id ? "opacity-40" : ""}
                 >
-                  <DealCard deal={deal} />
+                  <DealCard deal={deal} phase={phases[deal.id]} />
                 </div>
               ))}
               {capped && (

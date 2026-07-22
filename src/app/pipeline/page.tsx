@@ -3,6 +3,13 @@ import PageHeader, { NewDealButton } from "@/components/PageHeader";
 import PipelineBoard from "@/components/pipeline/PipelineBoard";
 import DealsTable from "@/components/pipeline/DealsTable";
 import { getDeals } from "@/lib/db";
+import {
+  getAllContentItems,
+  getAllOnboardingTasks,
+  getAllPaymentItems,
+  getAllShipments,
+} from "@/lib/fulfillment";
+import { dealPhase, type DealPhase } from "@/lib/deal-phase";
 import { dealPlatforms } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +34,27 @@ export default async function PipelinePage({
     ? all.filter((d) => dealPlatforms(d).includes(platform as never))
     : all;
   if (stage) deals = deals.filter((d) => d.stage === stage);
+
+  // Where the work actually stands on signed deals — computed, because a deal is
+  // routinely mid-setup and mid-production at once and no single column says that.
+  const onboarding = getAllOnboardingTasks();
+  const contentItems = getAllContentItems();
+  const payments = getAllPaymentItems();
+  const shipments = getAllShipments();
+  const phases: Record<number, DealPhase> = {};
+  for (const d of deals) {
+    // Only live work has a phase. On a wrapped-up deal, "ready to wrap" is wrong and an
+    // unfinished setup step is history, not a task.
+    if (d.stage !== "agreed") continue;
+    phases[d.id] = dealPhase({
+      dealId: d.id,
+      partnerId: d.partner_id,
+      onboarding,
+      shipments,
+      contentItems,
+      payments,
+    });
+  }
 
   const query = (over: Record<string, string>) => {
     const params = new URLSearchParams();
@@ -97,7 +125,7 @@ export default async function PipelinePage({
             </Link>
           </div>
         )}
-        {isList ? <DealsTable deals={deals} /> : <PipelineBoard deals={deals} />}
+        {isList ? <DealsTable deals={deals} phases={phases} /> : <PipelineBoard deals={deals} phases={phases} />}
       </main>
     </>
   );
