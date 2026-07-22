@@ -4,12 +4,11 @@ import PartnerProfile from "@/components/partners/PartnerProfile";
 import { getPartner, getPartnerChannels, getPartnerDeals } from "@/lib/db";
 import { partnerStats, partnerStatus } from "@/lib/partners";
 import PartnerStatusPill from "@/components/partners/PartnerStatusPill";
-import { STAGES, dealPlatforms, PLATFORM_META } from "@/lib/types";
+import { dealPlatforms, PLATFORM_META, STAGE_LABELS } from "@/lib/types";
 import { euro, euroCpm } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-const STAGE_LABEL = Object.fromEntries(STAGES.map((s) => [s.key, s.label]));
 
 export default async function PartnerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -115,7 +114,7 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
                         ))}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 text-slate-600">{STAGE_LABEL[d.stage] ?? d.stage}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{STAGE_LABELS[d.stage]}</td>
                     <td className="px-4 py-2.5 text-slate-500">{d.campaign ?? "—"}</td>
                     <td className="px-4 py-2.5 text-right font-tabular text-slate-500">
                       {euro(d.first_ask)}

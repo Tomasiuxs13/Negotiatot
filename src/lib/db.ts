@@ -84,6 +84,11 @@ CREATE TABLE IF NOT EXISTS usage_log (
   if (!cols.includes("actual_orders")) db.exec("ALTER TABLE deals ADD COLUMN actual_orders INTEGER");
   if (!cols.includes("actual_revenue")) db.exec("ALTER TABLE deals ADD COLUMN actual_revenue INTEGER");
   if (!cols.includes("actuals_logged_at")) db.exec("ALTER TABLE deals ADD COLUMN actuals_logged_at TEXT");
+  // Why a deal died, so losses become a signal instead of a gap.
+  if (!cols.includes("decline_reason")) db.exec("ALTER TABLE deals ADD COLUMN decline_reason TEXT");
+  if (!cols.includes("decline_note")) db.exec("ALTER TABLE deals ADD COLUMN decline_note TEXT");
+  if (!cols.includes("declined_at")) db.exec("ALTER TABLE deals ADD COLUMN declined_at TEXT");
+  if (!cols.includes("revisit_on")) db.exec("ALTER TABLE deals ADD COLUMN revisit_on TEXT");
   if (!cols.includes("job_status")) db.exec("ALTER TABLE deals ADD COLUMN job_status TEXT");
   if (!cols.includes("job_error")) db.exec("ALTER TABLE deals ADD COLUMN job_error TEXT");
   if (!cols.includes("job_started_at")) db.exec("ALTER TABLE deals ADD COLUMN job_started_at TEXT");
@@ -862,6 +867,7 @@ export function updateDeal(dealId: number, fields: Record<string, unknown>) {
     "actual_views", "actual_clicks", "actual_orders", "actual_revenue", "actuals_logged_at",
     "job_status", "job_error", "job_started_at",
     "partner_id", "campaign_id", "deal_type",
+    "decline_reason", "decline_note", "declined_at", "revisit_on",
   ];
   const keys = Object.keys(fields).filter((k) => allowed.includes(k));
   if (keys.length === 0) return;

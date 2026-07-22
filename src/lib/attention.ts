@@ -200,6 +200,22 @@ export function attentionItems({
     });
   }
 
+  // Deals parked on timing whose date has come round. Without this, "revisit in Q4"
+  // is a note nobody reads again.
+  for (const d of deals) {
+    if (d.stage !== "declined" || !d.revisit_on) continue;
+    if (d.revisit_on > today) continue;
+    items.push({
+      id: `revisit-${d.id}`,
+      severity: "info",
+      title: `${d.creator} — worth revisiting`,
+      detail: d.decline_note
+        ? `Parked on timing: ${d.decline_note}`
+        : "You parked this one on timing — the date you set has arrived",
+      href: `/deals/${d.id}`,
+    });
+  }
+
   // Deals where the work and the money are both done — close them out so the board
   // reflects live work rather than history.
   for (const d of deals) {

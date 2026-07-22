@@ -30,6 +30,8 @@ const DEMO_CREATORS = [
   "GamerGitta",
   "HomeWithHanna",
   "ReiseRobin",
+  "LuxeLina",
+  "BastelBenno",
 ];
 
 console.log("Clearing previous demo data…");
@@ -571,6 +573,81 @@ console.log("Seeding demo deals…");
        actual_revenue = 5280, actuals_logged_at = ? WHERE id = ?`
   ).run(stamp(-18), dealId);
   console.log("  ✓ ReiseRobin — completed YouTube+TikTok bundle with per-platform actuals");
+}
+
+/* 5c. Two deals that didn't happen — the losses that make a win rate mean something.
+       One walked away on price, one parked on timing and due to come back. */
+{
+  const partnerId = addPartner({
+    name: "LuxeLina",
+    email: "lina@luxelina.fr",
+    tags: ["lifestyle", "FR"],
+    notes: "Premium rates, won't negotiate below her card. Revisit if budget grows.",
+    channels: [
+      { platform: "instagram", handle: "@luxelina", url: "https://instagram.com/luxelina", followers: 420000, avgViews: 110000, er: 2.9 },
+    ],
+  });
+  const dealId = addDeal({
+    creator: "LuxeLina",
+    partnerId,
+    platforms: ["instagram"],
+    deliverables: "1× reel + 2× stories",
+    campaign: "Q3 DACH launch",
+    stage: "declined",
+    round: 3,
+    firstAsk: 4200,
+    currentAsk: 3800,
+    currentOffer: 2900,
+    anchor: 2500,
+    target: 2850,
+    walkaway: 3100,
+    breakeven: 3900,
+    avgViews: 110000,
+    er: 2.9,
+    statusLabel: "Above our walk-away",
+    statusTone: "warn",
+    updatedAt: stamp(-14),
+  });
+  db.prepare(
+    `UPDATE deals SET decline_reason = 'too_expensive', declined_at = ?,
+       decline_note = 'Held at €3,800 — €700 over walk-away, no scope trade closed it' WHERE id = ?`
+  ).run(day(-14), dealId);
+  console.log("  ✓ LuxeLina — declined above walk-away");
+}
+{
+  const partnerId = addPartner({
+    name: "BastelBenno",
+    email: "benno@bastelbenno.de",
+    tags: ["DIY", "DACH"],
+    channels: [
+      { platform: "youtube", handle: "@bastelbenno", url: "https://youtube.com/@bastelbenno", followers: 64000, avgViews: 27000, er: 6.8 },
+    ],
+  });
+  const dealId = addDeal({
+    creator: "BastelBenno",
+    partnerId,
+    platforms: ["youtube"],
+    deliverables: "1× integration",
+    stage: "declined",
+    round: 1,
+    firstAsk: 1100,
+    currentAsk: 1100,
+    anchor: 800,
+    target: 950,
+    walkaway: 1150,
+    breakeven: 1500,
+    avgViews: 27000,
+    er: 6.8,
+    statusLabel: "Wrong timing or budget",
+    statusTone: "warn",
+    updatedAt: stamp(-40),
+  });
+  // Revisit date already passed, so the Attention panel brings him back.
+  db.prepare(
+    `UPDATE deals SET decline_reason = 'timing', declined_at = ?, revisit_on = ?,
+       decline_note = 'Good fit and cheap — no budget left in Q3' WHERE id = ?`
+  ).run(day(-40), day(-2), dealId);
+  console.log("  ✓ BastelBenno — parked on timing, revisit date has arrived");
 }
 
 /* 6. Give the existing closed deal real actuals so Benchmarks has something. */

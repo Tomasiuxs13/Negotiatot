@@ -3,6 +3,7 @@ import { getDeals, getExpectedReach, getSetting } from "@/lib/db";
 import type { MeasurementWindows } from "@/lib/measurement";
 import { getAllContentItems } from "@/lib/fulfillment";
 import { benchmarkRows, platformAverages } from "@/lib/benchmark-rows";
+import { outcomes } from "@/lib/outcomes";
 import { PLATFORM_META } from "@/lib/types";
 import { euro, euroCpm, views as fmtViews } from "@/lib/format";
 
@@ -15,6 +16,7 @@ export default function BenchmarksPage() {
   const windows = getSetting<MeasurementWindows>("measurement_windows") ?? {};
   const rows = benchmarkRows(deals, getAllContentItems(), getExpectedReach(), windows);
   const calibrated = platformAverages(rows);
+  const result = outcomes(deals);
 
   return (
     <>
@@ -23,6 +25,48 @@ export default function BenchmarksPage() {
         subtitle="Calibrated from your closed deals — predicted vs actual, and your real CPM by platform"
       />
       <main className="flex-1 overflow-y-auto p-8">
+        {result.lost + result.won > 0 && (
+          <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5 mb-6 max-w-5xl">
+            <div className="flex items-baseline justify-between mb-3">
+              <h3 className="font-headline text-sm font-semibold text-slate-900">Win rate</h3>
+              <span className="text-xs text-slate-400">
+                {result.open} still open
+              </span>
+            </div>
+            <div className="flex items-baseline gap-6 flex-wrap">
+              <div>
+                <div className="text-2xl font-semibold font-tabular text-slate-900">
+                  {result.winRate != null ? `${Math.round(result.winRate * 100)}%` : "—"}
+                </div>
+                <div className="text-xs text-slate-500">
+                  {result.won} won · {result.lost} declined
+                </div>
+              </div>
+              {result.reasons.length > 0 && (
+                <div className="flex-1 min-w-64">
+                  <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                    Why deals died
+                  </div>
+                  <div className="space-y-1">
+                    {result.reasons.map((r) => (
+                      <div key={r.reason} className="flex items-baseline gap-2 text-sm">
+                        <span className="text-slate-600">{r.label}</span>
+                        <span className="flex-1 border-b border-dotted border-slate-200" />
+                        <span className="font-tabular text-slate-900">{r.count}</span>
+                        {r.value > 0 && (
+                          <span className="font-tabular text-xs text-slate-400 w-20 text-right">
+                            {euro(r.value)} asked
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {rows.length === 0 ? (
           <div className="bg-white rounded-lg border border-dashed border-slate-300 p-10 text-center max-w-2xl">
             <p className="text-sm font-medium text-slate-700 mb-1">No actuals logged yet</p>

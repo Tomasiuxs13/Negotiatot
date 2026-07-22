@@ -23,6 +23,47 @@ export const ALL_STAGES: Stage[] = [
 
 /** Deals that are finished — excluded from the working pipeline and active counts. */
 export const TERMINAL_STAGES: Stage[] = ["completed", "declined"];
+
+/**
+ * Display names for every stage, including the ones with no board column — STAGES
+ * covers the board only, so anything reading from it alone renders a raw key.
+ */
+export const STAGE_LABELS: Record<Stage, string> = {
+  lead: "Lead",
+  contacted: "Contacted",
+  analyzing: "To review",
+  offer_sent: "Offer Sent",
+  negotiating: "Negotiating",
+  agreed: "Agreed",
+  completed: "Completed",
+  declined: "Declined",
+};
+
+/**
+ * Why a deal died. Recording this is the point of having a Declined stage at all —
+ * "six lost above walk-away" says your ceiling may be wrong, "four ghosted after the
+ * offer" says your opening move is.
+ */
+export type DeclineReason =
+  | "too_expensive"
+  | "no_reply"
+  | "failed_rules"
+  | "creator_declined"
+  | "timing"
+  | "other";
+
+export const DECLINE_REASONS: { key: DeclineReason; label: string; hint: string }[] = [
+  { key: "too_expensive", label: "Above our walk-away", hint: "They wouldn't come down far enough" },
+  { key: "no_reply", label: "Went quiet", hint: "No reply after we reached out or offered" },
+  { key: "failed_rules", label: "Failed our rules", hint: "Audience, engagement or geo didn't qualify" },
+  { key: "creator_declined", label: "Creator said no", hint: "They turned the collaboration down" },
+  { key: "timing", label: "Wrong timing or budget", hint: "Good fit, just not now — set a date to revisit" },
+  { key: "other", label: "Other", hint: "Anything else — add a note" },
+];
+
+export const DECLINE_REASON_LABEL: Record<DeclineReason, string> = Object.fromEntries(
+  DECLINE_REASONS.map((r) => [r.key, r.label])
+) as Record<DeclineReason, string>;
 export type StatusTone = "good" | "warn" | "neutral";
 
 export interface Deal {
@@ -57,6 +98,11 @@ export interface Deal {
   actual_orders: number | null;
   actual_revenue: number | null;
   actuals_logged_at: string | null;
+  decline_reason: DeclineReason | null;
+  decline_note: string | null;
+  declined_at: string | null;
+  /** Set when a deal was parked on timing — brings it back when the date arrives. */
+  revisit_on: string | null;
   job_status: "analyzing" | "recommending" | null;
   job_error: string | null;
   job_started_at: string | null;

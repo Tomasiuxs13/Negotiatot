@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 import { getCampaign, getDeal, getMessages, getPartnerChannels, getSetting, getUsageTotals } from "@/lib/db";
 import type { MeasurementWindows } from "@/lib/measurement";
 import { describeOverrides, parseOverrides } from "@/lib/campaigns";
-import { PLATFORM_META, STAGES, dealPlatforms, dealScope } from "@/lib/types";
+import { DECLINE_REASON_LABEL, PLATFORM_META, STAGE_LABELS, dealPlatforms, dealScope } from "@/lib/types";
 import PriceLadder from "@/components/deal/PriceLadder";
 import DealProgress from "@/components/deal/DealProgress";
 import DealTabs from "@/components/deal/DealTabs";
 import DeleteDealButton from "@/components/deal/DeleteDealButton";
 import CompleteDealButton from "@/components/deal/CompleteDealButton";
+import DeclineDealButton from "@/components/deal/DeclineDealButton";
+import ReopenDealButton from "@/components/deal/ReopenDealButton";
 import ActualsPanel from "@/components/deal/ActualsPanel";
 import JobPoller, { JobChip } from "@/components/deal/JobPoller";
 import ContractBlock from "@/components/deal/ContractBlock";
@@ -20,12 +22,12 @@ import {
   getShipments,
   parseTerms,
 } from "@/lib/fulfillment";
+import { euro } from "@/lib/format";
 import AnalysisTab from "@/components/deal/AnalysisTab";
 import NegotiationTab from "@/components/deal/NegotiationTab";
 
 export const dynamic = "force-dynamic";
 
-const STAGE_LABEL = Object.fromEntries(STAGES.map((s) => [s.key, s.label]));
 
 const STAGE_PILL: Record<string, string> = {
   analyzing: "bg-slate-100 text-slate-600 border border-slate-200",
@@ -161,7 +163,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
             {scope ? ` · ${scope}` : ""}
           </span>
           <span className={`text-xs font-semibold rounded-full px-2.5 py-1 ${STAGE_PILL[deal.stage]}`}>
-            {STAGE_LABEL[deal.stage] ?? deal.stage}
+            {STAGE_LABELS[deal.stage]}
             {deal.round > 0 && !closed ? ` · Round ${deal.round}` : ""}
           </span>
           {deal.job_status && (
@@ -191,10 +193,43 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
               openWork={workDone.openWork}
             />
           )}
+          {deal.stage === "declined" ? (
+            <ReopenDealButton dealId={deal.id} />
+          ) : (
+            !closed && <DeclineDealButton dealId={deal.id} />
+          )}
           <DeleteDealButton dealId={deal.id} creator={deal.creator} />
         </div>
 
-        {closed ? (
+        {deal.stage === "declined" ? (
+          <div className="mt-4 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="text-sm font-semibold text-slate-900">
+                Declined
+                {deal.decline_reason
+                  ? ` — ${DECLINE_REASON_LABEL[deal.decline_reason].toLowerCase()}`
+                  : ""}
+              </span>
+              {deal.declined_at && (
+                <span className="text-xs text-slate-400 font-tabular">{deal.declined_at}</span>
+              )}
+              {deal.revisit_on && (
+                <span className="text-xs font-medium text-brand-dark">
+                  · revisit on {deal.revisit_on}
+                </span>
+              )}
+            </div>
+            {deal.decline_note && (
+              <p className="text-sm text-slate-600 mt-1">{deal.decline_note}</p>
+            )}
+            {deal.current_ask != null && deal.walkaway != null && (
+              <p className="text-xs text-slate-400 mt-1.5 font-tabular">
+                Their last position {euro(deal.current_ask)} · your walk-away{" "}
+                {euro(deal.walkaway)}
+              </p>
+            )}
+          </div>
+        ) : closed ? (
           <DealProgress deal={deal} contentItems={contentItems} paymentItems={paymentItems} />
         ) : (
           <PriceLadder deal={deal} />

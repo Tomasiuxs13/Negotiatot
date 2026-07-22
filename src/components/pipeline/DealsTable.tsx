@@ -1,9 +1,8 @@
 import Link from "next/link";
 import type { Deal } from "@/lib/types";
-import { PLATFORM_META, STAGES, dealPlatforms } from "@/lib/types";
+import { PLATFORM_META, STAGE_LABELS, dealPlatforms } from "@/lib/types";
 import { euro } from "@/lib/format";
 
-const STAGE_LABEL = Object.fromEntries(STAGES.map((s) => [s.key, s.label]));
 
 const STAGE_PILL: Record<string, string> = {
   lead: "bg-slate-100 text-slate-600",
@@ -87,7 +86,7 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
                 <span
                   className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${STAGE_PILL[d.stage] ?? "bg-slate-100 text-slate-600"}`}
                 >
-                  {STAGE_LABEL[d.stage] ?? d.stage}
+                  {STAGE_LABELS[d.stage]}
                 </span>
               </td>
               <td className="px-4 py-3 text-right font-tabular text-slate-600">
@@ -96,7 +95,14 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
               <td className="px-4 py-3 text-right font-tabular font-medium text-slate-900">
                 {d.agreed_price ?? d.current_offer ? euro(d.agreed_price ?? d.current_offer) : "—"}
               </td>
-              <td className="px-4 py-3 text-slate-500 text-xs">{d.status_label ?? "—"}</td>
+              <td className="px-4 py-3 text-slate-500 text-xs">
+                {d.status_label ?? "—"}
+                {d.decline_note && (
+                  <span className="block text-slate-400 truncate max-w-56" title={d.decline_note}>
+                    {d.decline_note}
+                  </span>
+                )}
+              </td>
               <td className="px-4 py-3 text-right text-xs text-slate-400 whitespace-nowrap">
                 {ago(d.updated_at)}
               </td>

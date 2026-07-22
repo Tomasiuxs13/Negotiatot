@@ -250,3 +250,37 @@ describe("measurement nudges", () => {
     ).toBe(false);
   });
 });
+
+describe("revisit nudges", () => {
+  it("brings back a deal parked on timing once its date arrives", () => {
+    const due = attentionItems({
+      ...base,
+      deals: [
+        deal({
+          stage: "declined",
+          decline_reason: "timing",
+          decline_note: "No budget until Q4",
+          revisit_on: "2026-07-20",
+        }),
+      ],
+    });
+    const nudge = due.find((i) => i.title.includes("worth revisiting"))!;
+    expect(nudge.detail).toContain("No budget until Q4");
+  });
+
+  it("stays quiet until the date arrives", () => {
+    const later = attentionItems({
+      ...base,
+      deals: [deal({ stage: "declined", decline_reason: "timing", revisit_on: "2026-09-01" })],
+    });
+    expect(later.some((i) => i.title.includes("worth revisiting"))).toBe(false);
+  });
+
+  it("never nags about a deal declined on price", () => {
+    const priced = attentionItems({
+      ...base,
+      deals: [deal({ stage: "declined", decline_reason: "too_expensive", revisit_on: null })],
+    });
+    expect(priced).toEqual([]);
+  });
+});
