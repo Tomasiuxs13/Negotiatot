@@ -2,7 +2,7 @@ import Link from "next/link";
 import PageHeader, { NewDealButton } from "@/components/PageHeader";
 import PipelineBoard from "@/components/pipeline/PipelineBoard";
 import DealsTable from "@/components/pipeline/DealsTable";
-import { getDeals } from "@/lib/db";
+import { getCampaigns, getDeals } from "@/lib/db";
 import {
   getAllContentItems,
   getAllOnboardingTasks,
@@ -11,8 +11,14 @@ import {
 } from "@/lib/fulfillment";
 import { dealPhase, type DealPhase } from "@/lib/deal-phase";
 import { dealPlatforms } from "@/lib/types";
+import { buildQuery, sortBy, type SortDir } from "@/lib/table-sort";
 
 export const dynamic = "force-dynamic";
+
+/** A deal's campaign, whether it came from a linked record or was typed in. */
+function campaignNameOf(d: { campaign: string | null }): string | null {
+  return d.campaign?.trim() || null;
+}
 
 const FILTERS = [
   { key: "", label: "All" },
@@ -24,9 +30,26 @@ const FILTERS = [
 export default async function PipelinePage({
   searchParams,
 }: {
-  searchParams: Promise<{ platform?: string; view?: string; stage?: string }>;
+  searchParams: Promise<{
+    platform?: string;
+    view?: string;
+    stage?: string;
+    campaign?: string;
+    q?: string;
+    sort?: string;
+    dir?: string;
+  }>;
 }) {
-  const { platform = "", view = "board", stage = "" } = await searchParams;
+  const params = await searchParams;
+  const {
+    platform = "",
+    view = "board",
+    stage = "",
+    campaign = "",
+    q = "",
+    sort = "",
+    dir = "desc",
+  } = params;
   const isList = view === "list";
 
   const all = getDeals();
@@ -34,6 +57,17 @@ export default async function PipelinePage({
     ? all.filter((d) => dealPlatforms(d).includes(platform as never))
     : all;
   if (stage) deals = deals.filter((d) => d.stage === stage);
+  // Matched by name: deals carry the campaign as text and may never have been linked to
+  // a campaign record, so filtering on the id alone would silently match nothing.
+  if (campaign) deals = deals.filter((d) => campaignNameOf(d) === campaign);
+  const needle = q.trim().toLowerCase();
+  if (needle) {
+    deals = deals.filter(
+      (d) =>
+        d.creator.toLowerCase().includes(needle) ||
+        (d.deliverables ?? "").toLowerCase().includes(needle)
+    );
+  }
 
   // Where the work actually stands on signed deals — computed, because a deal is
   // routinely mid-setup and mid-production at once and no single column says that.
@@ -56,15 +90,32 @@ export default async function PipelinePage({
     });
   }
 
-  const query = (over: Record<string, string>) => {
-    const params = new URLSearchParams();
-    const merged = { platform, view, stage, ...over };
-    for (const [k, v] of Object.entries(merged)) {
-      if (v && !(k === "view" && v === "board")) params.set(k, v);
-    }
-    const qs = params.toString();
-    return qs ? `/pipeline?${qs}` : "/pipeline";
-  };
+  const query = (over: Record<string, string>) =>
+    buildQuery("/pipeline", params as Record<string, string>, over, { view: "board", dir: "desc" });
+
+  // The board keeps its own order (by stage); only the list is sortable.
+  const listed = sort
+    ? sortBy(
+        deals,
+        (d) =>
+          sort === "value"
+            ? (d.agreed_price ?? d.current_offer)
+            : sort === "ask"
+              ? d.current_ask
+              : sort === "creator"
+                ? d.creator
+                : d.updated_at,
+        dir as SortDir
+      )
+    : deals;
+
+  // Every campaign that actually appears on a deal, plus any configured ones.
+  const campaignNames = [
+    ...new Set([
+      ...all.map(campaignNameOf).filter((n): n is string => Boolean(n)),
+      ...getCampaigns().map((c) => c.name),
+    ]),
+  ].sort((a, b) => a.localeCompare(b));
 
   return (
     <>
@@ -117,15 +168,53 @@ export default async function PipelinePage({
       />
 
       <main className="flex-1 overflow-x-auto overflow-y-auto p-8">
-        {stage && (
-          <div className="mb-4 flex items-center gap-2 text-sm">
-            <span className="text-slate-500">Filtered to one stage</span>
-            <Link href={query({ stage: "" })} className="text-brand-dark font-medium hover:underline">
-              Clear
-            </Link>
-          </div>
-        )}
-        {isList ? <DealsTable deals={deals} phases={phases} /> : <PipelineBoard deals={deals} phases={phases} />}
+        <div className="mb-4 flex items-center gap-3 flex-wrap">
+          <form className="flex items-center gap-2" method="get">
+            {platform && <input type="hidden" name="platform" value={platform} />}
+            {view !== "board" && <input type="hidden" name="view" value={view} />}
+            {stage && <input type="hidden" name="stage" value={stage} />}
+            {sort && <input type="hidden" name="sort" value={sort} />}
+            <input
+              name="q"
+              defaultValue={q}
+              placeholder="Search creator or deliverable…"
+              className="border border-slate-200 rounded-lg bg-white px-3 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand w-56"
+            />
+            {campaignNames.length > 0 && (
+              <select
+                name="campaign"
+                defaultValue={campaign}
+                className="border border-slate-200 rounded-lg bg-white px-2 py-1.5 text-xs text-slate-700"
+              >
+                <option value="">All campaigns</option>
+                {campaignNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button className="text-xs font-medium bg-slate-900 text-white rounded-md px-3 py-1.5 hover:bg-slate-800">
+              Apply
+            </button>
+          </form>
+
+          {(stage || campaign || q || platform || sort) && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-xs text-slate-500">
+                {deals.length} of {all.length} deals
+                {stage ? " · one stage" : ""}
+              </span>
+              <Link
+                href={view === "list" ? "/pipeline?view=list" : "/pipeline"}
+                className="text-xs text-brand-dark font-medium hover:underline"
+              >
+                Clear filters
+              </Link>
+            </div>
+          )}
+        </div>
+        {isList ? <DealsTable deals={listed} phases={phases} sort={sort} dir={dir as SortDir} hrefFor={query} /> : <PipelineBoard deals={deals} phases={phases} />}
       </main>
     </>
   );

@@ -1,5 +1,6 @@
 import { getAllPaymentItems } from "@/lib/fulfillment";
 import { PAYMENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL } from "@/lib/fulfillment-types";
+import { filterPayments } from "@/lib/payment-filters";
 
 /** Escapes a value for CSV: quotes it and doubles any inner quotes. */
 function cell(value: unknown): string {
@@ -7,8 +8,18 @@ function cell(value: unknown): string {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-export async function GET() {
-  const payments = getAllPaymentItems();
+export async function GET(request: Request) {
+  // The export answers the same question the screen is showing. Exporting everything
+  // while the page displays one month is how the wrong figure reaches accounting.
+  const url = new URL(request.url);
+  const filters = {
+    status: url.searchParams.get("status") ?? "",
+    creator: url.searchParams.get("creator") ?? "",
+    from: url.searchParams.get("from") ?? "",
+    to: url.searchParams.get("to") ?? "",
+  };
+  const payments = filterPayments(getAllPaymentItems(), filters);
+
   const header = [
     "Partner",
     "Payment",
@@ -36,7 +47,15 @@ export async function GET() {
   );
 
   const csv = [header.map(cell).join(","), ...rows].join("\n");
-  const filename = `counterpart-payments-${new Date().toISOString().slice(0, 10)}.csv`;
+
+  // Name the file after what's in it, so two exports never look alike on disk.
+  const scope = [filters.status, filters.creator, filters.from && `${filters.from}_${filters.to || "on"}`]
+    .filter(Boolean)
+    .join("-")
+    .replace(/[^a-zA-Z0-9_-]/g, "");
+  const filename = `counterpart-payments${scope ? `-${scope}` : ""}-${new Date()
+    .toISOString()
+    .slice(0, 10)}.csv`;
 
   return new Response(csv, {
     headers: {

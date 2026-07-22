@@ -6,15 +6,27 @@ import { parseTags, partnerStats, partnerStatus } from "@/lib/partners";
 import PartnerStatusPill from "@/components/partners/PartnerStatusPill";
 import { PLATFORM_META, type Platform } from "@/lib/types";
 import { euro, euroCpm } from "@/lib/format";
+import FilterPills, { SortHeader } from "@/components/FilterBar";
+import { PARTNER_STATUS_LABEL, type PartnerStatus } from "@/lib/partners";
+import { buildQuery, nextDir, sortBy, type SortDir } from "@/lib/table-sort";
+
+const PARTNER_STATUSES: PartnerStatus[] = [
+  "delivering",
+  "negotiating",
+  "past",
+  "prospect",
+  "lapsed",
+];
 
 export const dynamic = "force-dynamic";
 
 export default async function PartnersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; sort?: string; dir?: string }>;
 }) {
-  const { q = "" } = await searchParams;
+  const params = await searchParams;
+  const { q = "", status = "", sort = "", dir = "desc" } = params;
   const needle = q.trim().toLowerCase();
 
   const rows = getPartners().map((p) => {
@@ -24,11 +36,12 @@ export default async function PartnersPage({
       tags: parseTags(p.tags),
       channels: getPartnerChannels(p.id),
       partnerDeals: deals,
+      status: partnerStatus(deals),
       stats: partnerStats(deals),
     };
   });
 
-  const filtered = needle
+  let filtered = needle
     ? rows.filter(
         (r) =>
           r.partner.name.toLowerCase().includes(needle) ||
@@ -36,6 +49,31 @@ export default async function PartnersPage({
           r.tags.some((t) => t.toLowerCase().includes(needle))
       )
     : rows;
+  if (status) filtered = filtered.filter((r) => r.status === status);
+
+  // Name order is the sensible default; anything else you ask for wins.
+  if (sort) {
+    filtered = sortBy(
+      filtered,
+      (r) =>
+        sort === "committed"
+          ? r.stats.committed
+          : sort === "paid"
+            ? r.stats.paid
+            : sort === "cpm"
+              ? r.stats.actualCpm
+              : sort === "saved"
+                ? r.stats.savedVsAsk
+                : sort === "deals"
+                  ? r.stats.totalDeals
+                  : r.partner.name,
+      dir as SortDir
+    );
+  }
+
+  const href = (changes: Record<string, string>) =>
+    buildQuery("/partners", params as Record<string, string>, changes, { dir: "desc" });
+  const sortHref = (key: string) => href({ sort: key, dir: nextDir(sort === key, dir as SortDir) });
 
   return (
     <>
@@ -45,23 +83,44 @@ export default async function PartnersPage({
         actions={<NewPartnerButton />}
       />
       <main className="flex-1 overflow-y-auto p-8">
-        <form className="mb-4 max-w-sm">
-          <input
-            name="q"
-            defaultValue={q}
-            placeholder="Search name, email, or tag…"
-            className="w-full border border-slate-200 rounded-lg bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand"
+        <div className="mb-4 flex items-center gap-3 flex-wrap">
+          <form className="max-w-xs flex-1 min-w-56">
+            {status && <input type="hidden" name="status" value={status} />}
+            {sort && <input type="hidden" name="sort" value={sort} />}
+            <input
+              name="q"
+              defaultValue={q}
+              placeholder="Search name, email, or tag…"
+              className="w-full border border-slate-200 rounded-lg bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand"
+            />
+          </form>
+          <FilterPills
+            active={status}
+            href={(v) => href({ status: v })}
+            options={[
+              { value: "", label: "All", count: rows.length },
+              ...PARTNER_STATUSES.map((s) => ({
+                value: s,
+                label: PARTNER_STATUS_LABEL[s],
+                count: rows.filter((r) => r.status === s).length,
+              })).filter((o) => o.count > 0),
+            ]}
           />
-        </form>
+          {(q || status || sort) && (
+            <Link href="/partners" className="text-xs text-slate-500 hover:text-slate-800">
+              Clear
+            </Link>
+          )}
+        </div>
 
         {filtered.length === 0 ? (
           <div className="bg-white rounded-lg border border-dashed border-slate-300 p-10 text-center max-w-xl">
             <p className="text-sm font-medium text-slate-700 mb-1">
-              {needle ? "No partners match that search" : "No partners yet"}
+              {needle || status ? "No partners match this view" : "No partners yet"}
             </p>
             <p className="text-sm text-slate-500">
-              {needle
-                ? "Try a different name or tag."
+              {needle || status
+                ? "Try a different search or status."
                 : "Partners appear here automatically when you create deals, or add one manually."}
             </p>
           </div>
@@ -70,20 +129,18 @@ export default async function PartnersPage({
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                  <th className="px-4 py-3 font-medium">Partner</th>
+                  <SortHeader label="Partner" href={sortHref("name")} active={sort === "name"} dir={dir as SortDir} />
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Channels</th>
-                  <th className="px-4 py-3 font-medium text-right">Deals</th>
-                  <th className="px-4 py-3 font-medium text-right">Committed</th>
-                  <th className="px-4 py-3 font-medium text-right">Paid</th>
-                  <th className="px-4 py-3 font-medium text-right" title="From deals with logged actuals only">
-                    Actual CPM
-                  </th>
-                  <th className="px-4 py-3 font-medium text-right">Saved</th>
+                  <SortHeader label="Deals" align="right" href={sortHref("deals")} active={sort === "deals"} dir={dir as SortDir} />
+                  <SortHeader label="Committed" align="right" href={sortHref("committed")} active={sort === "committed"} dir={dir as SortDir} />
+                  <SortHeader label="Paid" align="right" href={sortHref("paid")} active={sort === "paid"} dir={dir as SortDir} />
+                  <SortHeader label="Actual CPM" align="right" href={sortHref("cpm")} active={sort === "cpm"} dir={dir as SortDir} />
+                  <SortHeader label="Saved" align="right" href={sortHref("saved")} active={sort === "saved"} dir={dir as SortDir} />
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(({ partner, tags, channels, partnerDeals, stats }) => (
+                {filtered.map(({ partner, tags, channels, status: rowStatus, stats }) => (
                   <tr key={partner.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <Link
@@ -106,7 +163,7 @@ export default async function PartnersPage({
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <PartnerStatusPill status={partnerStatus(partnerDeals)} />
+                      <PartnerStatusPill status={rowStatus} />
                     </td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-2 text-slate-500">

@@ -5,6 +5,8 @@ import { useTransition } from "react";
 import type { PaymentItem } from "@/lib/fulfillment-types";
 import { PAYMENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL, pendingReason } from "@/lib/fulfillment-types";
 import { euro } from "@/lib/format";
+import { SortHeader } from "@/components/FilterBar";
+import { nextDir, type SortDir } from "@/lib/table-sort";
 import { setPaymentStatusAction } from "@/app/deals/[id]/fulfillment-actions";
 
 const TONE: Record<string, string> = {
@@ -16,18 +18,25 @@ const TONE: Record<string, string> = {
 
 export default function PaymentsQueue({
   payments,
+  sort = "",
+  dir = "desc",
+  sortHrefs,
 }: {
   payments: (PaymentItem & { creator: string })[];
+  sort?: string;
+  dir?: SortDir;
+  /** Precomputed URLs — a client component can't receive the builder function itself. */
+  sortHrefs?: { creator: string; amount: string };
 }) {
   const [isPending, startTransition] = useTransition();
 
   if (payments.length === 0) {
     return (
       <div className="bg-white rounded-lg border border-dashed border-slate-300 p-10 text-center max-w-2xl">
-        <p className="text-sm font-medium text-slate-700 mb-1">No payments yet</p>
+        <p className="text-sm font-medium text-slate-700 mb-1">No payments to show</p>
         <p className="text-sm text-slate-500">
-          Payments appear here when you confirm a contract, or add them by hand on a deal&apos;s
-          Fulfillment tab.
+          Nothing matches this filter — or no payments exist yet. They appear when you confirm a
+          contract, or add them by hand on a deal&apos;s Fulfillment tab.
         </p>
       </div>
     );
@@ -39,10 +48,29 @@ export default function PaymentsQueue({
         <thead>
           <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
             <th className="px-4 py-3 font-medium">Status</th>
-            <th className="px-4 py-3 font-medium">Partner</th>
+            {sortHrefs ? (
+              <SortHeader
+                label="Partner"
+                active={sort === "creator"}
+                dir={dir}
+                href={sortHrefs.creator}
+              />
+            ) : (
+              <th className="px-4 py-3 font-medium">Partner</th>
+            )}
             <th className="px-4 py-3 font-medium">Payment</th>
             <th className="px-4 py-3 font-medium">Trigger</th>
-            <th className="px-4 py-3 font-medium text-right">Amount</th>
+            {sortHrefs ? (
+              <SortHeader
+                label="Amount"
+                align="right"
+                active={sort === "amount"}
+                dir={dir}
+                href={sortHrefs.amount}
+              />
+            ) : (
+              <th className="px-4 py-3 font-medium text-right">Amount</th>
+            )}
             <th className="px-4 py-3 font-medium text-right">Action</th>
           </tr>
         </thead>

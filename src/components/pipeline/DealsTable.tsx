@@ -3,6 +3,8 @@ import type { Deal } from "@/lib/types";
 import { PLATFORM_META, STAGE_LABELS, dealPlatforms } from "@/lib/types";
 import { euro } from "@/lib/format";
 import type { DealPhase } from "@/lib/deal-phase";
+import { SortHeader } from "@/components/FilterBar";
+import { nextDir, type SortDir } from "@/lib/table-sort";
 
 
 const STAGE_PILL: Record<string, string> = {
@@ -35,10 +37,30 @@ function ago(timestamp: string): string {
 export default function DealsTable({
   deals,
   phases = {},
+  sort = "",
+  dir = "desc",
+  hrefFor,
 }: {
   deals: Deal[];
   phases?: Record<number, DealPhase>;
+  sort?: string;
+  dir?: SortDir;
+  hrefFor?: (changes: Record<string, string>) => string;
 }) {
+  const sortable = (label: string, key: string, align: "left" | "right" = "left") =>
+    hrefFor ? (
+      <SortHeader
+        label={label}
+        align={align}
+        active={sort === key}
+        dir={dir}
+        href={hrefFor({ sort: key, dir: nextDir(sort === key, dir) })}
+      />
+    ) : (
+      <th className={`px-4 py-3 font-medium ${align === "right" ? "text-right" : "text-left"}`}>
+        {label}
+      </th>
+    );
   if (deals.length === 0) {
     return (
       <div className="bg-white rounded-lg border border-dashed border-slate-300 p-10 text-center">
@@ -53,13 +75,13 @@ export default function DealsTable({
       <table className="w-full text-sm min-w-[860px]">
         <thead>
           <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
-            <th className="px-4 py-3 font-medium">Creator</th>
+            {sortable("Creator", "creator")}
             <th className="px-4 py-3 font-medium">Platforms</th>
             <th className="px-4 py-3 font-medium">Stage</th>
-            <th className="px-4 py-3 font-medium text-right">Their ask</th>
-            <th className="px-4 py-3 font-medium text-right">Our number</th>
+            {sortable("Their ask", "ask", "right")}
+            {sortable("Our number", "value", "right")}
             <th className="px-4 py-3 font-medium">Status</th>
-            <th className="px-4 py-3 font-medium text-right">Last activity</th>
+            {sortable("Last activity", "updated", "right")}
           </tr>
         </thead>
         <tbody>
