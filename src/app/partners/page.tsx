@@ -4,6 +4,7 @@ import NewPartnerButton from "@/components/partners/NewPartnerButton";
 import { getPartnerChannels, getPartnerDeals, getPartners } from "@/lib/db";
 import { parseTags, partnerStats, partnerStatus } from "@/lib/partners";
 import PartnerStatusPill from "@/components/partners/PartnerStatusPill";
+import DeletePartnerButton from "@/components/partners/DeletePartnerButton";
 import { PLATFORM_META, type Platform } from "@/lib/types";
 import { euro, euroCpm } from "@/lib/format";
 import FilterPills, { SortHeader } from "@/components/FilterBar";
@@ -137,6 +138,7 @@ export default async function PartnersPage({
                   <SortHeader label="Paid" align="right" href={sortHref("paid")} active={sort === "paid"} dir={dir as SortDir} />
                   <SortHeader label="Actual CPM" align="right" href={sortHref("cpm")} active={sort === "cpm"} dir={dir as SortDir} />
                   <SortHeader label="Saved" align="right" href={sortHref("saved")} active={sort === "saved"} dir={dir as SortDir} />
+                  <th className="px-4 py-3 font-medium text-right" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
@@ -200,6 +202,13 @@ export default async function PartnersPage({
                     </td>
                     <td className="px-4 py-3 text-right font-tabular text-emerald-600">
                       {stats.savedVsAsk > 0 ? euro(stats.savedVsAsk) : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <DeletePartnerButton
+                        id={partner.id}
+                        name={partner.name}
+                        dealCount={stats.totalDeals}
+                      />
                     </td>
                   </tr>
                 ))}
