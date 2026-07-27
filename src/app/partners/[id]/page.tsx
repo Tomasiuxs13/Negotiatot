@@ -52,7 +52,7 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
       </div>
 
       <div className="space-y-4 max-w-5xl">
-        <PartnerProfile partner={partner} channels={channels} />
+        <PartnerProfile partner={partner} channels={channels} dealCount={deals.length} />
 
         <div className="grid grid-cols-5 gap-3">
           {kpis.map((k) => (

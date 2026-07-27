@@ -8,6 +8,7 @@ import { PLATFORM_META, type Platform } from "@/lib/types";
 import { views as fmtViews } from "@/lib/format";
 import {
   archivePartnerAction,
+  deletePartnerAction,
   deleteChannelAction,
   saveChannelAction,
   updatePartnerAction,
@@ -21,9 +22,11 @@ const PLATFORMS: Platform[] = ["youtube", "instagram", "tiktok"];
 export default function PartnerProfile({
   partner,
   channels,
+  dealCount = 0,
 }: {
   partner: Partner;
   channels: PartnerChannel[];
+  dealCount?: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -72,6 +75,23 @@ export default function PartnerProfile({
     if (!window.confirm(`Archive ${partner.name}? Their deals stay, but they leave the partner list.`)) return;
     startTransition(async () => {
       await archivePartnerAction(partner.id);
+      router.push("/partners");
+    });
+  };
+
+  const remove = () => {
+    const withDeals =
+      dealCount > 0
+        ? ` and their ${dealCount} deal${dealCount === 1 ? "" : "s"} (content, payments and history)`
+        : "";
+    if (
+      !window.confirm(
+        `Delete ${partner.name}${withDeals}? This can't be undone. To just hide them, use Archive instead.`
+      )
+    )
+      return;
+    startTransition(async () => {
+      await deletePartnerAction(partner.id);
       router.push("/partners");
     });
   };
@@ -130,8 +150,11 @@ export default function PartnerProfile({
               <button onClick={() => setEditing(true)} className="text-xs font-medium text-slate-500 hover:text-slate-900">
                 Edit
               </button>
-              <button onClick={archive} className="text-xs font-medium text-slate-400 hover:text-red-600">
+              <button onClick={archive} className="text-xs font-medium text-slate-400 hover:text-slate-700">
                 Archive
+              </button>
+              <button onClick={remove} className="text-xs font-medium text-slate-400 hover:text-red-600">
+                Delete
               </button>
             </div>
           </div>

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import {
   createPartner,
+  deletePartner,
   deletePartnerChannel,
   findPartnerByName,
   updatePartner,
@@ -49,6 +50,17 @@ export async function updatePartnerAction(
 export async function archivePartnerAction(id: number) {
   updatePartner(id, { archived: 1 });
   revalidatePath("/partners");
+  return {};
+}
+
+export async function deletePartnerAction(id: number) {
+  deletePartner(id);
+  // A deleted partner takes their deals with it, so refresh everywhere those show.
+  revalidatePath("/partners");
+  revalidatePath("/");
+  revalidatePath("/pipeline");
+  revalidatePath("/payments");
+  revalidatePath("/benchmarks");
   return {};
 }
 

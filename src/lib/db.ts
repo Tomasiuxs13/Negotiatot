@@ -11,6 +11,10 @@ if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
 const db = new Database(path.join(dataDir, "counterpart.db"));
 db.pragma("journal_mode = WAL");
+// Deleting a deal or partner relies on ON DELETE CASCADE to clear its children.
+// SQLite leaves foreign keys off per connection unless asked, so make it explicit
+// rather than trust a default — an orphaned payment row is a silent data bug.
+db.pragma("foreign_keys = ON");
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS deals (
@@ -368,8 +372,21 @@ function failStaleJobs() {
 }
 
 function seedIfEmpty() {
-  const count = (db.prepare("SELECT COUNT(*) AS n FROM deals").get() as { n: number }).n;
-  if (count > 0) return;
+  // Seeding must be a strict one-time event, not "run whenever deals is empty" —
+  // otherwise deleting your deals to start fresh silently restores the demo data on
+  // the next boot. A persistent marker records that seeding has happened.
+  if (getSetting<boolean>("seeded")) return;
+
+  // Existing installs predate the marker: if there's already any data, they were seeded
+  // (or built by hand) long ago, so record that and never seed over their content.
+  const existing =
+    (db.prepare("SELECT COUNT(*) AS n FROM deals").get() as { n: number }).n +
+    (db.prepare("SELECT COUNT(*) AS n FROM partners").get() as { n: number }).n +
+    (db.prepare("SELECT COUNT(*) AS n FROM playbook").get() as { n: number }).n;
+  if (existing > 0) {
+    setSetting("seeded", true);
+    return;
+  }
 
   const insertDeal = db.prepare(`
     INSERT INTO deals (creator, platform, format, stage, round, your_move,
@@ -568,6 +585,7 @@ function seedIfEmpty() {
     }));
   });
   insertAll();
+  setSetting("seeded", true);
 }
 seedIfEmpty();
 // Runs after seeding so demo deals get partners too; no-ops once every deal is linked.
@@ -599,6 +617,21 @@ export function findPartnerByName(name: string): Partner | undefined {
   return db.prepare("SELECT * FROM partners WHERE name = ? COLLATE NOCASE").get(name) as
     | Partner
     | undefined;
+}
+
+/** How many deals go with a partner, so a delete confirmation can say what it removes. */
+export function partnerDealCount(id: number): number {
+  return (db.prepare("SELECT COUNT(*) c FROM deals WHERE partner_id = ?").get(id) as { c: number })
+    .c;
+}
+
+/**
+ * Permanently removes a partner and, via ON DELETE CASCADE, their deals, channels and
+ * everything hanging off those. Unlike archive this can't be undone — the caller is
+ * responsible for confirming it.
+ */
+export function deletePartner(id: number) {
+  db.prepare("DELETE FROM partners WHERE id = ?").run(id);
 }
 
 export function getPartnerChannels(partnerId: number): PartnerChannel[] {
