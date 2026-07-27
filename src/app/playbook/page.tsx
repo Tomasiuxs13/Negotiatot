@@ -15,6 +15,8 @@ export default function PlaybookPage() {
     // Merge a default so the commission field appears on installs that predate it.
     unitEconomics: {
       commissionPercent: 0,
+      productCost: 0,
+      minPaidFee: 100,
       ...(getSetting<Record<string, unknown>>("unit_economics") ?? {}),
     },
     negotiationStyle: getSetting<Record<string, unknown>>("negotiation_style") ?? {},

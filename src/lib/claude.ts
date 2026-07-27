@@ -70,6 +70,37 @@ function commissionBlock(deal: Deal): string {
   ].join("\n");
 }
 
+/**
+ * Gifted product and the floor below which a fee isn't worth the paperwork. Without
+ * this the model prices tiny channels at a token fee nobody should administer, and
+ * treats a free product as costing nothing.
+ */
+function structureBlock(econ: Record<string, unknown> | null): string {
+  const productCost = Number(econ?.productCost ?? 0);
+  const minPaidFee = Number(econ?.minPaidFee ?? 0);
+  if (productCost <= 0 && minPaidFee <= 0) return "";
+
+  const lines: string[] = [``, `## Deal structure`];
+  if (productCost > 0) {
+    lines.push(
+      `Every creator is gifted product costing us €${productCost} (cost of goods, not its`,
+      `retail price). That is a real cost of this deal: subtract it from what the fixed fee`,
+      `can bear, exactly like commission, and include it when you state total deal cost.`
+    );
+  }
+  if (minPaidFee > 0) {
+    lines.push(
+      `The smallest fee worth paying is €${minPaidFee}. If the economics only support a fee`,
+      `below that, do NOT recommend a token payment — the contract, invoice and payment run`,
+      `cost more than it buys. Recommend a gifted + commission deal instead: the creator`,
+      `gets the product and earns on sales rather than a nominal fee. Say this explicitly,`,
+      `and draft the message on that basis. If there is no product and no commission to`,
+      `offer either, recommend walking away.`
+    );
+  }
+  return lines.join("\n");
+}
+
 function dealPlatformList(deal: Deal): string[] {
   if (deal.platforms) {
     try {
@@ -388,6 +419,8 @@ export async function analyzeDeal(params: {
   if (history) facts.push(history);
   const commission = commissionBlock(deal);
   if (commission) facts.push(commission);
+  const structure = structureBlock(playbook.unitEconomics);
+  if (structure) facts.push(structure);
 
   const userContent: Anthropic.ContentBlockParam[] = [];
   if (params.reportPdfBase64) {
@@ -610,6 +643,7 @@ export async function recommendNextMove(params: {
     `Avg views: ${deal.avg_views ?? "unknown"} · engagement: ${deal.engagement_rate ?? "unknown"}%`,
     analysis ? `Prior analysis summary: ${analysis.verdictSummary}` : "",
     commissionBlock(deal),
+    structureBlock(playbook.unitEconomics),
     historyBlock(params.history, deal.creator),
     ``,
     `## Conversation so far`,

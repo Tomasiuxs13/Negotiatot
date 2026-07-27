@@ -14,12 +14,15 @@ export default function DealProgress({
   contentItems,
   paymentItems,
   aov = 0,
+  productCost = 0,
 }: {
   deal: Deal;
   contentItems: ContentItem[];
   paymentItems: PaymentItem[];
   /** Average order value from the Playbook, for costing commission on real orders. */
   aov?: number;
+  /** What the gifted product costs us — free to them, not to us. */
+  productCost?: number;
 }) {
   const s = fulfillmentSummary(contentItems, paymentItems);
   const paid = paymentItems.filter((p) => p.status === "paid").reduce((n, p) => n + p.amount, 0);
@@ -28,9 +31,16 @@ export default function DealProgress({
 
   // What the deal really cost: the fee plus commission actually earned on real orders.
   const commission = dealCommission(deal);
+  const hasCommissionCost = commission.type !== "none" && Boolean(deal.actual_orders) && aov > 0;
   const cost =
-    commission.type !== "none" && deal.actual_orders && aov > 0
-      ? trueDealCost({ fee, expectedOrders: deal.actual_orders, aov, commission })
+    hasCommissionCost || productCost > 0
+      ? trueDealCost({
+          fee,
+          expectedOrders: deal.actual_orders ?? 0,
+          aov,
+          commission,
+          productCost,
+        })
       : null;
 
   const savedVsAsk =
@@ -59,7 +69,14 @@ export default function DealProgress({
             {euro(cost.total)}
           </div>
           <div className="text-xs text-slate-500">
-            + {euro(cost.commission)} commission on {deal.actual_orders} orders
+            {[
+              cost.commission > 0
+                ? `+ ${euro(cost.commission)} commission on ${deal.actual_orders} orders`
+                : null,
+              cost.product > 0 ? `+ ${euro(cost.product)} product` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </div>
         </div>
       )}

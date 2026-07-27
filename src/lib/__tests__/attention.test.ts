@@ -359,3 +359,23 @@ describe("onboarding gaps", () => {
     expect(gaps[0].title).toContain("Marta");
   });
 });
+
+describe("verdict vs your-move overlap", () => {
+  const analyzed = { stage: "analyzing" as const, analysis: "{}", job_status: null };
+
+  it("shows one item, not two, once the Copilot has drafted a move", () => {
+    // Both used to fire for the same deal: "verdict ready to review" and "your move".
+    const items = attentionItems({
+      ...base,
+      deals: [deal({ ...analyzed, your_move: 1 })],
+    });
+    const forThisDeal = items.filter((i) => i.title.startsWith("Marta"));
+    expect(forThisDeal).toHaveLength(1);
+    expect(forThisDeal[0].title).toContain("your move");
+  });
+
+  it("still asks for a decision when no recommendation is waiting", () => {
+    const items = attentionItems({ ...base, deals: [deal({ ...analyzed, your_move: 0 })] });
+    expect(items.some((i) => i.title.includes("verdict ready to review"))).toBe(true);
+  });
+});

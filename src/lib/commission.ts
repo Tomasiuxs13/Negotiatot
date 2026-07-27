@@ -51,14 +51,17 @@ export function grossProfitPerOrder(e: Economics): number {
 /**
  * The most you can pay in *fixed fee* before the deal stops making money.
  *
- * Commission comes off the top: every euro of expected CPA is a euro less of fee you
- * can afford. Clamped at zero — when commission alone exceeds the margin, the honest
- * answer is that there's no room for a fee at all, not a negative one.
+ * Commission and gifted product both come off the top: every euro of expected CPA and
+ * every euro of product cost is a euro less of fee you can afford. Clamped at zero —
+ * when those alone exceed the margin, the honest answer is that there's no room for a
+ * fee at all, not a negative one.
  */
 export function breakevenFee(params: {
   expectedOrders: number;
   economics: Economics;
   commission?: Commission;
+  /** What the gifted product costs YOU — cost of goods, not its retail price. */
+  productCost?: number;
 }): number {
   const { expectedOrders, economics } = params;
   const commission = params.commission ?? NO_COMMISSION;
@@ -66,7 +69,7 @@ export function breakevenFee(params: {
 
   const profit = grossProfitPerOrder(economics) * expectedOrders;
   const cpa = expectedCommission(commission, economics.aov, expectedOrders);
-  return Math.max(0, profit - cpa);
+  return Math.max(0, profit - cpa - (params.productCost ?? 0));
 }
 
 /**
@@ -84,19 +87,63 @@ export function feeReduction(params: {
   return Math.max(0, withNone - withCommission);
 }
 
-/** What the deal actually costs: the fee you agreed plus the CPA you expect to pay. */
+/**
+ * What the deal actually costs: the fee, plus the CPA you expect to pay, plus the
+ * product you gave away. A "free" product is only free to the creator.
+ */
 export function trueDealCost(params: {
   fee: number;
   expectedOrders: number;
   aov: number;
   commission?: Commission;
-}): { fee: number; commission: number; total: number } {
+  productCost?: number;
+}): { fee: number; commission: number; product: number; total: number } {
   const commission = expectedCommission(
     params.commission ?? NO_COMMISSION,
     params.aov,
     params.expectedOrders
   );
-  return { fee: params.fee, commission, total: params.fee + commission };
+  const product = params.productCost ?? 0;
+  return { fee: params.fee, commission, product, total: params.fee + commission + product };
+}
+
+export type DealStructure = "paid" | "gifted_plus_commission" | "not_viable";
+
+/**
+ * Whether a fixed fee is worth paying at all.
+ *
+ * On a small channel the affordable fee can land at a number — €22 — where the admin
+ * of a paid deal (contract, invoice, payment run, chasing) costs more than the fee
+ * buys. Below that floor the sane structure is product plus commission: the creator
+ * still earns, from sales rather than a token payment, and nobody processes a €22
+ * invoice. With nothing left to give at all, the deal isn't viable.
+ */
+export function suggestStructure(params: {
+  affordableFee: number;
+  /** Smallest fee worth the paperwork. */
+  minPaidFee: number;
+  hasProduct: boolean;
+  hasCommission: boolean;
+}): { structure: DealStructure; reason: string } {
+  const { affordableFee, minPaidFee, hasProduct, hasCommission } = params;
+
+  if (affordableFee >= minPaidFee) {
+    return { structure: "paid", reason: "The numbers support a fixed fee." };
+  }
+  if (hasProduct || hasCommission) {
+    return {
+      structure: "gifted_plus_commission",
+      reason:
+        `A fee of about €${Math.round(affordableFee)} costs more to administer than it's ` +
+        `worth. Offer the product and commission instead — the creator still earns, from sales.`,
+    };
+  }
+  return {
+    structure: "not_viable",
+    reason:
+      `Nothing left to offer: no fee the economics support, no product, no commission. ` +
+      `Walk away or find a cheaper ask.`,
+  };
 }
 
 /** Plain-language form, for prompts and UI. */

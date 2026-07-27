@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   breakevenFee,
+  suggestStructure,
   commissionPerOrder,
   dealCommission,
   describeCommission,
@@ -94,12 +95,81 @@ describe("feeReduction", () => {
 describe("trueDealCost", () => {
   it("adds the expected commission to the agreed fee", () => {
     const cost = trueDealCost({ fee: 2000, expectedOrders: 50, aov: 120, commission: tenPct });
-    expect(cost).toEqual({ fee: 2000, commission: 600, total: 2600 });
+    expect(cost).toEqual({ fee: 2000, commission: 600, product: 0, total: 2600 });
+  });
+
+  it("counts the gifted product — free to them isn't free to you", () => {
+    const cost = trueDealCost({
+      fee: 2000,
+      expectedOrders: 50,
+      aov: 120,
+      commission: tenPct,
+      productCost: 140,
+    });
+    expect(cost).toEqual({ fee: 2000, commission: 600, product: 140, total: 2740 });
   });
 
   it("is just the fee on a flat deal", () => {
     const cost = trueDealCost({ fee: 2000, expectedOrders: 50, aov: 120 });
     expect(cost.total).toBe(2000);
+  });
+});
+
+describe("breakevenFee with gifted product", () => {
+  it("takes the product cost out of what the fee can be", () => {
+    // €3,600 margin − €600 commission − €140 product = €2,860.
+    const fee = breakevenFee({
+      expectedOrders: 50,
+      economics,
+      commission: tenPct,
+      productCost: 140,
+    });
+    expect(fee).toBe(2860);
+  });
+
+  it("leaves no fee when the product alone eats the margin", () => {
+    // A tiny channel: 2 orders of margin against a €200 product.
+    const fee = breakevenFee({ expectedOrders: 2, economics, productCost: 200 });
+    expect(fee).toBe(0);
+  });
+});
+
+describe("suggestStructure", () => {
+  const floor = { minPaidFee: 100, hasProduct: true, hasCommission: true };
+
+  it("keeps a fixed fee when the numbers support one", () => {
+    expect(suggestStructure({ ...floor, affordableFee: 2000 }).structure).toBe("paid");
+  });
+
+  it("switches a token fee to product plus commission", () => {
+    // The Sigcruiser case: ~900 avg views puts the affordable fee at €22.
+    const s = suggestStructure({ ...floor, affordableFee: 22 });
+    expect(s.structure).toBe("gifted_plus_commission");
+    expect(s.reason).toContain("€22");
+  });
+
+  it("treats the floor as inclusive", () => {
+    expect(suggestStructure({ ...floor, affordableFee: 100 }).structure).toBe("paid");
+  });
+
+  it("calls it unviable when there's no product or commission to fall back on", () => {
+    const s = suggestStructure({
+      affordableFee: 22,
+      minPaidFee: 100,
+      hasProduct: false,
+      hasCommission: false,
+    });
+    expect(s.structure).toBe("not_viable");
+  });
+
+  it("still offers the gifted route when only a product is on the table", () => {
+    const s = suggestStructure({
+      affordableFee: 0,
+      minPaidFee: 100,
+      hasProduct: true,
+      hasCommission: false,
+    });
+    expect(s.structure).toBe("gifted_plus_commission");
   });
 });
 

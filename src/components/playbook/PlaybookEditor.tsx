@@ -29,6 +29,8 @@ const ECON_LABELS: Record<string, string> = {
   grossMargin: "Gross margin (%)",
   repeatFactor: "Repeat-purchase factor (×)",
   commissionPercent: "Default affiliate commission (%)",
+  productCost: "Gifted product — your cost (€)",
+  minPaidFee: "Smallest fee worth paying (€)",
 };
 
 const inputClass =

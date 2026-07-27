@@ -247,6 +247,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
             contentItems={contentItems}
             paymentItems={paymentItems}
             aov={Number(getSetting<Record<string, number>>("unit_economics")?.aov ?? 0)}
+            productCost={Number(getSetting<Record<string, number>>("unit_economics")?.productCost ?? 0)}
           />
         ) : (
           <PriceLadder deal={deal} />

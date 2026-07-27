@@ -575,7 +575,8 @@ function seedIfEmpty() {
     }));
 
     db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("unit_economics", JSON.stringify({
-      aov: 120, conversionRate: 3.0, grossMargin: 60, repeatFactor: 1.35, commissionPercent: 0,
+      aov: 120, conversionRate: 3.0, grossMargin: 60, repeatFactor: 1.35,
+      commissionPercent: 0, productCost: 0, minPaidFee: 100,
     }));
     db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("negotiation_style", JSON.stringify({
       style: "balanced", anchorBelowTargetPct: [12, 15], warnAtWalkawayPct: 90, maxStepPct: 10,

@@ -126,9 +126,12 @@ export function attentionItems({
     }
   }
 
-  // Analysis finished and nobody has acted on the verdict.
+  // Analysis finished and nobody has acted on the verdict. Once the Copilot has drafted
+  // a move, "your move" below says the same thing with a next step attached — showing
+  // both makes one job look like two.
   for (const d of deals) {
     if (d.stage !== "analyzing" || d.job_status != null || d.analysis == null) continue;
+    if (d.your_move === 1) continue;
     const waiting = daysBetween(d.updated_at, today);
     items.push({
       id: `verdict-${d.id}`,
