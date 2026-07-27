@@ -12,7 +12,11 @@ export default function PlaybookPage() {
       instagram: getPlaybook("instagram") ?? {},
       tiktok: getPlaybook("tiktok") ?? {},
     },
-    unitEconomics: getSetting<Record<string, unknown>>("unit_economics") ?? {},
+    // Merge a default so the commission field appears on installs that predate it.
+    unitEconomics: {
+      commissionPercent: 0,
+      ...(getSetting<Record<string, unknown>>("unit_economics") ?? {}),
+    },
     negotiationStyle: getSetting<Record<string, unknown>>("negotiation_style") ?? {},
   };
 

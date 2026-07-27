@@ -76,6 +76,14 @@ export async function createDealAction(
 
   const email = String(formData.get("email") ?? "").trim();
 
+  // A CPA alongside the fee changes what the fee can be, so it's captured up front.
+  const commissionTypeRaw = String(formData.get("commission_type") ?? "none").trim();
+  const commissionValue = Number(formData.get("commission_value")) || 0;
+  const commissionType =
+    (commissionTypeRaw === "percent" || commissionTypeRaw === "per_order") && commissionValue > 0
+      ? commissionTypeRaw
+      : null;
+
   // Resolve the partner: an explicit pick, an existing name match, or a new record.
   // Email is a contact attribute, so it lives on the partner rather than the deal.
   const partnerIdRaw = String(formData.get("partner_id") ?? "").trim();
@@ -123,6 +131,9 @@ export async function createDealAction(
     stage: isPreAnalysis ? stageRaw : "analyzing",
     status_label: stageRaw === "contacted" ? "Reached out · awaiting reply" : undefined,
   });
+  if (commissionType) {
+    updateDeal(id, { commission_type: commissionType, commission_value: commissionValue });
+  }
 
   // Keep the partner's channel list in step with the deal's platforms.
   for (const platform of platforms) {

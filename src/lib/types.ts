@@ -103,6 +103,9 @@ export interface Deal {
   declined_at: string | null;
   /** Set when a deal was parked on timing — brings it back when the date arrives. */
   revisit_on: string | null;
+  /** CPA paid on top of the fixed fee: "percent" of order value, or "per_order" euros. */
+  commission_type: "percent" | "per_order" | null;
+  commission_value: number | null;
   job_status: "analyzing" | "recommending" | null;
   job_error: string | null;
   job_started_at: string | null;

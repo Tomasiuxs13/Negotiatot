@@ -1,6 +1,6 @@
 import PageHeader from "@/components/PageHeader";
 import NewDealForm from "@/components/new/NewDealForm";
-import { getCampaigns, getPartner, getPartners } from "@/lib/db";
+import { getCampaigns, getPartner, getPartners, getSetting } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +15,9 @@ export default async function NewDealPage({
   const partners = getPartners().map((p) => ({ id: p.id, name: p.name }));
   const preset = partnerParam ? getPartner(Number(partnerParam)) : undefined;
   const presetPartner = preset ? { id: preset.id, name: preset.name } : undefined;
+  // Your standard program rate, so a hybrid deal doesn't need it retyped every time.
+  const econ = getSetting<Record<string, number>>("unit_economics");
+  const defaultCommission = econ?.commissionPercent ?? 0;
   return (
     <>
       <PageHeader
@@ -33,6 +36,7 @@ export default async function NewDealPage({
               partners={partners}
               presetPartner={presetPartner}
               stage={stage}
+              defaultCommission={defaultCommission}
             />
           </div>
 

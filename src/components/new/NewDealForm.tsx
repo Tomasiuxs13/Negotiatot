@@ -19,11 +19,14 @@ export default function NewDealForm({
   partners = [],
   presetPartner,
   stage,
+  defaultCommission = 0,
 }: {
   campaigns?: { id: number; name: string }[];
   partners?: { id: number; name: string }[];
   presetPartner?: { id: number; name: string };
   stage?: string;
+  /** Your standard affiliate rate, from the Playbook. */
+  defaultCommission?: number;
 }) {
   const isLeadCapture = stage === "lead" || stage === "contacted";
   const router = useRouter();
@@ -181,6 +184,35 @@ export default function NewDealForm({
           placeholder="creator@example.com"
           className={inputClass}
         />
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+          Commission{" "}
+          <span className="font-normal text-slate-500">
+            — CPA paid on top of the fee; the Copilot prices the fee net of it
+          </span>
+        </label>
+        <div className="flex gap-2">
+          <select
+            name="commission_type"
+            defaultValue={defaultCommission > 0 ? "percent" : "none"}
+            className={`${inputClass} w-40`}
+          >
+            <option value="none">No commission</option>
+            <option value="percent">% of order value</option>
+            <option value="per_order">€ per order</option>
+          </select>
+          <input
+            name="commission_value"
+            type="number"
+            min="0"
+            step="0.5"
+            defaultValue={defaultCommission > 0 ? String(defaultCommission) : ""}
+            placeholder="e.g. 10"
+            className={`${inputClass} w-32`}
+          />
+        </div>
       </div>
 
       <div>

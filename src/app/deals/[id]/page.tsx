@@ -25,6 +25,7 @@ import {
   parseTerms,
 } from "@/lib/fulfillment";
 import { euro } from "@/lib/format";
+import { dealCommission, describeCommission } from "@/lib/commission";
 import AnalysisTab from "@/components/deal/AnalysisTab";
 import NegotiationTab from "@/components/deal/NegotiationTab";
 
@@ -165,6 +166,14 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
             ))}
             {scope ? ` · ${scope}` : ""}
           </span>
+          {dealCommission(deal).type !== "none" && (
+            <span
+              className="text-xs font-medium bg-sky-50 text-sky-700 rounded-full px-2.5 py-1"
+              title="Paid on top of the fixed fee — the fee is priced net of this"
+            >
+              + {describeCommission(dealCommission(deal))}
+            </span>
+          )}
           <span className={`text-xs font-semibold rounded-full px-2.5 py-1 ${STAGE_PILL[deal.stage]}`}>
             {STAGE_LABELS[deal.stage]}
             {deal.round > 0 && !closed ? ` · Round ${deal.round}` : ""}
@@ -233,7 +242,12 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
             )}
           </div>
         ) : closed ? (
-          <DealProgress deal={deal} contentItems={contentItems} paymentItems={paymentItems} />
+          <DealProgress
+            deal={deal}
+            contentItems={contentItems}
+            paymentItems={paymentItems}
+            aov={Number(getSetting<Record<string, number>>("unit_economics")?.aov ?? 0)}
+          />
         ) : (
           <PriceLadder deal={deal} />
         )}

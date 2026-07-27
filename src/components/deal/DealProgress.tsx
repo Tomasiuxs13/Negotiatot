@@ -2,6 +2,7 @@ import type { Deal } from "@/lib/types";
 import type { ContentItem, PaymentItem } from "@/lib/fulfillment-types";
 import { fulfillmentSummary } from "@/lib/fulfillment-rules";
 import { euro } from "@/lib/format";
+import { dealCommission, trueDealCost } from "@/lib/commission";
 
 /**
  * What a signed deal is actually about: the fee, how much of the work has landed,
@@ -12,15 +13,25 @@ export default function DealProgress({
   deal,
   contentItems,
   paymentItems,
+  aov = 0,
 }: {
   deal: Deal;
   contentItems: ContentItem[];
   paymentItems: PaymentItem[];
+  /** Average order value from the Playbook, for costing commission on real orders. */
+  aov?: number;
 }) {
   const s = fulfillmentSummary(contentItems, paymentItems);
   const paid = paymentItems.filter((p) => p.status === "paid").reduce((n, p) => n + p.amount, 0);
   const fee = deal.agreed_price ?? paymentItems.reduce((n, p) => n + p.amount, 0);
   const pct = s.totalContent > 0 ? Math.round((s.verified / s.totalContent) * 100) : 0;
+
+  // What the deal really cost: the fee plus commission actually earned on real orders.
+  const commission = dealCommission(deal);
+  const cost =
+    commission.type !== "none" && deal.actual_orders && aov > 0
+      ? trueDealCost({ fee, expectedOrders: deal.actual_orders, aov, commission })
+      : null;
 
   const savedVsAsk =
     deal.first_ask != null && deal.agreed_price != null ? deal.first_ask - deal.agreed_price : null;
@@ -38,6 +49,20 @@ export default function DealProgress({
           </div>
         )}
       </div>
+
+      {cost && (
+        <div>
+          <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+            True cost
+          </div>
+          <div className="text-2xl font-semibold font-tabular text-slate-900">
+            {euro(cost.total)}
+          </div>
+          <div className="text-xs text-slate-500">
+            + {euro(cost.commission)} commission on {deal.actual_orders} orders
+          </div>
+        </div>
+      )}
 
       <div className="min-w-40">
         <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">

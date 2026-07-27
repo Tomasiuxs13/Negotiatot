@@ -2,6 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { Deal, DealAnalysis, Message } from "./types";
 import type { PriorDeal } from "./partners";
+import { dealCommission, describeCommission } from "./commission";
 
 export const MODEL = "claude-opus-4-8";
 
@@ -45,6 +46,28 @@ function playbookBlock(ctx: PlaybookContext): string {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+/**
+ * A CPA paid alongside the fee is part of the deal price. Without this the model prices
+ * the fixed fee against the full margin and the deal quietly overspends by whatever the
+ * commission turns out to cost.
+ */
+function commissionBlock(deal: Deal): string {
+  const commission = dealCommission(deal);
+  if (commission.type === "none") return "";
+  return [
+    ``,
+    `## Performance side of this deal`,
+    `On top of the fixed fee, this creator is paid ${describeCommission(commission)}.`,
+    `The fee and the commission come out of the same margin, so every number you produce`,
+    `(anchor, target, walk-away, breakeven) must be the FIXED FEE **net of** expected`,
+    `commission: estimate the orders this content should drive from the unit economics,`,
+    `price the commission that implies, and subtract it from what the deal can bear.`,
+    `Say the expected commission in euros in your reasoning, and treat it as leverage —`,
+    `a creator earning on every sale has already been given upside the fee shouldn't`,
+    `pay for twice.`,
+  ].join("\n");
 }
 
 function dealPlatformList(deal: Deal): string[] {
@@ -363,6 +386,8 @@ export async function analyzeDeal(params: {
   if (params.reportText) facts.push(`Analytics report (text):\n"""${params.reportText}"""`);
   const history = historyBlock(params.history, deal.creator);
   if (history) facts.push(history);
+  const commission = commissionBlock(deal);
+  if (commission) facts.push(commission);
 
   const userContent: Anthropic.ContentBlockParam[] = [];
   if (params.reportPdfBase64) {
@@ -584,6 +609,7 @@ export async function recommendNextMove(params: {
     `Manager's numbers — anchor €${deal.anchor ?? "?"}, target €${deal.target ?? "?"}, walk-away €${deal.walkaway ?? "?"}, breakeven €${deal.breakeven ?? "?"}`,
     `Avg views: ${deal.avg_views ?? "unknown"} · engagement: ${deal.engagement_rate ?? "unknown"}%`,
     analysis ? `Prior analysis summary: ${analysis.verdictSummary}` : "",
+    commissionBlock(deal),
     historyBlock(params.history, deal.creator),
     ``,
     `## Conversation so far`,
