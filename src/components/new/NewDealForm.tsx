@@ -51,6 +51,7 @@ export default function NewDealForm({
             const el = form.elements.namedItem(field) as HTMLInputElement | null;
             if (el && !el.value && value != null) el.value = String(value);
           };
+          fill("email", found.email);
           fill("channel_url", found.channelUrl);
           fill("known_avg_views", found.avgViews);
           fill("known_engagement", found.engagementRate);
@@ -165,6 +166,21 @@ export default function NewDealForm({
             ))}
           </div>
         </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+          Email{" "}
+          <span className="font-normal text-slate-500">
+            — saved to the partner, so it&apos;s there for every future deal
+          </span>
+        </label>
+        <input
+          name="email"
+          type="email"
+          placeholder="creator@example.com"
+          className={inputClass}
+        />
       </div>
 
       <div>

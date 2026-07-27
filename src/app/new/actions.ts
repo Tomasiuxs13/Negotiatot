@@ -14,6 +14,7 @@ import {
   getPartnerDeals,
   setJob,
   updateDeal,
+  updatePartner,
   upsertPartnerChannel,
 } from "@/lib/db";
 import { hasApiKey, type ImageMediaType } from "@/lib/claude";
@@ -73,12 +74,19 @@ export async function createDealAction(
   if (!creator) return { error: "Creator name is required." };
   if (platforms.length === 0) return { error: "Pick at least one platform." };
 
+  const email = String(formData.get("email") ?? "").trim();
+
   // Resolve the partner: an explicit pick, an existing name match, or a new record.
+  // Email is a contact attribute, so it lives on the partner rather than the deal.
   const partnerIdRaw = String(formData.get("partner_id") ?? "").trim();
   const picked = partnerIdRaw ? getPartner(Number(partnerIdRaw)) : undefined;
   const partner = picked ?? findPartnerByName(creator);
-  const partnerId = partner?.id ?? createPartner({ name: creator });
+  const partnerId = partner?.id ?? createPartner({ name: creator, email: email || null });
   const partnerName = partner?.name ?? creator;
+  // Fill an existing partner's email only when it's blank — never clobber what's there.
+  if (partner && email && !partner.email) {
+    updatePartner(partner.id, { email });
+  }
 
   let pdfBase64: string | undefined;
   let reportImage: { base64: string; mediaType: ImageMediaType } | undefined;
@@ -166,6 +174,7 @@ export async function createDealAction(
 export interface PartnerPrefill {
   partnerId: number;
   name: string;
+  email: string | null;
   platforms: string[];
   channelUrl: string | null;
   avgViews: number | null;
@@ -202,6 +211,7 @@ export async function lookupPartnerAction(name: string): Promise<PartnerPrefill 
   return {
     partnerId: partner.id,
     name: partner.name,
+    email: partner.email,
     platforms: channels.map((c) => c.platform),
     channelUrl: primary?.url ?? channels.find((c) => c.url)?.url ?? null,
     avgViews: primary?.avg_views ?? null,

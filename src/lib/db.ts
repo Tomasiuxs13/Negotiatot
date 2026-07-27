@@ -626,12 +626,21 @@ export function partnerDealCount(id: number): number {
 }
 
 /**
- * Permanently removes a partner and, via ON DELETE CASCADE, their deals, channels and
- * everything hanging off those. Unlike archive this can't be undone — the caller is
- * responsible for confirming it.
+ * Permanently removes a partner and everything under them. Unlike archive this can't be
+ * undone — the caller is responsible for confirming it.
+ *
+ * deals.partner_id was added by ALTER TABLE, which can't carry a foreign key, so deleting
+ * the partner would orphan their deals rather than remove them. The deals are deleted
+ * explicitly here; each deal DOES cascade to its own content, payments and history.
+ * Channels and partner-level onboarding are keyed to the partner with a real FK, so
+ * those cascade on the final partner delete.
  */
 export function deletePartner(id: number) {
-  db.prepare("DELETE FROM partners WHERE id = ?").run(id);
+  const deleteAll = db.transaction((partnerId: number) => {
+    db.prepare("DELETE FROM deals WHERE partner_id = ?").run(partnerId);
+    db.prepare("DELETE FROM partners WHERE id = ?").run(partnerId);
+  });
+  deleteAll(id);
 }
 
 export function getPartnerChannels(partnerId: number): PartnerChannel[] {
