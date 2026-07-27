@@ -1,6 +1,7 @@
 import type { Deal, DealAnalysis } from "@/lib/types";
 import { euro } from "@/lib/format";
 import RunAnalysisButton from "./RunAnalysisButton";
+import AnalyzingProgress from "./AnalyzingProgress";
 
 const VERDICT_STYLE: Record<
   DealAnalysis["verdict"],
@@ -38,21 +39,7 @@ const FLAG_DOT: Record<string, string> = {
 
 export default function AnalysisTab({ deal }: { deal: Deal }) {
   if (!deal.analysis && deal.job_status === "analyzing") {
-    return (
-      <div className="bg-white rounded-lg border border-slate-200 p-10 text-center">
-        <div className="inline-flex items-center gap-2.5 text-sm font-medium text-slate-700">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand opacity-60" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand" />
-          </span>
-          Analyzing this deal…
-        </div>
-        <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto">
-          Reading the inputs, checking the Playbook, computing your four numbers. Usually 30–90
-          seconds — you can leave this page; the result will be here.
-        </p>
-      </div>
-    );
+    return <AnalyzingProgress startedAt={deal.job_started_at} />;
   }
 
   if (!deal.analysis) {
