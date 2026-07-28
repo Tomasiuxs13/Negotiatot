@@ -1,10 +1,16 @@
 /**
  * Hybrid deals: a fixed fee plus a CPA/commission on what the content sells.
  *
- * The fee and the commission are the same budget. Paying 10% on every order doesn't
- * sit outside the deal price — it eats the margin the fixed fee is priced against, so
- * a fee that's fair at 0% commission is an overpay at 15%. Everything here exists to
- * make the fee *net* of what the performance side will cost.
+ * Commission, the audience coupon and the gifted product are all real costs, and this
+ * module measures them — but measuring what a deal costs is not the same as deciding
+ * what to offer, and conflating the two priced deals nobody would sign. A creator's
+ * rate comes from their market; commission is upside they earn on sales they generate
+ * and the coupon is our own marketing decision, so neither is a discount they should
+ * fund. Netting both out of the fee once put a $28-CPM channel on an offer worth $9.92.
+ *
+ * So: `trueDealCost` and `marginAtZeroFee` count everything, because the manager needs
+ * the real number. The fee itself is quoted at market rate, and affordability is
+ * enforced where a budget ceiling belongs — maxPerDeal, the monthly cap, and breakeven.
  */
 
 export type CommissionType = "none" | "percent" | "per_order";

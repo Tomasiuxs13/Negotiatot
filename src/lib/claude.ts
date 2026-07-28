@@ -224,9 +224,18 @@ function playbookBlock(ctx: PlaybookContext, deal?: Deal): string {
 }
 
 /**
- * A CPA paid alongside the fee is part of the deal price. Without this the model prices
- * the fixed fee against the full margin and the deal quietly overspends by whatever the
- * commission turns out to cost.
+ * The performance side of the deal — and, importantly, what it must NOT do to the fee.
+ *
+ * These costs used to be subtracted from the fixed fee, on the reasoning that fee and
+ * commission come out of one margin. Internally consistent, and it produced offers no
+ * established creator would take: a 500k-subscriber channel priced at a $28 CPM ceiling
+ * was offered $783 a video, an effective CPM of $9.92, because $2,900 of commission and
+ * coupon had been clawed back out of their fee.
+ *
+ * A creator's rate is set by their market, not by what we spend elsewhere. Commission is
+ * upside they earn on sales they generate, and the audience coupon is our marketing
+ * decision — neither is a discount the creator should fund. Affordability is enforced
+ * where a budget ceiling belongs: maxPerDeal, the monthly cap, and breakeven.
  */
 function commissionBlock(deal: Deal, econ: Record<string, number> | null): string {
   const { commission, discount } = resolveOffer(deal, econ ?? {});
@@ -245,17 +254,21 @@ function commissionBlock(deal: Deal, econ: Record<string, number> | null): strin
     );
   }
   lines.push(
-    `Fee, commission and discount all come out of the same margin, so every number you`,
-    `produce (anchor, target, walk-away, breakeven) must be the FIXED FEE **net of** them:`,
-    `estimate the orders this content should drive, price the commission and coupon that`,
-    `implies, and subtract both from what the deal can bear.`,
+    `Do NOT subtract commission or the audience coupon from the fixed fee. Anchor, target`,
+    `and walk-away are the market rate for the placement, priced from views and the CPM`,
+    `ceiling — a creator's rate is set by their market, not by what we spend elsewhere.`,
+    `Commission is upside they earn on sales they drive, and the coupon is our marketing`,
+    `decision; making the creator fund either one produces an offer far below market that`,
+    `an established channel will simply decline.`,
+    `Affordability is checked separately, and that is where these costs belong: report the`,
+    `TOTAL deal cost (fee + expected commission + expected coupon + gifted product) in your`,
+    `reasoning, and flag it if that total breaches maxPerDeal, the monthly cap, or breakeven.`,
     ``,
     `Treat these as tradeable levers, not fixed terms. They cost different amounts and are`,
     `worth different amounts to the creator, so when they push on price, name the swap and`,
     `its dollar cost — a richer commission or a better code for their audience often buys`,
-    `more goodwill per dollar than cash does, and a creator earning on every sale has`,
-    `already been given upside the fee shouldn't pay for twice. State the expected`,
-    `commission and discount cost in dollars in your reasoning.`
+    `more goodwill per dollar than cash does. State the expected commission and coupon cost`,
+    `in dollars in your reasoning.`
   );
   return lines.join("\n");
 }
@@ -277,9 +290,12 @@ function structureBlock(
   if (productCost > 0) {
     lines.push(
       `Every creator is gifted product. It costs us $${productCost} — cost of goods, an`,
-      `INTERNAL figure never shown to the creator. Subtract it from what the fixed fee can`,
-      `bear, exactly like commission, and include it when you state total deal cost to the`,
-      `manager. How to describe the gift to the creator is covered under "Voice and product".`
+      `INTERNAL figure never shown to the creator. Unlike commission and the audience`,
+      `coupon, the gift IS compensation the creator receives, so it counts toward what`,
+      `they are being paid: weigh it when judging whether the overall package is fair, and`,
+      `always include it in the total deal cost you report to the manager. It does not`,
+      `reduce the market rate you quote as target or walk-away.`,
+      `How to describe the gift to the creator is covered under "Voice and product".`
     );
   }
   // A gifted deal reads as costless, so nobody checks it. The product is paid for up
@@ -744,10 +760,11 @@ export async function analyzeDeal(params: {
     text: [
       `Analyze this influencer deal for the manager. This deal covers the deliverables listed above${platforms.length > 1 ? ` across ${platforms.length} platforms` : ""}. Compute the four numbers strictly from the Playbook:`,
       `- Value each deliverable separately using that platform's realistic avg views × that platform's max CPM for the format, then sum into bundle-level numbers.`,
-      `- Target = the summed fair value, discounted for quality issues (view trend, geo shortfall, engagement).`,
-      `- Walk-away = the summed hard ceiling implied by the playbook max CPMs on realistic views.`,
+      `- Target = the summed fair value, discounted for quality issues (view trend, geo shortfall, engagement). This is a market rate for the placement: do NOT reduce it by expected commission, audience-coupon cost or the gifted product.`,
+      `- Walk-away = the summed hard ceiling implied by the playbook max CPMs on realistic views, capped by maxPerDeal. Also do not net performance costs out of it.`,
       `- Breakeven = total predicted clicks across deliverables × conversion × AOV × margin × repeat factor from unit economics, less commission, coupon and gifted-product cost. This is the largest fee that still breaks even, so it floors at $0 — if those costs already exceed the margin, Breakeven is 0 and the shortfall goes in the summary as a viability warning, not into the number.`,
       `- Anchor = the opening offer per the playbook's anchoring rule (below target, defensible with data).`,
+      `- Then run the affordability check separately, since the fee no longer absorbs these costs: total deal cost = target fee + expected commission + expected coupon cost + gifted product. Say that total in the summary, and flag it explicitly if it breaches maxPerDeal, the monthly cap, or breakeven. A market-rate fee the budget cannot cover is a real finding — report it as one rather than quietly shrinking the offer to fit.`,
       `In the number explanations, show the per-deliverable breakdown when there is more than one deliverable.`,
       `Grade each metric against the playbook thresholds. Flag data-quality and audience risks. Be honest about uncertainty when inputs are thin.`,
       params.channelUrl
