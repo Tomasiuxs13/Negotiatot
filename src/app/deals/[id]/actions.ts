@@ -86,6 +86,36 @@ export async function runAnalysis(dealId: number) {
   return {};
 }
 
+/**
+ * Correct the audience figures a deal is priced from, and re-price on them.
+ *
+ * These could only be set at intake, so a wrong number was permanent: a 445k-subscriber
+ * channel captured at 4,900 average views stayed there through every re-run, and the
+ * analysis — which flagged the figure as impossible — had no choice but to price on it
+ * and produced a $100-a-video offer. Views are the single input every number derives
+ * from, so they have to be correctable after intake.
+ */
+export async function saveAudienceData(
+  dealId: number,
+  avgViews: number | null,
+  engagementRate: number | null
+) {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  if (avgViews != null && (!Number.isFinite(avgViews) || avgViews < 0)) {
+    return { error: "Average views must be a positive number." };
+  }
+  if (engagementRate != null && (!Number.isFinite(engagementRate) || engagementRate < 0)) {
+    return { error: "Engagement rate must be a positive number." };
+  }
+
+  updateDeal(dealId, { avg_views: avgViews, engagement_rate: engagementRate });
+  revalidatePath(`/deals/${dealId}`);
+  revalidatePath("/");
+  revalidatePath("/pipeline");
+  return {};
+}
+
 export async function saveActuals(
   dealId: number,
   actuals: { views?: number | null; clicks?: number | null; orders?: number | null; revenue?: number | null }

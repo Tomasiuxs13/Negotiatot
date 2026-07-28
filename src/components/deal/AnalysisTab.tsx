@@ -2,6 +2,8 @@ import type { Deal, DealAnalysis } from "@/lib/types";
 import { money } from "@/lib/format";
 import RunAnalysisButton from "./RunAnalysisButton";
 import AnalyzingProgress from "./AnalyzingProgress";
+import AudienceDataEditor from "./AudienceDataEditor";
+import { suspectAudienceData } from "@/lib/audience-sanity";
 
 const VERDICT_STYLE: Record<
   DealAnalysis["verdict"],
@@ -37,7 +39,13 @@ const FLAG_DOT: Record<string, string> = {
   crit: "bg-red-500",
 };
 
-export default function AnalysisTab({ deal }: { deal: Deal }) {
+export default function AnalysisTab({
+  deal,
+  followers,
+}: {
+  deal: Deal;
+  followers?: number | null;
+}) {
   if (!deal.analysis && deal.job_status === "analyzing") {
     return <AnalyzingProgress startedAt={deal.job_started_at} />;
   }
@@ -63,6 +71,15 @@ export default function AnalysisTab({ deal }: { deal: Deal }) {
       <div className="flex justify-end -mb-2">
         <RunAnalysisButton dealId={deal.id} compact />
       </div>
+
+      {/* Shown always, not just on suspicion: views drive every number here, and until
+          this existed a figure captured wrongly at intake could never be corrected. */}
+      <AudienceDataEditor
+        dealId={deal.id}
+        avgViews={deal.avg_views}
+        engagementRate={deal.engagement_rate}
+        suspect={suspectAudienceData({ avgViews: deal.avg_views, followers })}
+      />
       {/* Verdict banner */}
       <div className={`flex gap-4 items-start p-4 rounded-lg border ${v.wrap}`}>
         <span

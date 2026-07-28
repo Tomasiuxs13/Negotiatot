@@ -84,12 +84,15 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
     paymentItems.length > 0 ||
     shipments.length > 0;
 
+  const channels = deal.partner_id != null ? getPartnerChannels(deal.partner_id) : [];
+
   // This creator's typical reach per platform — how a bundle fee gets attributed.
   const expectedReach = Object.fromEntries(
-    (deal.partner_id != null ? getPartnerChannels(deal.partner_id) : [])
-      .filter((c) => c.avg_views != null)
-      .map((c) => [c.platform, c.avg_views as number])
+    channels.filter((c) => c.avg_views != null).map((c) => [c.platform, c.avg_views as number])
   );
+
+  /** Follower count for this deal's platform, used to sanity-check the view figure. */
+  const followers = channels.find((c) => c.platform === deal.platform)?.followers ?? null;
 
   const workDone = (() => {
     const unverified = contentItems.filter((c) => c.status !== "verified").length;
@@ -283,7 +286,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
               ? "Negotiation"
               : "Analysis"
         }
-        analysis={<AnalysisTab deal={deal} />}
+        analysis={<AnalysisTab deal={deal} followers={followers} />}
         negotiation={<NegotiationTab deal={deal} messages={messages} />}
         fulfillment={
           showFulfillment ? (
