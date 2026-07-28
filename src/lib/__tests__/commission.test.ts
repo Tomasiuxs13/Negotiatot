@@ -22,6 +22,7 @@ import {
   resolveOffer,
   expectedOrdersFrom,
   earningsForecast,
+  marginAtZeroFee,
   type Commission,
   type CommissionTier,
   type Discount,
@@ -146,6 +147,38 @@ describe("breakevenFee with gifted product", () => {
     // A tiny channel: 2 orders of margin against a €200 product.
     const fee = breakevenFee({ expectedOrders: 2, economics, productCost: 200 });
     expect(fee).toBe(0);
+  });
+});
+
+describe("marginAtZeroFee", () => {
+  it("shows the loss that breakevenFee hides behind its floor", () => {
+    // The Sigcruiser case: an €80 product against well under one expected order.
+    const params = {
+      expectedOrders: 0.83,
+      economics: { aov: 120, grossMarginPct: 60, repeatFactor: 1.35 },
+      commission: { type: "per_order", value: 20 } as Commission,
+      discount: { type: "fixed", value: 20 } as Discount,
+      productCost: 80,
+    };
+    expect(breakevenFee(params)).toBe(0); // "no room for a fee"
+    expect(marginAtZeroFee(params)).toBeCloseTo(-32.52, 2); // ...because it loses money
+  });
+
+  it("agrees with breakevenFee whenever the deal is profitable", () => {
+    const params = {
+      expectedOrders: 50,
+      economics: { aov: 120, grossMarginPct: 60, repeatFactor: 1 },
+      commission: tenPct,
+      productCost: 140,
+    };
+    expect(marginAtZeroFee(params)).toBe(breakevenFee(params));
+  });
+
+  it("is the product cost when the creator sells nothing at all", () => {
+    // Not zero: the product was still bought and shipped.
+    expect(
+      marginAtZeroFee({ expectedOrders: 0, economics, productCost: 200 })
+    ).toBe(-200);
   });
 });
 

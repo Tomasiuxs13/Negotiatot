@@ -45,6 +45,7 @@ const BRAND_LABELS: Record<string, string> = {
   senderRole: "Your role",
   brandName: "Brand name",
   productName: "Product you gift",
+  productOffer: "How customers buy it (quoted to creators)",
 };
 
 const OFFER_FIELDS = [
@@ -152,21 +153,49 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
           to &quot;the partnerships team&quot;.
         </p>
         <div className="grid grid-cols-4 gap-4">
-          {Object.entries(brand).map(([key, value]) => (
-            <div key={key}>
-              <label className="block text-xs text-slate-600 mb-1">{BRAND_LABELS[key] ?? key}</label>
-              <input
-                className={`${inputClass} w-full text-left`}
-                type="text"
-                value={String(value ?? "")}
-                placeholder={key === "productName" ? "e.g. Alpha 3 headset" : ""}
-                onChange={(e) => {
-                  setBrand((prev) => ({ ...prev, [key]: e.target.value }));
-                  setStatus("idle");
-                }}
-              />
-            </div>
-          ))}
+          {Object.entries(brand)
+            .filter(([key]) => key !== "productOffer")
+            .map(([key, value]) => (
+              <div key={key}>
+                <label className="block text-xs text-slate-600 mb-1">
+                  {BRAND_LABELS[key] ?? key}
+                </label>
+                <input
+                  className={`${inputClass} w-full text-left`}
+                  type="text"
+                  value={String(value ?? "")}
+                  placeholder={key === "productName" ? "e.g. Alpha 3 headset" : ""}
+                  onChange={(e) => {
+                    setBrand((prev) => ({ ...prev, [key]: e.target.value }));
+                    setStatus("idle");
+                  }}
+                />
+              </div>
+            ))}
+        </div>
+
+        {/* A single retail number can't describe a subscription, a bundle or a promo
+            price, so drafts either quote a figure the creator can't find on the site or
+            invent one. This is quoted verbatim instead. */}
+        <div className="mt-4">
+          <label className="block text-xs text-slate-600 mb-1">
+            {BRAND_LABELS.productOffer}
+          </label>
+          <input
+            className={`${inputClass} w-full text-left`}
+            type="text"
+            value={String(brand.productOffer ?? "")}
+            placeholder="e.g. €19.99/month for 6 months, device included"
+            onChange={(e) => {
+              setBrand((prev) => ({ ...prev, productOffer: e.target.value }));
+              setStatus("idle");
+            }}
+          />
+          <p className="text-[11px] text-slate-500 mt-1">
+            How a customer actually buys it, in your words — drafts quote this instead of a
+            lump sum, so the price is one a creator can find on your site. Leave blank to use
+            the retail price.
+          </p>
         </div>
       </div>
 

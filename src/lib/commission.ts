@@ -187,8 +187,28 @@ export function breakevenFee(params: {
   /** What the gifted product costs YOU — cost of goods, not its retail price. */
   productCost?: number;
 }): number {
+  if (params.expectedOrders <= 0) return 0;
+  return Math.max(0, marginAtZeroFee(params));
+}
+
+/**
+ * What the deal earns — or loses — when the fixed fee is zero.
+ *
+ * `breakevenFee` floors at zero, which quietly turns "this loses €32" into "you can't
+ * afford a fee", and a gifted deal then looks automatically safe. It isn't: a gifted
+ * product is a real cost paid up front against orders that may never arrive. This is
+ * the same arithmetic without the floor, so a loss stays visible as a loss.
+ */
+export function marginAtZeroFee(params: {
+  expectedOrders: number;
+  economics: Economics;
+  commission?: Commission;
+  discount?: Discount;
+  productCost?: number;
+}): number {
   const { expectedOrders, economics } = params;
-  if (expectedOrders <= 0) return 0;
+  const productCost = params.productCost ?? 0;
+  if (expectedOrders <= 0) return -productCost;
 
   const profit = grossProfitPerOrder(economics) * expectedOrders;
   const perOrder = offerCostPerOrder({
@@ -196,7 +216,7 @@ export function breakevenFee(params: {
     commission: params.commission,
     discount: params.discount,
   });
-  return Math.max(0, profit - perOrder.total * expectedOrders - (params.productCost ?? 0));
+  return profit - perOrder.total * expectedOrders - productCost;
 }
 
 /**
