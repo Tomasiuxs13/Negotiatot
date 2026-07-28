@@ -113,8 +113,16 @@ export async function performAnalysis(
       target: result.numbers.target ?? deal.target,
       walkaway: result.numbers.walkaway ?? deal.walkaway,
       breakeven: result.numbers.breakeven ?? deal.breakeven,
-      avg_views: inputs.knownAvgViews ?? deal.avg_views ?? result.estimatedAvgViews,
-      engagement_rate: inputs.knownEngagement ?? deal.engagement_rate ?? result.estimatedEngagementRate,
+      // The researched estimate outranks whatever intake captured. An intake figure is
+      // often a blended channel average — Shorts and long-form together — while the
+      // analysis prices integrations on long-form alone and says so. Keeping intake's
+      // number left the deal priced on one figure and every downstream forecast on
+      // another: Gary Bembridge was valued at 79k views while his commission tiers were
+      // filtered against 4.9k, hiding rungs he clears comfortably. A number the manager
+      // typed for THIS run still wins — that's an explicit correction, not a stale one.
+      avg_views: inputs.knownAvgViews ?? result.estimatedAvgViews ?? deal.avg_views,
+      engagement_rate:
+        inputs.knownEngagement ?? result.estimatedEngagementRate ?? deal.engagement_rate,
       first_ask: deal.first_ask ?? result.theirAsk,
       current_ask: deal.current_ask ?? result.theirAsk,
       status_label:

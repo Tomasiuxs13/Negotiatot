@@ -58,6 +58,11 @@ function finalText(response: Anthropic.Message): string | undefined {
   return texts.at(-1);
 }
 
+/** Prices never go below zero — "no fee is supportable" is $0, not a negative fee. */
+function atLeastZero(n: number | undefined): number | undefined {
+  return n == null ? n : Math.max(0, n);
+}
+
 /** Every tier the manager configured, whether or not this creator can reach it. */
 function configuredTiers(style: Record<string, unknown> | null): CommissionTier[] {
   const raw = style?.commissionTiers;
@@ -445,7 +450,7 @@ const ANALYSIS_SCHEMA = {
     numbers: {
       type: "array",
       description:
-        "Exactly four entries labeled Anchor, Target, Walk-away, Breakeven — each with the computed dollar value and the math behind it.",
+        "Exactly four entries labeled Anchor, Target, Walk-away, Breakeven — each with the computed dollar value and the math behind it. All four are CASH FEES and can never be negative: when the economics support no fee at all the value is 0, not a loss. If the deal loses money at a zero fee, that shortfall belongs in verdictSummary, never in these values.",
       items: {
         type: "object",
         additionalProperties: false,
@@ -741,7 +746,7 @@ export async function analyzeDeal(params: {
       `- Value each deliverable separately using that platform's realistic avg views × that platform's max CPM for the format, then sum into bundle-level numbers.`,
       `- Target = the summed fair value, discounted for quality issues (view trend, geo shortfall, engagement).`,
       `- Walk-away = the summed hard ceiling implied by the playbook max CPMs on realistic views.`,
-      `- Breakeven = total predicted clicks across deliverables × conversion × AOV × margin × repeat factor from unit economics.`,
+      `- Breakeven = total predicted clicks across deliverables × conversion × AOV × margin × repeat factor from unit economics, less commission, coupon and gifted-product cost. This is the largest fee that still breaks even, so it floors at $0 — if those costs already exceed the margin, Breakeven is 0 and the shortfall goes in the summary as a viability warning, not into the number.`,
       `- Anchor = the opening offer per the playbook's anchoring rule (below target, defensible with data).`,
       `In the number explanations, show the per-deliverable breakdown when there is more than one deliverable.`,
       `Grade each metric against the playbook thresholds. Flag data-quality and audience risks. Be honest about uncertainty when inputs are thin.`,
@@ -839,11 +844,15 @@ export async function analyzeDeal(params: {
       redFlags: parsed.redFlags,
       numbers: parsed.numbers,
     },
+    // All four are prices, so a negative one is a category error, not a small deal. The
+    // viability warning puts a loss figure ("$32 underwater") in front of the model, and
+    // it wrote that straight into Breakeven — the ladder then read $0/$0/$0/−$32. The
+    // instruction not to is worth having, but the clamp is what guarantees it.
     numbers: {
-      anchor: byLabel["Anchor"],
-      target: byLabel["Target"],
-      walkaway: byLabel["Walk-away"],
-      breakeven: byLabel["Breakeven"],
+      anchor: atLeastZero(byLabel["Anchor"]),
+      target: atLeastZero(byLabel["Target"]),
+      walkaway: atLeastZero(byLabel["Walk-away"]),
+      breakeven: atLeastZero(byLabel["Breakeven"]),
     },
     estimatedAvgViews: parsed.estimatedAvgViews,
     estimatedEngagementRate: parsed.estimatedEngagementRate,

@@ -25,7 +25,9 @@ import {
   parseTerms,
 } from "@/lib/fulfillment";
 import { money } from "@/lib/format";
-import { dealCommission, describeCommission } from "@/lib/commission";
+import { dealCommission, dealDiscount, describeCommission, expectedOrdersFrom } from "@/lib/commission";
+import { deliverableCount } from "@/lib/deliverables";
+import { ladderNotes } from "@/lib/ladder-notes";
 import AnalysisTab from "@/components/deal/AnalysisTab";
 import NegotiationTab from "@/components/deal/NegotiationTab";
 
@@ -56,6 +58,25 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   const onboarding = getOnboardingForDeal(deal.id, deal.partner_id);
   /** Price is settled — the header should report delivery, not the negotiation. */
   const closed = deal.stage === "agreed" || deal.stage === "completed";
+
+  // What the ladder's numbers actually cover, and what the deal really costs.
+  const econ = getSetting<Record<string, number>>("unit_economics") ?? {};
+  const ladderPieces = deliverableCount({ text: dealScope(deal) });
+  const ladder = ladderNotes({
+    targetFee: deal.target,
+    pieces: ladderPieces,
+    scopeText: dealScope(deal),
+    expectedOrders:
+      expectedOrdersFrom({
+        views: deal.avg_views ?? 0,
+        linkCtrPct: Number(econ.linkCtr ?? 0),
+        orderConversionPct: Number(econ.orderConversion ?? 0),
+      }) * ladderPieces,
+    aov: Number(econ.aov ?? 0),
+    commission: dealCommission(deal),
+    discount: dealDiscount(deal),
+    productCost: Number(econ.productCost ?? 0),
+  });
   const showFulfillment =
     deal.stage === "agreed" ||
     contract != null ||
@@ -250,7 +271,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
             productCost={Number(getSetting<Record<string, number>>("unit_economics")?.productCost ?? 0)}
           />
         ) : (
-          <PriceLadder deal={deal} />
+          <PriceLadder deal={deal} scopeNote={ladder.scopeNote} costNote={ladder.costNote} />
         )}
       </div>
 

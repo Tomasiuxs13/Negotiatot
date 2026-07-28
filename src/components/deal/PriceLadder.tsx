@@ -8,7 +8,17 @@ interface Marker {
   kind: "line" | "ask";
 }
 
-export default function PriceLadder({ deal }: { deal: Deal }) {
+export default function PriceLadder({
+  deal,
+  scopeNote,
+  costNote,
+}: {
+  deal: Deal;
+  /** What the figures cover, e.g. "for 3 integrations · ~$783 each". */
+  scopeNote?: string | null;
+  /** What the deal costs in total once commission, coupon and product are counted. */
+  costNote?: string | null;
+}) {
   const { anchor, target, walkaway, breakeven, current_ask } = deal;
   if (anchor == null || target == null || walkaway == null) return null;
 
@@ -31,6 +41,7 @@ export default function PriceLadder({ deal }: { deal: Deal }) {
   const amberW = pos(walkaway) - pos(target);
 
   return (
+    <>
     <div className="relative h-20 mx-1 my-2" aria-label="Price ladder">
       {/* Track */}
       <div className="absolute top-8 left-0 right-0 h-2.5 rounded-full overflow-hidden flex">
@@ -71,5 +82,17 @@ export default function PriceLadder({ deal }: { deal: Deal }) {
         </div>
       ))}
     </div>
+
+    {/* Bare totals read as a per-video rate on a bundle deal, and as the whole cost when
+        commission, coupon and gifted product are still to come. Both were the first
+        things a manager asked about, so both are stated rather than implied. */}
+    {(scopeNote || costNote) && (
+      <div className="mx-1 mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
+        {scopeNote && <span>{scopeNote}</span>}
+        {scopeNote && costNote && <span className="text-slate-300">·</span>}
+        {costNote && <span>{costNote}</span>}
+      </div>
+    )}
+    </>
   );
 }
