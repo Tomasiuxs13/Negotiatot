@@ -41,6 +41,7 @@ function playbookBlock(ctx: PlaybookContext): string {
       ? `These rules are already resolved for the campaign "${ctx.campaignName}" — campaign-specific overrides (e.g. a different target geo or CPM ceiling) are baked into the values below. Judge this deal only against these numbers.`
       : ``,
     perPlatform,
+    `"minIntegrations" is the fewest pieces of content worth doing on that platform — a one-off costs the same to set up as a bundle. If the creator offers fewer, negotiate up to that number before conceding on price: volume is your cheapest concession and the per-video rate improves. Say the bundle you want in the draft.`,
     `Unit economics (for breakeven math): ${JSON.stringify(ctx.unitEconomics)}`,
     `Negotiation style & concession rules: ${JSON.stringify(ctx.negotiationStyle)}`,
   ]

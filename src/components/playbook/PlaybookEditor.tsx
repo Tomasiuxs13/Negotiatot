@@ -11,6 +11,7 @@ const PLATFORM_LABEL: Record<string, string> = {
 };
 
 const RULE_LABELS: Record<string, string> = {
+  minIntegrations: "Min pieces of content per deal",
   maxCpmIntegration: "Max CPM · integration (€)",
   maxCpmShort: "Max CPM · short / mention (€)",
   targetCpc: "Target CPC (€)",

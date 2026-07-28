@@ -559,16 +559,19 @@ function seedIfEmpty() {
 
     const insertPlaybook = db.prepare("INSERT INTO playbook (platform, rules) VALUES (?, ?)");
     insertPlaybook.run("youtube", JSON.stringify({
+      minIntegrations: 1,
       maxCpmIntegration: 28, maxCpmShort: 12, targetCpc: 1.2,
       minAvgViews: 25000, minEngagementRate: 3.5, maxFakeFollowers: 15,
       minGeoShare: 60, geoLabel: "DACH", maxPerDeal: 6000, monthlyCap: 25000,
     }));
     insertPlaybook.run("instagram", JSON.stringify({
+      minIntegrations: 2,
       maxCpmIntegration: 18, maxCpmShort: 8, targetCpc: 1.0,
       minAvgViews: 15000, minEngagementRate: 3.0, maxFakeFollowers: 20,
       minGeoShare: 60, geoLabel: "DACH", maxPerDeal: 4000, monthlyCap: 25000,
     }));
     insertPlaybook.run("tiktok", JSON.stringify({
+      minIntegrations: 3,
       maxCpmIntegration: 10, maxCpmShort: 6, targetCpc: 0.8,
       minAvgViews: 30000, minEngagementRate: 4.0, maxFakeFollowers: 20,
       minGeoShare: 50, geoLabel: "DACH", maxPerDeal: 3000, monthlyCap: 25000,

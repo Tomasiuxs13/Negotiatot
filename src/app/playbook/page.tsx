@@ -7,10 +7,11 @@ export const dynamic = "force-dynamic";
 
 export default function PlaybookPage() {
   const initial = {
+    // Merge defaults so fields added after an install still appear in the editor.
     platforms: {
-      youtube: getPlaybook("youtube") ?? {},
-      instagram: getPlaybook("instagram") ?? {},
-      tiktok: getPlaybook("tiktok") ?? {},
+      youtube: { minIntegrations: 1, ...(getPlaybook("youtube") ?? {}) },
+      instagram: { minIntegrations: 2, ...(getPlaybook("instagram") ?? {}) },
+      tiktok: { minIntegrations: 3, ...(getPlaybook("tiktok") ?? {}) },
     },
     // Merge a default so the commission field appears on installs that predate it.
     unitEconomics: {
