@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { euro, euroCpm, views } from "../format";
+import { money, moneyCpm, views } from "../format";
 import { dealPlatforms, dealScope } from "../types";
 
 describe("money formatting", () => {
-  it("formats whole euros with thousands separators", () => {
-    expect(euro(2398)).toBe("€2,398");
-    expect(euro(25000)).toBe("€25,000");
-    expect(euro(0)).toBe("€0");
-    expect(euro(null)).toBe("—");
+  it("formats whole dollars with thousands separators", () => {
+    expect(money(2398)).toBe("$2,398");
+    expect(money(25000)).toBe("$25,000");
+    expect(money(0)).toBe("$0");
+    expect(money(null)).toBe("—");
   });
 
   it("formats CPM with two decimals", () => {
-    expect(euroCpm(36.307)).toBe("€36.31");
-    expect(euroCpm(8)).toBe("€8.00");
-    expect(euroCpm(undefined)).toBe("—");
+    expect(moneyCpm(36.307)).toBe("$36.31");
+    expect(moneyCpm(8)).toBe("$8.00");
+    expect(moneyCpm(undefined)).toBe("—");
   });
 
   it("abbreviates view counts", () => {

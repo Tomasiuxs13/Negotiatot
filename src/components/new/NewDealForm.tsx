@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createDealAction, lookupPartnerAction, type PartnerPrefill } from "@/app/new/actions";
-import { euro, euroCpm } from "@/lib/format";
+import { money, moneyCpm } from "@/lib/format";
 
 const inputClass =
   "w-full border border-slate-200 rounded-lg bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand";
@@ -111,11 +111,11 @@ export default function NewDealForm({
           <p className="text-xs text-slate-600 mt-1 ml-6">
             {known.lastAgreedPrice != null ? (
               <>
-                Last time: {euro(known.lastAgreedPrice)}
+                Last time: {money(known.lastAgreedPrice)}
                 {known.lastScope ? ` for ${known.lastScope}` : ""}
                 {known.lastDealDate ? ` (${known.lastDealDate})` : ""}
                 {known.lastActualCpm != null
-                  ? ` · delivered at ${euroCpm(known.lastActualCpm)} CPM`
+                  ? ` · delivered at ${moneyCpm(known.lastActualCpm)} CPM`
                   : ""}
                 . The Copilot will use this as your anchor.
               </>
@@ -206,7 +206,7 @@ export default function NewDealForm({
           >
             <option value="none">No commission</option>
             <option value="percent">% of order value</option>
-            <option value="per_order">€ per order</option>
+            <option value="per_order">$ per order</option>
           </select>
           <input
             name="commission_value"
@@ -235,7 +235,7 @@ export default function NewDealForm({
           >
             <option value="none">No discount</option>
             <option value="percent">% off</option>
-            <option value="fixed">€ off</option>
+            <option value="fixed">$ off</option>
           </select>
           <input
             name="discount_value"

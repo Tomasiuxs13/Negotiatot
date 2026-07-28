@@ -1,7 +1,7 @@
 import type { Deal } from "@/lib/types";
 import type { ContentItem, PaymentItem } from "@/lib/fulfillment-types";
 import { fulfillmentSummary } from "@/lib/fulfillment-rules";
-import { euro } from "@/lib/format";
+import { money } from "@/lib/format";
 import { dealCommission, dealDiscount, trueDealCost } from "@/lib/commission";
 
 /**
@@ -57,10 +57,10 @@ export default function DealProgress({
         <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
           Agreed fee
         </div>
-        <div className="text-2xl font-semibold font-tabular text-slate-900">{euro(fee)}</div>
+        <div className="text-2xl font-semibold font-tabular text-slate-900">{money(fee)}</div>
         {savedVsAsk != null && savedVsAsk > 0 && (
           <div className="text-xs text-emerald-600 font-medium">
-            {euro(savedVsAsk)} below their first ask
+            {money(savedVsAsk)} below their first ask
           </div>
         )}
       </div>
@@ -71,15 +71,15 @@ export default function DealProgress({
             True cost
           </div>
           <div className="text-2xl font-semibold font-tabular text-slate-900">
-            {euro(cost.total)}
+            {money(cost.total)}
           </div>
           <div className="text-xs text-slate-500">
             {[
               cost.commission > 0
-                ? `+ ${euro(cost.commission)} commission on ${deal.actual_orders} orders`
+                ? `+ ${money(cost.commission)} commission on ${deal.actual_orders} orders`
                 : null,
-              cost.discount > 0 ? `+ ${euro(cost.discount)} discount codes` : null,
-              cost.product > 0 ? `+ ${euro(cost.product)} product` : null,
+              cost.discount > 0 ? `+ ${money(cost.discount)} discount codes` : null,
+              cost.product > 0 ? `+ ${money(cost.product)} product` : null,
             ]
               .filter(Boolean)
               .join(" · ")}
@@ -113,10 +113,10 @@ export default function DealProgress({
         <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
           Paid out
         </div>
-        <div className="text-2xl font-semibold font-tabular text-slate-900">{euro(paid)}</div>
+        <div className="text-2xl font-semibold font-tabular text-slate-900">{money(paid)}</div>
         {s.unpaid > 0 && (
           <div className="text-xs text-slate-500">
-            {euro(s.unpaid)} outstanding
+            {money(s.unpaid)} outstanding
             {s.awaitingApproval > 0 && (
               <span className="text-amber-600 font-medium"> · {s.awaitingApproval} to approve</span>
             )}

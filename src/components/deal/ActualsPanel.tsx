@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import type { Deal } from "@/lib/types";
 import { PLATFORM_META, dealPlatforms, type Platform } from "@/lib/types";
 import type { ContentItem } from "@/lib/fulfillment-types";
-import { euro, euroCpm, views as fmtViews } from "@/lib/format";
+import { money, moneyCpm, views as fmtViews } from "@/lib/format";
 import { allocateFee } from "@/lib/benchmark-rows";
 import type { MeasurementWindows } from "@/lib/measurement";
 import { saveActuals } from "@/app/deals/[id]/actions";
@@ -161,16 +161,16 @@ function PerItemActuals({
                       {fmtViews(b.views)} views
                     </span>
                     <span className="ml-auto font-tabular text-slate-500 text-xs">
-                      {b.share != null ? euro(b.share) : "—"}
+                      {b.share != null ? money(b.share) : "—"}
                     </span>
                     <span className="font-tabular font-semibold text-slate-900 w-20 text-right">
-                      {b.cpm != null ? euroCpm(b.cpm) : "—"}
+                      {b.cpm != null ? moneyCpm(b.cpm) : "—"}
                     </span>
                   </div>
                 ))}
               </div>
               <p className="text-xs text-slate-400 mt-2">
-                The {price != null ? euro(price) : "fee"} is split by the reach you expected from
+                The {price != null ? money(price) : "fee"} is split by the reach you expected from
                 each platform, so a platform that over-delivers shows the lower CPM it earned.
               </p>
             </div>
@@ -212,7 +212,7 @@ function DealLevelActuals({ deal, price }: { deal: Deal; price: number | null })
     ["Actual views delivered", views, setViews, "e.g. 88000"],
     ["Clicks (from your link)", clicks, setClicks, "e.g. 1050"],
     ["Orders / conversions", orders, setOrders, "e.g. 34"],
-    ["Revenue attributed (€)", revenue, setRevenue, "e.g. 4080"],
+    ["Revenue attributed ($)", revenue, setRevenue, "e.g. 4080"],
   ];
 
   return (
@@ -249,7 +249,7 @@ function DealLevelActuals({ deal, price }: { deal: Deal; price: number | null })
           <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
             <div className="text-[11px] text-slate-500 uppercase tracking-wider">Predicted CPM</div>
             <div className="font-tabular font-semibold text-slate-900">
-              {predictedCpm != null ? euroCpm(predictedCpm) : "—"}
+              {predictedCpm != null ? moneyCpm(predictedCpm) : "—"}
             </div>
           </div>
           <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
@@ -263,14 +263,14 @@ function DealLevelActuals({ deal, price }: { deal: Deal; price: number | null })
                   : "text-slate-900"
               }`}
             >
-              {actualCpm != null ? euroCpm(actualCpm) : "—"}
+              {actualCpm != null ? moneyCpm(actualCpm) : "—"}
             </div>
           </div>
         </div>
       )}
 
       {price != null && (
-        <p className="text-xs text-slate-400 mt-3">Paid {euro(price)} for this deal.</p>
+        <p className="text-xs text-slate-400 mt-3">Paid {money(price)} for this deal.</p>
       )}
 
       <div className="flex items-center gap-3 mt-4">

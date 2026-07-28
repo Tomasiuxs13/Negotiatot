@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useTransition } from "react";
 import type { PaymentItem } from "@/lib/fulfillment-types";
 import { PAYMENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL, pendingReason } from "@/lib/fulfillment-types";
-import { euro } from "@/lib/format";
+import { money } from "@/lib/format";
 import { SortHeader } from "@/components/FilterBar";
 import { nextDir, type SortDir } from "@/lib/table-sort";
 import { setPaymentStatusAction } from "@/app/deals/[id]/fulfillment-actions";
@@ -89,7 +89,7 @@ export default function PaymentsQueue({
               </td>
               <td className="px-4 py-3 text-slate-600">{p.description}</td>
               <td className="px-4 py-3 text-slate-500 text-xs">{PAYMENT_TRIGGER_LABEL[p.trigger]}</td>
-              <td className="px-4 py-3 text-right font-tabular font-semibold">{euro(p.amount)}</td>
+              <td className="px-4 py-3 text-right font-tabular font-semibold">{money(p.amount)}</td>
               <td className="px-4 py-3 text-right">
                 {p.status === "approvable" && (
                   <button

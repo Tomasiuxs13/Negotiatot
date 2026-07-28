@@ -24,7 +24,7 @@ import {
   getShipments,
   parseTerms,
 } from "@/lib/fulfillment";
-import { euro } from "@/lib/format";
+import { money } from "@/lib/format";
 import { dealCommission, describeCommission } from "@/lib/commission";
 import AnalysisTab from "@/components/deal/AnalysisTab";
 import NegotiationTab from "@/components/deal/NegotiationTab";
@@ -236,8 +236,8 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
             )}
             {deal.current_ask != null && deal.walkaway != null && (
               <p className="text-xs text-slate-400 mt-1.5 font-tabular">
-                Their last position {euro(deal.current_ask)} · your walk-away{" "}
-                {euro(deal.walkaway)}
+                Their last position {money(deal.current_ask)} · your walk-away{" "}
+                {money(deal.walkaway)}
               </p>
             )}
           </div>

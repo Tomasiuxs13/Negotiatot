@@ -49,7 +49,7 @@ describe("commissionPerOrder", () => {
 
 describe("expectedCommission", () => {
   it("scales with the orders you expect", () => {
-    expect(expectedCommission(tenPct, 120, 50)).toBe(600); // 50 × €12
+    expect(expectedCommission(tenPct, 120, 50)).toBe(600); // 50 × $12
   });
 
   it("is nothing when nothing is expected to sell", () => {
@@ -59,12 +59,12 @@ describe("expectedCommission", () => {
 
 describe("breakevenFee", () => {
   it("is the whole margin when no commission is paid", () => {
-    // 50 orders × €120 × 60% = €3,600
+    // 50 orders × $120 × 60% = $3,600
     expect(breakevenFee({ expectedOrders: 50, economics })).toBe(3600);
   });
 
-  it("drops euro-for-euro by the commission you'll owe", () => {
-    // Same deal at 10%: €3,600 margin − €600 commission = €3,000 of affordable fee.
+  it("drops dollar-for-dollar by the commission you'll owe", () => {
+    // Same deal at 10%: $3,600 margin − $600 commission = $3,000 of affordable fee.
     expect(breakevenFee({ expectedOrders: 50, economics, commission: tenPct })).toBe(3000);
   });
 
@@ -90,7 +90,7 @@ describe("breakevenFee", () => {
 
 describe("feeReduction", () => {
   it("quantifies how much the fixed fee has to come down", () => {
-    // The number to put in front of a creator: your 10% is worth €600 on this deal.
+    // The number to put in front of a creator: your 10% is worth $600 on this deal.
     expect(feeReduction({ expectedOrders: 50, economics, commission: tenPct })).toBe(600);
   });
 
@@ -133,7 +133,7 @@ describe("trueDealCost", () => {
 
 describe("breakevenFee with gifted product", () => {
   it("takes the product cost out of what the fee can be", () => {
-    // €3,600 margin − €600 commission − €140 product = €2,860.
+    // $3,600 margin − $600 commission − $140 product = $2,860.
     const fee = breakevenFee({
       expectedOrders: 50,
       economics,
@@ -144,7 +144,7 @@ describe("breakevenFee with gifted product", () => {
   });
 
   it("leaves no fee when the product alone eats the margin", () => {
-    // A tiny channel: 2 orders of margin against a €200 product.
+    // A tiny channel: 2 orders of margin against a $200 product.
     const fee = breakevenFee({ expectedOrders: 2, economics, productCost: 200 });
     expect(fee).toBe(0);
   });
@@ -152,7 +152,7 @@ describe("breakevenFee with gifted product", () => {
 
 describe("marginAtZeroFee", () => {
   it("shows the loss that breakevenFee hides behind its floor", () => {
-    // The Sigcruiser case: an €80 product against well under one expected order.
+    // The Sigcruiser case: an $80 product against well under one expected order.
     const params = {
       expectedOrders: 0.83,
       economics: { aov: 120, grossMarginPct: 60, repeatFactor: 1.35 },
@@ -190,10 +190,10 @@ describe("suggestStructure", () => {
   });
 
   it("switches a token fee to product plus commission", () => {
-    // The Sigcruiser case: ~900 avg views puts the affordable fee at €22.
+    // The Sigcruiser case: ~900 avg views puts the affordable fee at $22.
     const s = suggestStructure({ ...floor, affordableFee: 22 });
     expect(s.structure).toBe("gifted_plus_commission");
-    expect(s.reason).toContain("€22");
+    expect(s.reason).toContain("$22");
   });
 
   it("treats the floor as inclusive", () => {
@@ -224,7 +224,7 @@ describe("suggestStructure", () => {
 describe("describeCommission", () => {
   it("reads naturally in a prompt or on a card", () => {
     expect(describeCommission(tenPct)).toBe("10% commission per sale");
-    expect(describeCommission({ type: "per_order", value: 15 })).toBe("€15 per order");
+    expect(describeCommission({ type: "per_order", value: 15 })).toBe("$15 per order");
     expect(describeCommission(NO_COMMISSION)).toBe("no commission");
   });
 });
@@ -250,7 +250,7 @@ describe("audience discount", () => {
   const twentyOff: Discount = { type: "fixed", value: 20 };
 
   it("costs you the face value of the coupon", () => {
-    // Cost of goods doesn't change, so €20 off is €20 straight off margin.
+    // Cost of goods doesn't change, so $20 off is $20 straight off margin.
     expect(discountPerOrder(twentyOff, 120)).toBe(20);
     expect(discountPerOrder({ type: "percent", value: 15 }, 120)).toBe(18);
     expect(discountPerOrder(NO_DISCOUNT, 120)).toBe(0);
@@ -261,7 +261,7 @@ describe("audience discount", () => {
   });
 
   it("pays percentage commission on what the customer actually paid", () => {
-    // €120 − €20 coupon = €100 paid; 20% of that is €20, not €24.
+    // $120 − $20 coupon = $100 paid; 20% of that is $20, not $24.
     expect(commissionPerOrder({ type: "percent", value: 20 }, 120, twentyOff)).toBe(20);
   });
 
@@ -281,7 +281,7 @@ describe("audience discount", () => {
 
 describe("breakevenFee with a discount code", () => {
   it("treats the coupon as a cost, not a freebie", () => {
-    // 50 orders: €3,600 margin − €1,000 coupon − €1,000 commission = €1,600 of fee.
+    // 50 orders: $3,600 margin − $1,000 coupon − $1,000 commission = $1,600 of fee.
     const fee = breakevenFee({
       expectedOrders: 50,
       economics,
@@ -297,7 +297,7 @@ describe("breakevenFee with a discount code", () => {
       economics,
       commission: { type: "percent", value: 20 },
     });
-    // 20% of the full €120 = €24/order, so €3,600 − €1,200 = €2,400.
+    // 20% of the full $120 = $24/order, so $3,600 − $1,200 = $2,400.
     expect(withoutCode).toBe(2400);
   });
 });
@@ -324,7 +324,7 @@ describe("trueDealCost with every lever", () => {
 
 describe("describeDiscount / dealDiscount", () => {
   it("reads naturally", () => {
-    expect(describeDiscount({ type: "fixed", value: 20 })).toBe("€20 off for their audience");
+    expect(describeDiscount({ type: "fixed", value: 20 })).toBe("$20 off for their audience");
     expect(describeDiscount({ type: "percent", value: 15 })).toBe("15% off for their audience");
     expect(describeDiscount(NO_DISCOUNT)).toBe("no discount code");
   });
@@ -339,7 +339,7 @@ describe("describeDiscount / dealDiscount", () => {
 });
 
 describe("volume tiers", () => {
-  // The user's programme: €20/sale, rising to €40 as volume grows.
+  // The user's programme: $20/sale, rising to $40 as volume grows.
   const tiers: CommissionTier[] = [
     { minOrders: 0, amount: 20 },
     { minOrders: 25, amount: 30 },
@@ -354,7 +354,7 @@ describe("volume tiers", () => {
   });
 
   it("applies the reached rate retroactively, not progressively", () => {
-    // 50 sales at €40 = €2,000 — not 25×20 + 25×30 = €1,250.
+    // 50 sales at $40 = $2,000 — not 25×20 + 25×30 = $1,250.
     expect(tieredCommission(tiers, 50)).toBe(2000);
     expect(tieredCommission(tiers, 10)).toBe(200);
   });
@@ -369,7 +369,7 @@ describe("volume tiers", () => {
   });
 
   it("names the next rung and what reaching it is worth", () => {
-    // At 20 sales they're earning €400. At 25 they'd earn €750 — worth €350 more.
+    // At 20 sales they're earning $400. At 25 they'd earn $750 — worth $350 more.
     const next = nextTier(tiers, 20)!;
     expect(next.tier.amount).toBe(30);
     expect(next.ordersAway).toBe(5);
@@ -383,7 +383,7 @@ describe("volume tiers", () => {
   it("parses and prints the Playbook's ladder, sorting as it goes", () => {
     const parsed = parseTiers(["50: 40", "0: 20", "25: 30", "nonsense"]);
     expect(parsed).toEqual(tiers);
-    expect(describeTiers(parsed)).toBe("€20/sale from 0, €30/sale from 25, €40/sale from 50");
+    expect(describeTiers(parsed)).toBe("$20/sale from 0, $30/sale from 25, $40/sale from 50");
     expect(describeTiers([])).toBe("no volume tiers");
   });
 });
@@ -400,7 +400,7 @@ describe("parseTiers robustness", () => {
   });
 
   it("tolerates currency symbols and loose spacing", () => {
-    expect(parseTiers(["0: €20", " 25 : $30 "])).toEqual([
+    expect(parseTiers(["0: $20", " 25 : $30 "])).toEqual([
       { minOrders: 0, amount: 20 },
       { minOrders: 25, amount: 30 },
     ]);
@@ -419,7 +419,7 @@ describe("resolveOffer", () => {
   const econ = { commissionPerOrder: 20, commissionPercent: 0, discountFixed: 0, discountPercent: 0 };
 
   it("falls back to the Playbook's standard offer when the deal says nothing", () => {
-    // The Sigcruiser case: €20/sale was set in the Playbook but never reached the model,
+    // The Sigcruiser case: $20/sale was set in the Playbook but never reached the model,
     // because the deal predated the field and carried no commission of its own.
     const { commission } = resolveOffer({}, econ);
     expect(commission).toEqual({ type: "per_order", value: 20 });

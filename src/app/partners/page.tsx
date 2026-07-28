@@ -6,7 +6,7 @@ import { parseTags, partnerStats, partnerStatus } from "@/lib/partners";
 import PartnerStatusPill from "@/components/partners/PartnerStatusPill";
 import DeletePartnerButton from "@/components/partners/DeletePartnerButton";
 import { PLATFORM_META, type Platform } from "@/lib/types";
-import { euro, euroCpm } from "@/lib/format";
+import { money, moneyCpm } from "@/lib/format";
 import FilterPills, { SortHeader } from "@/components/FilterBar";
 import { PARTNER_STATUS_LABEL, type PartnerStatus } from "@/lib/partners";
 import { buildQuery, nextDir, sortBy, type SortDir } from "@/lib/table-sort";
@@ -192,16 +192,16 @@ export default async function PartnersPage({
                       )}
                     </td>
                     <td className="px-4 py-3 text-right font-tabular">
-                      {stats.committed > 0 ? euro(stats.committed) : "—"}
+                      {stats.committed > 0 ? money(stats.committed) : "—"}
                     </td>
                     <td className="px-4 py-3 text-right font-tabular text-slate-500">
-                      {stats.paid > 0 ? euro(stats.paid) : "—"}
+                      {stats.paid > 0 ? money(stats.paid) : "—"}
                     </td>
                     <td className="px-4 py-3 text-right font-tabular text-slate-500">
-                      {stats.actualCpm != null ? euroCpm(stats.actualCpm) : "—"}
+                      {stats.actualCpm != null ? moneyCpm(stats.actualCpm) : "—"}
                     </td>
                     <td className="px-4 py-3 text-right font-tabular text-emerald-600">
-                      {stats.savedVsAsk > 0 ? euro(stats.savedVsAsk) : "—"}
+                      {stats.savedVsAsk > 0 ? money(stats.savedVsAsk) : "—"}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <DeletePartnerButton

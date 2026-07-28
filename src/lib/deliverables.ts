@@ -9,7 +9,7 @@
 /**
  * Counts like "3 YouTube integrations" or "2x Reels + 1 story". Deliberately narrow —
  * it matches a number attached to a known content noun, so stray numbers in free text
- * ("€500 for the bundle") are not mistaken for a piece count.
+ * ("$500 for the bundle") are not mistaken for a piece count.
  */
 // Plurals mostly fall out for free (there's no trailing word boundary, so "videos"
 // matches on "video"), but "stories" doesn't share a stem with "story" and has to be

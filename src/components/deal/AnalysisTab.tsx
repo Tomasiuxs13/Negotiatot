@@ -1,5 +1,5 @@
 import type { Deal, DealAnalysis } from "@/lib/types";
-import { euro } from "@/lib/format";
+import { money } from "@/lib/format";
 import RunAnalysisButton from "./RunAnalysisButton";
 import AnalyzingProgress from "./AnalyzingProgress";
 
@@ -116,7 +116,7 @@ export default function AnalysisTab({ deal }: { deal: Deal }) {
                   <span className="material-symbols-outlined text-slate-400 transition-transform group-open:rotate-90" style={{ fontSize: 14 }}>
                     chevron_right
                   </span>
-                  {n.label} <span className="font-tabular">{euro(n.value)}</span>
+                  {n.label} <span className="font-tabular">{money(n.value)}</span>
                 </summary>
                 <p className="text-xs text-slate-500 mt-1.5 ml-6 max-w-[62ch]">{n.explanation}</p>
               </details>

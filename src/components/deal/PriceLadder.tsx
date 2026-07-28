@@ -1,5 +1,5 @@
 import type { Deal } from "@/lib/types";
-import { euro } from "@/lib/format";
+import { money } from "@/lib/format";
 
 interface Marker {
   value: number;
@@ -60,7 +60,7 @@ export default function PriceLadder({ deal }: { deal: Deal }) {
                 m.kind === "ask" ? "text-red-600" : "text-slate-900"
               }`}
             >
-              {euro(Math.round(m.value))}
+              {money(Math.round(m.value))}
             </div>
             <div
               className={`text-[10px] ${m.kind === "ask" ? "text-red-500 font-medium" : "text-slate-500"}`}

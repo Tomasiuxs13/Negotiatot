@@ -419,11 +419,11 @@ function seedIfEmpty() {
   const martaAnalysis = JSON.stringify({
     verdict: "negotiate",
     verdictSummary:
-      "Their €3,500 ask is 30% above your walk-away, but the channel's fundamentals support €2,200–2,700. Engagement and audience quality pass your Playbook; price is the only real gap. Recommended path: anchor at €1,950 and trade scope before price.",
+      "Their $3,500 ask is 30% above your walk-away, but the channel's fundamentals support $2,200–2,700. Engagement and audience quality pass your Playbook; price is the only real gap. Recommended path: anchor at $1,950 and trade scope before price.",
     metrics: [
       { label: "Avg views · last 30 videos", value: "96.4K", note: "▼ 18% over 90 days", tone: "warn" },
       { label: "Engagement rate", value: "4.7%", note: "✓ min 3.5%", tone: "good" },
-      { label: "CPM at their ask", value: "€36.30", note: "✗ max €28.00", tone: "crit" },
+      { label: "CPM at their ask", value: "$36.30", note: "✗ max $28.00", tone: "crit" },
       { label: "DACH audience", value: "58%", note: "~ required ≥ 60%", tone: "warn" },
     ],
     redFlags: [
@@ -456,19 +456,19 @@ function seedIfEmpty() {
         label: "Target",
         value: 2250,
         explanation:
-          "96.4K avg views × your target CPM of €23.30 (niche benchmark €26, discounted 10% for the view-trend decline and geo shortfall).",
+          "96.4K avg views × your target CPM of $23.30 (niche benchmark $26, discounted 10% for the view-trend decline and geo shortfall).",
       },
       {
         label: "Walk-away",
         value: 2700,
         explanation:
-          "Your Playbook max CPM €28.00 × 96.4K avg views. Above this the deal fails your rules regardless of how the conversation goes.",
+          "Your Playbook max CPM $28.00 × 96.4K avg views. Above this the deal fails your rules regardless of how the conversation goes.",
       },
       {
         label: "Breakeven",
         value: 3050,
         explanation:
-          "Predicted 1,157 clicks (1.2% CTR) × 3.0% conversion × €120 AOV × 60% margin × 1.35 repeat factor. Above breakeven the deal loses money even if it performs to forecast.",
+          "Predicted 1,157 clicks (1.2% CTR) × 3.0% conversion × $120 AOV × 60% margin × 1.35 repeat factor. Above breakeven the deal loses money even if it performs to forecast.",
       },
       {
         label: "Anchor",
@@ -527,44 +527,44 @@ function seedIfEmpty() {
     );
     insertMsg.run(
       marta, "them",
-      "Hi! Thanks for reaching out — I love the product. My rate for a dedicated integration (60–90s) is €3,500 including one round of revisions. Happy to jump on a call!",
+      "Hi! Thanks for reaching out — I love the product. My rate for a dedicated integration (60–90s) is $3,500 including one round of revisions. Happy to jump on a call!",
       null
     );
     insertMsg.run(
       marta, "us",
-      "Thanks Marta! We ran the numbers on recent performance — for a 60–90s integration our budget model works out to €1,950. That's based on your last-30-video average views, and we'd love to make this the first of several collaborations if it performs. Would that work as a starting point?",
+      "Thanks Marta! We ran the numbers on recent performance — for a 60–90s integration our budget model works out to $1,950. That's based on your last-30-video average views, and we'd love to make this the first of several collaborations if it performs. Would that work as a starting point?",
       JSON.stringify({ offer: 1950 })
     );
     insertMsg.run(
       marta, "them",
-      "I appreciate the transparency! €1,950 is quite far from my rate though. Considering the production quality I put in, the lowest I could do is €3,100.",
+      "I appreciate the transparency! $1,950 is quite far from my rate though. Considering the production quality I put in, the lowest I could do is $3,100.",
       JSON.stringify({ counter: 3100 })
     );
     insertMsg.run(
       marta, "copilot",
-      "Counter €2,300 and trade usage rights",
+      "Counter $2,300 and trade usage rights",
       JSON.stringify({
         round: 2,
-        headline: "Counter €2,300 and trade usage rights",
+        headline: "Counter $2,300 and trade usage rights",
         proposedOffer: 2300,
         pills: [
-          { label: "Counter: €2,300", tone: "good" },
+          { label: "Counter: $2,300", tone: "good" },
           { label: "+ ask: 60-day ad usage rights", tone: "plain" },
-          { label: "Headroom left: €400", tone: "plain" },
+          { label: "Headroom left: $400", tone: "plain" },
         ],
         reasoning: [
-          "€2,300 = €23.90 CPM on her real average views — inside your €28 max, just above your €2,250 target.",
-          "She moved €400 (3,500 → 3,100); moving €350 mirrors her concession size and signals your ceiling is near.",
+          "$2,300 = $23.90 CPM on her real average views — inside your $28 max, just above your $2,250 target.",
+          "She moved $400 (3,500 → 3,100); moving $350 mirrors her concession size and signals your ceiling is near.",
           "Asking for usage rights makes your raise a trade, not a cave — she can accept the price by giving scope.",
-          "Expected counter: €2,700–2,900. Plan: hold €2,300–2,500, offer whitelisting or a 2-video bundle instead of more cash.",
+          "Expected counter: $2,700–2,900. Plan: hold $2,300–2,500, offer whitelisting or a 2-video bundle instead of more cash.",
         ],
         drafts: {
           balanced:
-            "Totally understand, Marta — your production quality shows. Here's where we can realistically land: €2,300, and to make it worth the gap we'd include 60-day usage rights so we can run the segment as ads (that's real added value on our side, and extra reach for you). If the video performs against our benchmarks, we'd lock a multi-video deal at a higher rate for the next round. Deal?",
+            "Totally understand, Marta — your production quality shows. Here's where we can realistically land: $2,300, and to make it worth the gap we'd include 60-day usage rights so we can run the segment as ads (that's real added value on our side, and extra reach for you). If the video performs against our benchmarks, we'd lock a multi-video deal at a higher rate for the next round. Deal?",
           warm:
-            "Marta, we really do want to make this work — your content is exactly the fit we look for. We can stretch to €2,300 if we can also use the segment in our ads for 60 days. And honestly, our favorite creators are the ones we work with repeatedly: if this one performs, the next deal starts from a better number. Can we shake on that?",
+            "Marta, we really do want to make this work — your content is exactly the fit we look for. We can stretch to $2,300 if we can also use the segment in our ads for 60 days. And honestly, our favorite creators are the ones we work with repeatedly: if this one performs, the next deal starts from a better number. Can we shake on that?",
           firm:
-            "Appreciate you moving, Marta. To be transparent: our model prices your channel on the last-30-video average (96K views), which puts a 60–90s integration at €2,300 — that's already at the top of our range. We can do €2,300 with 60-day usage rights included. If that doesn't work for this quarter, we'd genuinely like to revisit when the timing is better.",
+            "Appreciate you moving, Marta. To be transparent: our model prices your channel on the last-30-video average (96K views), which puts a 60–90s integration at $2,300 — that's already at the top of our range. We can do $2,300 with 60-day usage rights included. If that doesn't work for this quarter, we'd genuinely like to revisit when the timing is better.",
         },
       })
     );
@@ -600,7 +600,7 @@ function seedIfEmpty() {
         "Add smaller deliverable (story / short) instead of raising price",
         "Trade usage rights (60 d) for meeting their number",
         "Multi-video bundle at −12–15% per video",
-        "Performance bonus up to €300",
+        "Performance bonus up to $300",
         "Raise price — steps ≤ 10%, never past walk-away",
       ],
       commissionTiers: ["0: 20", "25: 30", "50: 40"],

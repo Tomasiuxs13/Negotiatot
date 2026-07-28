@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const header = [
     "Partner",
     "Payment",
-    "Amount EUR",
+    "Amount USD",
     "Trigger",
     "Status",
     "Approved at",

@@ -11,7 +11,7 @@ import {
   getAllShipments,
 } from "@/lib/fulfillment";
 import { STAGES, TERMINAL_STAGES } from "@/lib/types";
-import { euro, euroCpm } from "@/lib/format";
+import { money, moneyCpm } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -46,14 +46,14 @@ export default function DashboardPage() {
     },
     {
       label: "Committed / cap",
-      value: euro(kpis.committed),
-      note: `of ${euro(kpis.monthlyCap)} this month`,
+      value: money(kpis.committed),
+      note: `of ${money(kpis.monthlyCap)} this month`,
       noteTone: "text-slate-500",
       href: "/pipeline",
     },
     {
       label: "Owed to creators",
-      value: euro(outstanding),
+      value: money(outstanding),
       note:
         toApprove.length > 0
           ? `${toApprove.length} ready to approve`
@@ -63,8 +63,8 @@ export default function DashboardPage() {
     },
     {
       label: "Avg closed CPM",
-      value: kpis.avgClosedCpm != null ? euroCpm(kpis.avgClosedCpm) : "—",
-      note: `target ≤ ${euro(kpis.targetCpm)}`,
+      value: kpis.avgClosedCpm != null ? moneyCpm(kpis.avgClosedCpm) : "—",
+      note: `target ≤ ${money(kpis.targetCpm)}`,
       noteTone: "text-slate-500",
       href: "/benchmarks",
     },

@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import type { Contract, ParsedTerms, PaymentTrigger } from "@/lib/fulfillment-types";
 import { PAYMENT_TRIGGER_LABEL } from "@/lib/fulfillment-types";
-import { euro } from "@/lib/format";
+import { money } from "@/lib/format";
 import { confirmContractAction, uploadContractAction } from "@/app/deals/[id]/fulfillment-actions";
 
 const inputClass =
@@ -308,7 +308,7 @@ export default function ContractBlock({
             <input
               className={`${inputClass} w-28 text-right font-tabular`}
               type="number"
-              placeholder="value €"
+              placeholder="value $"
               value={draft.product?.value ?? ""}
               onChange={(e) =>
                 setDraft({
@@ -387,7 +387,7 @@ export default function ContractBlock({
           <p className="text-xs text-slate-500 mt-0.5">
             {contract.filename}
             {contract.signed_at ? ` · signed ${contract.signed_at}` : ""}
-            {totalFee != null ? ` · ${euro(totalFee)} total` : ""}
+            {totalFee != null ? ` · ${money(totalFee)} total` : ""}
           </p>
         </div>
         <span

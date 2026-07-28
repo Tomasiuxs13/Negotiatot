@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import type { ContentItem } from "@/lib/fulfillment-types";
 import { PLATFORM_META, type Platform } from "@/lib/types";
-import { euroCpm } from "@/lib/format";
+import { moneyCpm } from "@/lib/format";
 import { saveContentActualsAction } from "@/app/deals/[id]/fulfillment-actions";
 import {
   MEASUREMENT_LABEL,
@@ -128,7 +128,7 @@ export default function ContentActualsRow({
         <span className="text-sm font-medium text-slate-800">{item.title}</span>
         <MeasurementBadge measurement={measurement} />
         {cpm != null && (
-          <span className="ml-auto text-xs font-tabular text-slate-500">{euroCpm(cpm)} CPM</span>
+          <span className="ml-auto text-xs font-tabular text-slate-500">{moneyCpm(cpm)} CPM</span>
         )}
       </div>
 
@@ -136,7 +136,7 @@ export default function ContentActualsRow({
         {field("Views", views, setViews, "88000")}
         {field("Clicks", clicks, setClicks, "1050")}
         {field("Orders", orders, setOrders, "34")}
-        {field("Revenue €", revenue, setRevenue, "4080")}
+        {field("Revenue $", revenue, setRevenue, "4080")}
         <button
           onClick={save}
           disabled={isPending || !dirty}

@@ -96,7 +96,7 @@ export const DEFAULT_BRAND_PROFILE: Record<string, string> = {
   brandName: "",
   productName: "",
   /**
-   * How a customer actually buys it, in your own words — "€19.99/month for 6 months,
+   * How a customer actually buys it, in your own words — "$19.99/month for 6 months,
    * device included". A single retail figure can't describe a subscription, a bundle or
    * a promo price, so drafts either quote a number the creator can't find on the site or
    * invent one. Whatever is written here is quoted verbatim instead.

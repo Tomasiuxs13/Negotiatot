@@ -36,9 +36,9 @@ export default function SettingsPage() {
     },
     {
       label: "Currency",
-      value: "EUR",
+      value: "USD",
       tone: "text-slate-900",
-      note: "All prices and playbook thresholds are in euros.",
+      note: "All prices and playbook thresholds are in dollars.",
     },
     {
       label: "API usage",

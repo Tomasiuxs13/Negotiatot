@@ -22,14 +22,14 @@ describe("buildRounds", () => {
 
   it("computes CPM detail from avg views", () => {
     const rounds = buildRounds(marta, thread, null);
-    expect(rounds[0].detail).toBe("€36.31 CPM");
-    expect(rounds[1].detail).toBe("€20.23 CPM");
+    expect(rounds[0].detail).toBe("$36.31 CPM");
+    expect(rounds[1].detail).toBe("$20.23 CPM");
   });
 
   it("reports how far they moved on counters", () => {
     const rounds = buildRounds(marta, thread, null);
     const counter = rounds.find((r) => r.label === "their counter");
-    expect(counter?.detail).toBe("moved €400");
+    expect(counter?.detail).toBe("moved $400");
   });
 
   it("handles a deal with no ask and no messages (outbound opening)", () => {

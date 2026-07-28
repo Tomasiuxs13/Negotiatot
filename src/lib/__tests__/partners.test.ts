@@ -29,7 +29,7 @@ describe("partnerStats", () => {
     expect(stats.committed).toBe(3000);
     expect(stats.paid).toBe(2000); // only the completed deal's money actually went out
     expect(stats.savedVsAsk).toBe(1200); // 1000 + 200
-    expect(stats.actualCpm).toBe(20); // (€20 CPM + €20 CPM) / 2
+    expect(stats.actualCpm).toBe(20); // ($20 CPM + $20 CPM) / 2
     expect(stats.lastDealAt).toBe("2026-07-01 10:00:00");
   });
 

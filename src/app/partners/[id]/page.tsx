@@ -6,7 +6,7 @@ import { getPartnerOnboarding } from "@/lib/fulfillment";
 import { partnerStats, partnerStatus } from "@/lib/partners";
 import PartnerStatusPill from "@/components/partners/PartnerStatusPill";
 import { dealPlatforms, PLATFORM_META, STAGE_LABELS } from "@/lib/types";
-import { euro, euroCpm } from "@/lib/format";
+import { money, moneyCpm } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -24,16 +24,16 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
   const kpis = [
     { label: "Deals", value: String(stats.totalDeals), sub: `${stats.activeDeals} active` },
     { label: "Won", value: String(stats.wonDeals), sub: "closed deals" },
-    { label: "Committed", value: euro(stats.committed), sub: "agreed fees" },
-    { label: "Paid", value: stats.paid > 0 ? euro(stats.paid) : "—", sub: "completed deals" },
+    { label: "Committed", value: money(stats.committed), sub: "agreed fees" },
+    { label: "Paid", value: stats.paid > 0 ? money(stats.paid) : "—", sub: "completed deals" },
     {
       label: "Actual CPM",
-      value: stats.actualCpm != null ? euroCpm(stats.actualCpm) : "—",
+      value: stats.actualCpm != null ? moneyCpm(stats.actualCpm) : "—",
       sub: stats.actualCpm != null ? "from logged actuals" : "no actuals logged",
     },
     {
       label: "Saved vs ask",
-      value: stats.savedVsAsk > 0 ? euro(stats.savedVsAsk) : "—",
+      value: stats.savedVsAsk > 0 ? money(stats.savedVsAsk) : "—",
       sub: "negotiated down",
       good: true,
     },
@@ -164,14 +164,14 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
                     <td className="px-4 py-2.5 text-slate-600">{STAGE_LABELS[d.stage]}</td>
                     <td className="px-4 py-2.5 text-slate-500">{d.campaign ?? "—"}</td>
                     <td className="px-4 py-2.5 text-right font-tabular text-slate-500">
-                      {euro(d.first_ask)}
+                      {money(d.first_ask)}
                     </td>
                     <td className="px-4 py-2.5 text-right font-tabular">
-                      {euro(d.agreed_price ?? d.current_offer)}
+                      {money(d.agreed_price ?? d.current_offer)}
                     </td>
                     <td className="px-4 py-2.5 text-right font-tabular text-slate-500">
                       {d.actual_views && d.agreed_price
-                        ? euroCpm((d.agreed_price / d.actual_views) * 1000)
+                        ? moneyCpm((d.agreed_price / d.actual_views) * 1000)
                         : "—"}
                     </td>
                     <td className="px-4 py-2.5 text-right text-xs text-slate-400 whitespace-nowrap">

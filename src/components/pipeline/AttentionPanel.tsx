@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { AttentionItem } from "@/lib/attention";
-import { euro } from "@/lib/format";
+import { money } from "@/lib/format";
 
 const SEVERITY: Record<AttentionItem["severity"], { dot: string; label: string }> = {
   critical: { dot: "bg-red-500", label: "text-red-700" },
@@ -53,7 +53,7 @@ export default function AttentionPanel({ items }: { items: AttentionItem[] }) {
             <span className="text-xs text-slate-500 truncate flex-1">{item.detail}</span>
             {item.amount != null && (
               <span className="text-sm font-tabular font-semibold text-slate-900">
-                {euro(item.amount)}
+                {money(item.amount)}
               </span>
             )}
             <span className="material-symbols-outlined text-slate-300 group-hover:text-slate-500" style={{ fontSize: 16 }}>

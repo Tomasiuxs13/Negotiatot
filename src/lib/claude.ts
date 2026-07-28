@@ -84,7 +84,7 @@ function dealForecast(deal: Deal, ctx: PlaybookContext) {
     ...forecast,
     views,
     pieces,
-    /** Orders and euros across the whole bundle — what a draft should actually quote. */
+    /** Orders and dollars across the whole bundle — what a draft should actually quote. */
     ordersTotal: perPiece * pieces,
     earningsTotal: forecast.total * pieces,
   };
@@ -140,7 +140,7 @@ function dealPieces(deal: Deal, ctx: PlaybookContext): number {
  * worth the model knowing it exists and how to pitch it.
  *
  * `tiers` is deliberately the *reachable* set, not everything the manager configured.
- * Telling the model "do not mention the €30 rung" while the number €30 sits in its
+ * Telling the model "do not mention the $30 rung" while the number $30 sits in its
  * context does not work — it competes with every instruction to sell the upside, and
  * the persuasive one wins. A rung this creator cannot reach is simply never shown.
  */
@@ -152,7 +152,7 @@ function tierGuidance(tiers: CommissionTier[], anySuppressed: boolean): string {
       : "";
   }
   return [
-    `Commission volume tiers (EUROS PER SALE — these are flat amounts, never percentages).`,
+    `Commission volume tiers (DOLLARS PER SALE — these are flat amounts, never percentages).`,
     `These are the ONLY rungs this creator can realistically reach; any others are`,
     `withheld deliberately. Never invent, extrapolate or mention a rung not listed here:`,
     describeTiers(tiers) + ".",
@@ -220,7 +220,7 @@ function commissionBlock(deal: Deal, econ: Record<string, number> | null): strin
   if (discount.type !== "none") {
     lines.push(
       `Their audience gets ${describeDiscount(discount)}. That coupon is OUR cost, not the`,
-      `creator's: cost of goods is unchanged, so every euro off the price is a euro off our`,
+      `creator's: cost of goods is unchanged, so every dollar off the price is a dollar off our`,
       `margin. A percentage commission is then paid on what the customer actually paid,`,
       `after the discount.`
     );
@@ -233,10 +233,10 @@ function commissionBlock(deal: Deal, econ: Record<string, number> | null): strin
     ``,
     `Treat these as tradeable levers, not fixed terms. They cost different amounts and are`,
     `worth different amounts to the creator, so when they push on price, name the swap and`,
-    `its euro cost — a richer commission or a better code for their audience often buys`,
-    `more goodwill per euro than cash does, and a creator earning on every sale has`,
+    `its dollar cost — a richer commission or a better code for their audience often buys`,
+    `more goodwill per dollar than cash does, and a creator earning on every sale has`,
     `already been given upside the fee shouldn't pay for twice. State the expected`,
-    `commission and discount cost in euros in your reasoning.`
+    `commission and discount cost in dollars in your reasoning.`
   );
   return lines.join("\n");
 }
@@ -257,7 +257,7 @@ function structureBlock(
   const lines: string[] = [``, `## Deal structure`];
   if (productCost > 0) {
     lines.push(
-      `Every creator is gifted product. It costs us €${productCost} — cost of goods, an`,
+      `Every creator is gifted product. It costs us $${productCost} — cost of goods, an`,
       `INTERNAL figure never shown to the creator. Subtract it from what the fixed fee can`,
       `bear, exactly like commission, and include it when you state total deal cost to the`,
       `manager. How to describe the gift to the creator is covered under "Voice and product".`
@@ -269,18 +269,22 @@ function structureBlock(
   if (viability && viability.margin < 0) {
     const across = viability.pieces > 1 ? ` across ${viability.pieces} pieces` : ``;
     lines.push(
-      `VIABILITY WARNING — this deal loses money even at a zero fee. At the forecast of`,
+      `VIABILITY WARNING — this deal loses money even at a zero fee, so "gift it and pay CPA"`,
+      `is not automatically the safe fallback. At the forecast of`,
       `${viability.orders.toFixed(1)} orders${across}, the margin earned does not cover the gifted`,
-      `product and commission: the deal is €${Math.abs(viability.margin).toFixed(0)} underwater`,
+      `product and commission: the deal is $${Math.abs(viability.margin).toFixed(0)} underwater`,
       `before any cash fee. Say this to the manager plainly and early in your reasoning, with`,
-      `the number. Do not present a gifted structure as automatically safe just because no fee`,
-      `is paid. It may still be worth doing as a bet on a growing channel — but that is the`,
-      `manager's call to make knowingly, so give them the figure rather than the conclusion.`
+      `the number, and name the levers that would close the gap — a shorter bundle, dropping`,
+      `the audience discount, a lower-cost item, or not gifting the product at all and running`,
+      `commission-only. If none of them get the deal above water, say the honest thing: the`,
+      `product is worth more than this placement returns.`,
+      `It may still be worth doing as a bet on a growing channel, and that is the manager's`,
+      `call — so give them the figure and the options rather than the conclusion.`
     );
   }
   if (minPaidFee > 0) {
     lines.push(
-      `The smallest fee worth paying is €${minPaidFee}. If the economics only support a fee`,
+      `The smallest fee worth paying is $${minPaidFee}. If the economics only support a fee`,
       `below that, do NOT recommend a token payment — the contract, invoice and payment run`,
       `cost more than it buys. Recommend a gifted + commission deal instead: the creator`,
       `gets the product and earns on sales rather than a nominal fee. Say this explicitly,`,
@@ -295,7 +299,7 @@ function structureBlock(
  * What this creator should realistically earn, computed rather than guessed, and which
  * tiers are actually within reach.
  *
- * Dangling "€40/sale once you pass 50" at a channel that will drive two orders reads
+ * Dangling "$40/sale once you pass 50" at a channel that will drive two orders reads
  * well and pays nothing — the fastest way to make a first collaboration the last one.
  */
 function forecastBlock(deal: Deal, ctx: PlaybookContext): string {
@@ -303,17 +307,17 @@ function forecastBlock(deal: Deal, ctx: PlaybookContext): string {
   if (!f) return "";
 
   const orders = f.ordersTotal;
-  const euros = f.earningsTotal;
+  const dollars = f.earningsTotal;
   const bundle = f.pieces > 1 ? ` across all ${f.pieces} pieces` : ``;
 
   const lines = [
     ``,
     `## What this creator should actually earn (computed — these are the ONLY figures you may quote)`,
     `At ${Math.round(f.views).toLocaleString("en")} views a piece, the Playbook's rates give`,
-    `about ${orders.toFixed(1)} orders${bundle} — roughly €${euros.toFixed(0)} to the creator`,
-    `at €${f.perOrder}/sale.`,
+    `about ${orders.toFixed(1)} orders${bundle} — roughly $${dollars.toFixed(0)} to the creator`,
+    `at $${f.perOrder}/sale.`,
     `If you quantify the offer in a draft, use exactly these two numbers: ${orders.toFixed(1)}`,
-    `orders and €${euros.toFixed(0)}. Do NOT pick a rounder or larger order count to make the`,
+    `orders and $${dollars.toFixed(0)}. Do NOT pick a rounder or larger order count to make the`,
     `sentence land — "if 8 of your viewers buy" against a forecast of ${orders.toFixed(1)} is a`,
     `fabricated promise, and it is the number the creator will remember and hold you to.`,
     `If the honest figure is too small to be worth stating, say nothing about earnings at`,
@@ -325,7 +329,7 @@ function forecastBlock(deal: Deal, ctx: PlaybookContext): string {
       `They are absent from the tier list above by design. Do not reconstruct or allude to them.`
     );
   }
-  if (euros < 30) {
+  if (dollars < 30) {
     lines.push(
       `Commission here is realistically negligible. Be straight about that: lead on the`,
       `product and the upside if a video outperforms, and do not imply meaningful earnings.`
@@ -362,12 +366,12 @@ function brandBlock(ctx: PlaybookContext): string {
       );
     } else if (retail > 0) {
       lines.push(
-        `It retails at €${retail} — quote that as what the creator would otherwise pay. Never`,
+        `It retails at $${retail} — quote that as what the creator would otherwise pay. Never`,
         `quote our cost: it is lower than the shelf price and discloses our margin.`
       );
     } else {
       lines.push(
-        `No retail price or offer wording is set, so do NOT put a euro value on the gift —`,
+        `No retail price or offer wording is set, so do NOT put a dollar value on the gift —`,
         `the only figure available is our internal cost. Describe it by name instead.`
       );
     }
@@ -395,7 +399,7 @@ const ANALYSIS_SCHEMA = {
     verdictSummary: {
       type: "string",
       description:
-        "2-3 sentences: how their ask compares to the manager's numbers, whether fundamentals pass the playbook, and the recommended path. Mention concrete euro amounts.",
+        "2-3 sentences: how their ask compares to the manager's numbers, whether fundamentals pass the playbook, and the recommended path. Mention concrete dollar amounts.",
     },
     metrics: {
       type: "array",
@@ -427,7 +431,7 @@ const ANALYSIS_SCHEMA = {
     numbers: {
       type: "array",
       description:
-        "Exactly four entries labeled Anchor, Target, Walk-away, Breakeven — each with the computed euro value and the math behind it.",
+        "Exactly four entries labeled Anchor, Target, Walk-away, Breakeven — each with the computed dollar value and the math behind it.",
       items: {
         type: "object",
         additionalProperties: false,
@@ -643,14 +647,14 @@ function historyBlock(history: PriorDeal[] | undefined, creator: string): string
   const lines = history.slice(0, 5).map((h) => {
     const parts = [
       `${h.date}: ${h.scope ?? "collaboration"} (${h.platforms.join(" + ")})`,
-      `agreed €${h.agreedPrice}`,
+      `agreed $${h.agreedPrice}`,
     ];
     if (h.firstAsk != null && h.agreedPrice != null && h.firstAsk > h.agreedPrice) {
       const pct = Math.round(((h.firstAsk - h.agreedPrice) / h.firstAsk) * 100);
-      parts.push(`down from their €${h.firstAsk} ask (−${pct}%)`);
+      parts.push(`down from their $${h.firstAsk} ask (−${pct}%)`);
     }
     if (h.actualCpm != null) {
-      parts.push(`delivered ${h.actualViews?.toLocaleString("en")} views · real CPM €${h.actualCpm.toFixed(2)}`);
+      parts.push(`delivered ${h.actualViews?.toLocaleString("en")} views · real CPM $${h.actualCpm.toFixed(2)}`);
     }
     return `- ${parts.join(" · ")}`;
   });
@@ -683,7 +687,7 @@ export async function analyzeDeal(params: {
     `Platform(s): ${platforms.join(", ")}`,
     `Deliverables we want: ${scope ?? "unspecified — assume one standard placement per platform"}`,
   ];
-  if (deal.first_ask != null) facts.push(`Their first ask: €${deal.first_ask}`);
+  if (deal.first_ask != null) facts.push(`Their first ask: $${deal.first_ask}`);
   if (deal.avg_views != null) facts.push(`Known avg views: ${deal.avg_views}`);
   if (deal.engagement_rate != null) facts.push(`Known engagement rate: ${deal.engagement_rate}%`);
   if (params.channelUrl) facts.push(`Channel URL: ${params.channelUrl}`);
@@ -831,11 +835,11 @@ const RECO_SCHEMA = {
   properties: {
     headline: {
       type: "string",
-      description: "Short imperative move, e.g. 'Counter €2,300 and trade usage rights'",
+      description: "Short imperative move, e.g. 'Counter $2,300 and trade usage rights'",
     },
     proposedOffer: {
       type: "number",
-      description: "The euro amount of the next offer/counter. Never above walk-away.",
+      description: "The dollar amount of the next offer/counter. Never above walk-away.",
     },
     pills: {
       type: "array",
@@ -911,9 +915,9 @@ export async function recommendNextMove(params: {
     `Creator: ${deal.creator} (${dealPlatformList(deal).join(" + ")})`,
     `Deliverables we want: ${deal.deliverables ?? deal.format ?? "unspecified"}`,
     `Round: ${deal.round}`,
-    `Their first ask: €${deal.first_ask ?? "unknown"} · their current position: €${deal.current_ask ?? "unknown"}`,
-    `Our last offer: €${deal.current_offer ?? "none yet"}`,
-    `Manager's numbers — anchor €${deal.anchor ?? "?"}, target €${deal.target ?? "?"}, walk-away €${deal.walkaway ?? "?"}, breakeven €${deal.breakeven ?? "?"}`,
+    `Their first ask: $${deal.first_ask ?? "unknown"} · their current position: $${deal.current_ask ?? "unknown"}`,
+    `Our last offer: $${deal.current_offer ?? "none yet"}`,
+    `Manager's numbers — anchor $${deal.anchor ?? "?"}, target $${deal.target ?? "?"}, walk-away $${deal.walkaway ?? "?"}, breakeven $${deal.breakeven ?? "?"}`,
     `Avg views: ${deal.avg_views ?? "unknown"} · engagement: ${deal.engagement_rate ?? "unknown"}%`,
     analysis ? `Prior analysis summary: ${analysis.verdictSummary}` : "",
     commissionBlock(deal, playbook.unitEconomics as Record<string, number>),
@@ -934,8 +938,9 @@ export async function recommendNextMove(params: {
     `- Drafts must be ready to send: specific numbers, no placeholders, in the same language the creator writes in, matching the manager's configured style.`,
     `- Sell the value, don't just list terms. Put a number on what the creator gets — the product by name and what it would cost them, and what the commission is worth at their actual view count. A list of mechanics reads like paperwork; a quantified offer reads like an opportunity.`,
     `- Every figure in a draft must come from this prompt. You may not invent, round up or "for example" your way to an order count, an earnings total, a commission rung or a product value. If you write "if N of your viewers buy", N is the computed forecast above and nothing else — an illustrative number that flatters the offer is a promise the creator will hold the manager to, and it is the single most damaging thing you can put in a draft. When the honest number is unimpressive, omit it and sell something else that is true.`,
-    `- Mention the product once, where the creator sees what they get. Naming it in the opening line and again in the bullets is padding, and repeating its price twice reads as overselling.`,
-    `- Never justify a no-fee or low-fee structure by the creator's size. "Given where your channel is right now" reads as "you're too small to pay" and loses deals. Frame performance terms as uncapped upside they own, not as a consolation for not being paid.`,
+    `- State each term exactly once. The product, the code, the trackable link, the approval step — each belongs in one place, either the offer list or the house-rules line, never both. Repeating a term is padding, and repeating a price reads as overselling.`,
+    `- If no cash fee is being offered, say so plainly and early — one sentence, before the terms: this is a product and performance partnership rather than a paid placement. Leaving it unsaid is not tact. The creator assumes a rate is coming, replies asking for it, and feels misled when the answer is none, which costs a round and the goodwill you opened with. Naming the structure is not the same as apologising for it.`,
+    `- Never justify a no-fee or low-fee structure by the creator's size. "Given where your channel is right now" reads as "you're too small to pay" and loses deals. Name the structure as a choice, and frame performance terms as uncapped upside they own, not as a consolation for not being paid.`,
     `- Format drafts as a real email, not a paragraph: greeting on its own line, blank line between paragraphs, 1-3 sentences each. Put a multi-part offer in "- " bullets on separate lines — a creator should be able to see what they get at a glance. Finish with one clear question and a sign-off.`,
     `- A draft is read by the CREATOR. Never disclose internal figures in one: cost of goods, gross margin, breakeven, walk-away, target price, CPM ceilings, or what you can "afford". Quote only what is being offered to them — fee, commission, tier thresholds, their discount code, and the product's price exactly as given under "Voice and product". Internal numbers belong in the reasoning, which the manager alone sees.`,
   ]

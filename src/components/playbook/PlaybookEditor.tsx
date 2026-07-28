@@ -12,31 +12,31 @@ const PLATFORM_LABEL: Record<string, string> = {
 
 const RULE_LABELS: Record<string, string> = {
   minIntegrations: "Min pieces of content per deal",
-  maxCpmIntegration: "Max CPM · integration (€)",
-  maxCpmShort: "Max CPM · short / mention (€)",
-  targetCpc: "Target CPC (€)",
+  maxCpmIntegration: "Max CPM · integration ($)",
+  maxCpmShort: "Max CPM · short / mention ($)",
+  targetCpc: "Target CPC ($)",
   minAvgViews: "Min avg views",
   minEngagementRate: "Min engagement rate (%)",
   maxFakeFollowers: "Max fake followers (%)",
   minGeoShare: "Min audience in that market (%)",
   geoLabel: "Target market",
-  maxPerDeal: "Max per deal (€)",
-  monthlyCap: "Monthly budget (€)",
+  maxPerDeal: "Max per deal ($)",
+  monthlyCap: "Monthly budget ($)",
 };
 
 const ECON_LABELS: Record<string, string> = {
-  aov: "Average order value (€)",
+  aov: "Average order value ($)",
   linkCtr: "Viewers who click the link (%)",
   orderConversion: "Clickers who buy (%)",
   grossMargin: "Gross margin (%)",
   repeatFactor: "Repeat-purchase factor (×)",
   commissionPercent: "Default commission (% of sale)",
-  commissionPerOrder: "Default commission (€ per order)",
+  commissionPerOrder: "Default commission ($ per order)",
   discountPercent: "Default audience discount (%)",
-  discountFixed: "Default audience discount (€)",
-  productCost: "Gifted product — your cost (€, internal)",
-  productRetail: "Gifted product — retail price (€, quoted to creators)",
-  minPaidFee: "Smallest fee worth paying (€)",
+  discountFixed: "Default audience discount ($)",
+  productCost: "Gifted product — your cost ($, internal)",
+  productRetail: "Gifted product — retail price ($, quoted to creators)",
+  minPaidFee: "Smallest fee worth paying ($)",
 };
 
 /** What the manager sets themselves vs what comes from finance vs sensible defaults. */
@@ -185,7 +185,7 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
             className={`${inputClass} w-full text-left`}
             type="text"
             value={String(brand.productOffer ?? "")}
-            placeholder="e.g. €19.99/month for 6 months, device included"
+            placeholder="e.g. $19.99/month for 6 months, device included"
             onChange={(e) => {
               setBrand((prev) => ({ ...prev, productOffer: e.target.value }));
               setStatus("idle");
@@ -428,7 +428,7 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
             Commission volume tiers
           </h3>
           <p className="text-xs text-slate-500 mb-2">
-            One rung per line as <code className="text-slate-600">from: €/sale</code> — e.g.{" "}
+            One rung per line as <code className="text-slate-600">from: $/sale</code> — e.g.{" "}
             <code className="text-slate-600">0: 20</code>, <code className="text-slate-600">50: 40</code>.
             The volume reached sets one rate paid on every sale, so crossing a rung lifts the
             creator&apos;s whole payout.

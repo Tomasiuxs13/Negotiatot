@@ -8,7 +8,7 @@ import {
   type Campaign,
   type CampaignOverrides,
 } from "@/lib/campaigns";
-import { euro } from "@/lib/format";
+import { money } from "@/lib/format";
 import { archiveCampaignAction, saveCampaignAction } from "@/app/playbook/campaign-actions";
 
 const inputClass =
@@ -110,7 +110,7 @@ export default function CampaignsEditor({
                 <span className="text-sm font-semibold text-slate-900">{c.name}</span>
                 {c.budget != null && (
                   <span className="text-xs font-tabular text-slate-500">
-                    {euro(spend)} / {euro(c.budget)}
+                    {money(spend)} / {money(c.budget)}
                     {spend > c.budget && <span className="text-red-600 font-semibold"> · over</span>}
                   </span>
                 )}
@@ -159,7 +159,7 @@ export default function CampaignsEditor({
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Campaign budget (€) <span className="font-normal text-slate-500">optional</span>
+                Campaign budget ($) <span className="font-normal text-slate-500">optional</span>
               </label>
               <input
                 className={inputClass + " w-full font-tabular"}

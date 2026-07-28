@@ -108,8 +108,8 @@ export async function uploadContractAction(
         dealContext: [
           `Creator: ${deal.creator}`,
           `Deliverables discussed: ${deal.deliverables ?? deal.format ?? "unspecified"}`,
-          deal.agreed_price != null ? `Agreed price: €${deal.agreed_price}` : "",
-          deal.current_offer != null ? `Last offer: €${deal.current_offer}` : "",
+          deal.agreed_price != null ? `Agreed price: $${deal.agreed_price}` : "",
+          deal.current_offer != null ? `Last offer: $${deal.current_offer}` : "",
         ]
           .filter(Boolean)
           .join("\n"),

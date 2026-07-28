@@ -21,11 +21,11 @@ export interface Campaign {
 export const OVERRIDE_FIELDS: { key: keyof CampaignOverrides; label: string; numeric: boolean }[] = [
   { key: "geoLabel", label: "Target geo", numeric: false },
   { key: "minGeoShare", label: "Min geo share (%)", numeric: true },
-  { key: "maxCpmIntegration", label: "Max CPM · integration (€)", numeric: true },
-  { key: "maxCpmShort", label: "Max CPM · short (€)", numeric: true },
+  { key: "maxCpmIntegration", label: "Max CPM · integration ($)", numeric: true },
+  { key: "maxCpmShort", label: "Max CPM · short ($)", numeric: true },
   { key: "minAvgViews", label: "Min avg views", numeric: true },
   { key: "minEngagementRate", label: "Min engagement (%)", numeric: true },
-  { key: "maxPerDeal", label: "Max per deal (€)", numeric: true },
+  { key: "maxPerDeal", label: "Max per deal ($)", numeric: true },
 ];
 
 export function parseOverrides(raw: string | null | undefined): CampaignOverrides {

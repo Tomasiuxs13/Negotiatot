@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Deal } from "@/lib/types";
 import { PLATFORM_META, STAGE_LABELS, dealPlatforms } from "@/lib/types";
-import { euro } from "@/lib/format";
+import { money } from "@/lib/format";
 import type { DealPhase } from "@/lib/deal-phase";
 import { SortHeader } from "@/components/FilterBar";
 import { nextDir, type SortDir } from "@/lib/table-sort";
@@ -119,10 +119,10 @@ export default function DealsTable({
                 </span>
               </td>
               <td className="px-4 py-3 text-right font-tabular text-slate-600">
-                {d.current_ask ? euro(d.current_ask) : "—"}
+                {d.current_ask ? money(d.current_ask) : "—"}
               </td>
               <td className="px-4 py-3 text-right font-tabular font-medium text-slate-900">
-                {d.agreed_price ?? d.current_offer ? euro(d.agreed_price ?? d.current_offer) : "—"}
+                {d.agreed_price ?? d.current_offer ? money(d.agreed_price ?? d.current_offer) : "—"}
               </td>
               <td className="px-4 py-3 text-slate-500 text-xs">
                 {phases[d.id] && phases[d.id].key !== "nothing_tracked"

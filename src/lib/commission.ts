@@ -11,14 +11,14 @@ export type CommissionType = "none" | "percent" | "per_order";
 
 export interface Commission {
   type: CommissionType;
-  /** Percent of order value for "percent"; euros per order for "per_order". */
+  /** Percent of order value for "percent"; dollars per order for "per_order". */
   value: number;
 }
 
 export const NO_COMMISSION: Commission = { type: "none", value: 0 };
 
 export interface Economics {
-  /** Average order value, in euros. */
+  /** Average order value, in dollars. */
   aov: number;
   /** Gross margin on that order, as a percent. */
   grossMarginPct: number;
@@ -36,7 +36,7 @@ export interface CommissionTier {
  * The per-sale rate at a given volume.
  *
  * Modelled the way influencer affiliate programs usually run it: the volume reached
- * sets ONE rate that applies to every sale ("hit 50 and you're on €40"), rather than
+ * sets ONE rate that applies to every sale ("hit 50 and you're on $40"), rather than
  * progressive brackets where the first sales stay on the lower rate. That makes the
  * ladder a motivator — the creator's whole payout improves when they cross a rung —
  * which is the reason to offer tiers at all.
@@ -86,7 +86,9 @@ export function parseTiers(lines: string[]): CommissionTier[] {
     .map((entry) => {
       const [from, amount] = entry
         .split(":")
-        .map((part) => Number(part.replace(/[€$£\s]/g, "").trim()));
+        // Currency symbols are stripped rather than required, so a ladder typed with or
+        // without one — and pasted from an older euro-denominated playbook — still parses.
+        .map((part) => Number(part.replace(/[$€£\s]/g, "").trim()));
       return Number.isFinite(from) && Number.isFinite(amount)
         ? { minOrders: from, amount }
         : null;
@@ -98,12 +100,12 @@ export function parseTiers(lines: string[]): CommissionTier[] {
 /** Reads back as the Playbook stores it. */
 export function describeTiers(tiers: CommissionTier[]): string {
   if (tiers.length === 0) return "no volume tiers";
-  return tiers.map((t) => `€${t.amount}/sale from ${t.minOrders}`).join(", ");
+  return tiers.map((t) => `$${t.amount}/sale from ${t.minOrders}`).join(", ");
 }
 
 export type DiscountType = "none" | "percent" | "fixed";
 
-/** The offer the creator's audience gets — a coupon code, in percent or euros off. */
+/** The offer the creator's audience gets — a coupon code, in percent or dollars off. */
 export interface Discount {
   type: DiscountType;
   value: number;
@@ -115,7 +117,7 @@ export const NO_DISCOUNT: Discount = { type: "none", value: 0 };
  * What one order costs you in audience discount.
  *
  * A discount code isn't a marketing freebie: cost of goods doesn't change, so every
- * euro off the price is a euro straight off your margin — the same as paying it out.
+ * dollar off the price is a dollar straight off your margin — the same as paying it out.
  */
 export function discountPerOrder(discount: Discount, aov: number): number {
   if (discount.type === "none" || discount.value <= 0) return 0;
@@ -173,8 +175,8 @@ export function grossProfitPerOrder(e: Economics): number {
 /**
  * The most you can pay in *fixed fee* before the deal stops making money.
  *
- * Commission and gifted product both come off the top: every euro of expected CPA and
- * every euro of product cost is a euro less of fee you can afford. Clamped at zero —
+ * Commission and gifted product both come off the top: every dollar of expected CPA and
+ * every dollar of product cost is a dollar less of fee you can afford. Clamped at zero —
  * when those alone exceed the margin, the honest answer is that there's no room for a
  * fee at all, not a negative one.
  */
@@ -194,7 +196,7 @@ export function breakevenFee(params: {
 /**
  * What the deal earns — or loses — when the fixed fee is zero.
  *
- * `breakevenFee` floors at zero, which quietly turns "this loses €32" into "you can't
+ * `breakevenFee` floors at zero, which quietly turns "this loses $32" into "you can't
  * afford a fee", and a gifted deal then looks automatically safe. It isn't: a gifted
  * product is a real cost paid up front against orders that may never arrive. This is
  * the same arithmetic without the floor, so a loss stays visible as a loss.
@@ -220,7 +222,7 @@ export function marginAtZeroFee(params: {
 }
 
 /**
- * How much a commission shrinks the affordable fee, in euros. This is the number the
+ * How much a commission shrinks the affordable fee, in dollars. This is the number the
  * fixed-fee negotiation has to move by — the "you're already earning on every sale"
  * argument, quantified.
  */
@@ -275,10 +277,10 @@ export type DealStructure = "paid" | "gifted_plus_commission" | "not_viable";
 /**
  * Whether a fixed fee is worth paying at all.
  *
- * On a small channel the affordable fee can land at a number — €22 — where the admin
+ * On a small channel the affordable fee can land at a number — $22 — where the admin
  * of a paid deal (contract, invoice, payment run, chasing) costs more than the fee
  * buys. Below that floor the sane structure is product plus commission: the creator
- * still earns, from sales rather than a token payment, and nobody processes a €22
+ * still earns, from sales rather than a token payment, and nobody processes a $22
  * invoice. With nothing left to give at all, the deal isn't viable.
  */
 export function suggestStructure(params: {
@@ -297,7 +299,7 @@ export function suggestStructure(params: {
     return {
       structure: "gifted_plus_commission",
       reason:
-        `A fee of about €${Math.round(affordableFee)} costs more to administer than it's ` +
+        `A fee of about $${Math.round(affordableFee)} costs more to administer than it's ` +
         `worth. Offer the product and commission instead — the creator still earns, from sales.`,
     };
   }
@@ -314,14 +316,14 @@ export function describeDiscount(discount: Discount): string {
   if (discount.type === "none" || discount.value <= 0) return "no discount code";
   return discount.type === "percent"
     ? `${discount.value}% off for their audience`
-    : `€${discount.value} off for their audience`;
+    : `$${discount.value} off for their audience`;
 }
 
 /** Plain-language form, for prompts and UI. */
 export function describeCommission(commission: Commission): string {
   if (commission.type === "none" || commission.value <= 0) return "no commission";
   if (commission.type === "percent") return `${commission.value}% commission per sale`;
-  return `€${commission.value} per order`;
+  return `$${commission.value} per order`;
 }
 
 /**
@@ -403,7 +405,7 @@ export function expectedOrdersFrom(params: {
  * What the creator should expect to earn, and whether the tiers above them are
  * realistically in reach.
  *
- * The reachability check matters: dangling "€40/sale once you pass 50" at a channel
+ * The reachability check matters: dangling "$40/sale once you pass 50" at a channel
  * that will drive two orders is a promise that reads well and pays nothing, which is
  * how a first collaboration becomes a last one.
  */

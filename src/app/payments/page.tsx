@@ -6,7 +6,7 @@ import { getAllPaymentItems } from "@/lib/fulfillment";
 import { filterPayments, paymentTotals } from "@/lib/payment-filters";
 import { PAYMENT_STATUS_LABEL, type PaymentStatus } from "@/lib/fulfillment-types";
 import { buildQuery, nextDir, sortBy, type SortDir } from "@/lib/table-sort";
-import { euro } from "@/lib/format";
+import { money } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -46,10 +46,10 @@ export default async function PaymentsPage({
   const creators = [...new Set(all.map((p) => p.creator))].sort((a, b) => a.localeCompare(b));
 
   const kpis = [
-    { label: "Ready to approve", value: euro(totals.approvable), tone: "text-amber-600" },
-    { label: "Approved, unpaid", value: euro(totals.approved), tone: "text-sky-600" },
-    { label: "Not yet earned", value: euro(totals.pending), tone: "text-slate-900" },
-    { label: "Paid", value: euro(totals.paid), tone: "text-emerald-600" },
+    { label: "Ready to approve", value: money(totals.approvable), tone: "text-amber-600" },
+    { label: "Approved, unpaid", value: money(totals.approved), tone: "text-sky-600" },
+    { label: "Not yet earned", value: money(totals.pending), tone: "text-slate-900" },
+    { label: "Paid", value: money(totals.paid), tone: "text-emerald-600" },
   ];
 
   const filtered = Boolean(status || creator || from || to);
@@ -139,7 +139,7 @@ export default async function PaymentsPage({
 
           {filtered && (
             <p className="text-xs text-slate-500">
-              Showing {rows.length} of {all.length} payments · {euro(totals.total)} total. The
+              Showing {rows.length} of {all.length} payments · {money(totals.total)} total. The
               export follows this filter.
             </p>
           )}

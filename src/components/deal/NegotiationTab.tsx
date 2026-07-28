@@ -1,5 +1,5 @@
 import type { Deal, Message, CopilotReco } from "@/lib/types";
-import { euro } from "@/lib/format";
+import { money } from "@/lib/format";
 import { getSetting } from "@/lib/db";
 import { buildRounds, currentGap } from "@/lib/negotiation";
 import CopilotCard from "./CopilotCard";
@@ -100,7 +100,7 @@ export default function NegotiationTab({ deal, messages }: { deal: Deal; message
               <div key={i} className="flex gap-3 py-2 text-xs first:pt-0">
                 <span className="font-tabular text-slate-400 w-6 pt-0.5">{r.round}</span>
                 <div>
-                  <span className="font-tabular font-semibold text-slate-900">{euro(r.amount)}</span>{" "}
+                  <span className="font-tabular font-semibold text-slate-900">{money(r.amount)}</span>{" "}
                   <span className="text-slate-600">— {r.label}</span>
                   {r.detail && <span className="text-slate-400"> · {r.detail}</span>}
                 </div>
@@ -110,7 +110,7 @@ export default function NegotiationTab({ deal, messages }: { deal: Deal; message
           {gap != null && (
             <div className="mt-2.5 flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
               <span className="text-xs text-slate-600">Current gap</span>
-              <span className="font-tabular font-semibold text-sm text-slate-900">{euro(gap)}</span>
+              <span className="font-tabular font-semibold text-sm text-slate-900">{money(gap)}</span>
             </div>
           )}
         </div>
@@ -149,7 +149,7 @@ export default function NegotiationTab({ deal, messages }: { deal: Deal; message
             <p className="text-xs font-bold text-amber-700 mb-1">Guardrail</p>
             <p className="text-xs text-slate-600">
               Walk-away is{" "}
-              <span className="font-tabular font-semibold text-slate-900">{euro(deal.walkaway)}</span>.
+              <span className="font-tabular font-semibold text-slate-900">{money(deal.walkaway)}</span>.
               Counterpart warns before any draft that crosses it, and won&apos;t draft above it.
             </p>
           </div>

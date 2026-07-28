@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Deal } from "@/lib/types";
 import type { DealPhase } from "@/lib/deal-phase";
 import { PLATFORM_META, dealPlatforms } from "@/lib/types";
-import { euro, views as fmtViews } from "@/lib/format";
+import { money, views as fmtViews } from "@/lib/format";
 
 const AVATAR_COLORS = [
   "bg-indigo-100 text-indigo-700",
@@ -53,22 +53,22 @@ export default function DealCard({ deal, phase }: { deal: Deal; phase?: DealPhas
   const rows: { label: string; value: string; accent?: "warn" | "good" }[] = [];
   if (deal.stage === "lead" || deal.stage === "contacted") {
     if (deal.avg_views != null) rows.push({ label: "Avg views:", value: fmtViews(deal.avg_views) });
-    if (deal.current_ask != null) rows.push({ label: "Their ask:", value: euro(deal.current_ask) });
+    if (deal.current_ask != null) rows.push({ label: "Their ask:", value: money(deal.current_ask) });
   } else if (deal.stage === "analyzing") {
-    if (deal.current_ask != null) rows.push({ label: "Ask:", value: euro(deal.current_ask) });
-    if (deal.target != null) rows.push({ label: "Est. value:", value: euro(deal.target) });
+    if (deal.current_ask != null) rows.push({ label: "Ask:", value: money(deal.current_ask) });
+    if (deal.target != null) rows.push({ label: "Est. value:", value: money(deal.target) });
   } else if (deal.stage === "offer_sent") {
-    if (deal.current_offer != null) rows.push({ label: "Our offer:", value: euro(deal.current_offer) });
-    if (deal.current_ask != null) rows.push({ label: "Their ask:", value: euro(deal.current_ask) });
+    if (deal.current_offer != null) rows.push({ label: "Our offer:", value: money(deal.current_offer) });
+    if (deal.current_ask != null) rows.push({ label: "Their ask:", value: money(deal.current_ask) });
   } else if (deal.stage === "negotiating") {
-    if (deal.current_ask != null) rows.push({ label: "Current ask:", value: euro(deal.current_ask) });
-    if (deal.current_offer != null) rows.push({ label: "Our offer:", value: euro(deal.current_offer) });
+    if (deal.current_ask != null) rows.push({ label: "Current ask:", value: money(deal.current_ask) });
+    if (deal.current_offer != null) rows.push({ label: "Our offer:", value: money(deal.current_offer) });
     if (deal.current_ask != null && deal.current_offer != null)
-      rows.push({ label: "Gap:", value: euro(deal.current_ask - deal.current_offer), accent: "warn" });
+      rows.push({ label: "Gap:", value: money(deal.current_ask - deal.current_offer), accent: "warn" });
   } else if (deal.stage === "agreed" || deal.stage === "completed") {
-    if (deal.agreed_price != null) rows.push({ label: "Final:", value: euro(deal.agreed_price) });
+    if (deal.agreed_price != null) rows.push({ label: "Final:", value: money(deal.agreed_price) });
     if (deal.first_ask != null && deal.agreed_price != null)
-      rows.push({ label: "Saved:", value: euro(deal.first_ask - deal.agreed_price), accent: "good" });
+      rows.push({ label: "Saved:", value: money(deal.first_ask - deal.agreed_price), accent: "good" });
   }
 
   return (

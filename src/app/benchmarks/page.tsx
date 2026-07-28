@@ -5,7 +5,7 @@ import { getAllContentItems } from "@/lib/fulfillment";
 import { benchmarkRows, platformAverages } from "@/lib/benchmark-rows";
 import { outcomes } from "@/lib/outcomes";
 import { PLATFORM_META } from "@/lib/types";
-import { euro, euroCpm, views as fmtViews } from "@/lib/format";
+import { money, moneyCpm, views as fmtViews } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +55,7 @@ export default function BenchmarksPage() {
                         <span className="font-tabular text-slate-900">{r.count}</span>
                         {r.value > 0 && (
                           <span className="font-tabular text-xs text-slate-400 w-20 text-right">
-                            {euro(r.value)} asked
+                            {money(r.value)} asked
                           </span>
                         )}
                       </div>
@@ -94,7 +94,7 @@ export default function BenchmarksPage() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-500">Your real avg CPM</span>
-                      <span className="font-tabular font-semibold text-slate-900">{euroCpm(c.avgActualCpm)}</span>
+                      <span className="font-tabular font-semibold text-slate-900">{moneyCpm(c.avgActualCpm)}</span>
                     </div>
                     {c.avgDelivery != null && (
                       <div className="flex justify-between text-sm">
@@ -158,13 +158,13 @@ export default function BenchmarksPage() {
                           )}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right font-tabular">{euro(r.price)}</td>
+                      <td className="px-4 py-3 text-right font-tabular">{money(r.price)}</td>
                       <td className="px-4 py-3 text-right font-tabular text-slate-500">
                         {r.predictedViews != null ? fmtViews(r.predictedViews) : "—"}
                       </td>
                       <td className="px-4 py-3 text-right font-tabular">{fmtViews(r.actualViews)}</td>
                       <td className="px-4 py-3 text-right font-tabular text-slate-500">
-                        {r.predictedCpm != null ? euroCpm(r.predictedCpm) : "—"}
+                        {r.predictedCpm != null ? moneyCpm(r.predictedCpm) : "—"}
                       </td>
                       <td
                         className={`px-4 py-3 text-right font-tabular font-semibold ${
@@ -175,7 +175,7 @@ export default function BenchmarksPage() {
                             : "text-slate-900"
                         }`}
                       >
-                        {euroCpm(r.actualCpm)}
+                        {moneyCpm(r.actualCpm)}
                       </td>
                       <td className="px-4 py-3 text-right font-tabular">
                         {r.roas != null ? `${r.roas.toFixed(2)}×` : "—"}
@@ -188,7 +188,7 @@ export default function BenchmarksPage() {
 
             <p className="text-xs text-slate-500 max-w-[70ch]">
               Actual CPM in green means the deal delivered at or below what you predicted (you got
-              equal or better reach per euro); amber means it under-delivered. As this table grows,
+              equal or better reach per dollar); amber means it under-delivered. As this table grows,
               the per-platform averages above become your calibrated fair-price baseline.
               {rows.some((r) => !r.isFinal) && (
                 <>

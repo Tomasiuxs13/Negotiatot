@@ -102,7 +102,7 @@ describe("benchmarkRows", () => {
         item({ id: 2, platform: "tiktok", actual_views: 140_000 }),
       ]
     );
-    // The bug this guards: one €14.00 CPM YouTube row for all 200k views.
+    // The bug this guards: one $14.00 CPM YouTube row for all 200k views.
     expect(rows.every((r) => r.price < 2800)).toBe(true);
     expect(rows.reduce((s, r) => s + r.price, 0)).toBeCloseTo(2800);
   });
@@ -176,7 +176,7 @@ describe("platformAverages", () => {
     expect(ig.avgRoas).toBeCloseTo(2);
 
     const yt = averages.find((a) => a.platform === "youtube")!;
-    expect(yt.avgActualCpm).toBeCloseTo(20); // half of €2,000 over 50k views
+    expect(yt.avgActualCpm).toBeCloseTo(20); // half of $2,000 over 50k views
   });
 });
 

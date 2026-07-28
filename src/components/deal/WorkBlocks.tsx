@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import type { ContentItem, PaymentItem, Shipment, ContentStatus, PaymentTrigger } from "@/lib/fulfillment-types";
 import { CONTENT_STATUS_FLOW, CONTENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL, pendingReason } from "@/lib/fulfillment-types";
 import { isOverdue } from "@/lib/fulfillment-rules";
-import { euro } from "@/lib/format";
+import { money } from "@/lib/format";
 import {
   addContentItemAction,
   addPaymentItemAction,
@@ -225,7 +225,7 @@ export function ShipmentsBlock({ dealId, shipments }: { dealId: number; shipment
               </span>
               <span className="text-sm text-slate-800 flex-1">
                 {s.product}
-                {s.value != null && <span className="text-slate-400 font-tabular"> · {euro(s.value)}</span>}
+                {s.value != null && <span className="text-slate-400 font-tabular"> · {money(s.value)}</span>}
               </span>
               {s.status !== "delivered" && (
                 <button
@@ -313,7 +313,7 @@ export function ShipmentsBlock({ dealId, shipments }: { dealId: number; shipment
           <input
             className={`${inputClass} w-24 text-right font-tabular`}
             type="number"
-            placeholder="value €"
+            placeholder="value $"
             value={draft.value}
             onChange={(e) => setDraft({ ...draft, value: e.target.value })}
           />
@@ -367,7 +367,7 @@ export function PaymentItemsBlock({ dealId, payments }: { dealId: number; paymen
         <h3 className="font-headline text-sm font-semibold text-slate-900">
           Payments{" "}
           <span className="font-normal text-slate-400 font-tabular">
-            {euro(unpaid)} outstanding of {euro(total)}
+            {money(unpaid)} outstanding of {money(total)}
           </span>
         </h3>
         {!adding && (
@@ -393,7 +393,7 @@ export function PaymentItemsBlock({ dealId, payments }: { dealId: number; paymen
               {p.description}
               <span className="text-xs text-slate-400"> · {PAYMENT_TRIGGER_LABEL[p.trigger]}</span>
             </span>
-            <span className="font-tabular text-sm font-semibold text-slate-900">{euro(p.amount)}</span>
+            <span className="font-tabular text-sm font-semibold text-slate-900">{money(p.amount)}</span>
             {p.status === "approvable" && (
               <button
                 onClick={() =>
@@ -463,7 +463,7 @@ export function PaymentItemsBlock({ dealId, payments }: { dealId: number; paymen
           <input
             className={`${inputClass} w-24 text-right font-tabular`}
             type="number"
-            placeholder="€"
+            placeholder="$"
             value={draft.amount}
             onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
           />

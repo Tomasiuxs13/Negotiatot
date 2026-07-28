@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { euro } from "@/lib/format";
+import { money } from "@/lib/format";
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: "space_dashboard" },
@@ -89,8 +89,8 @@ export default function Sidebar({
         </div>
         <div className="px-2">
           <div className="flex justify-between text-xs mb-1 font-tabular">
-            <span className="text-white">{euro(committed)}</span>
-            <span className="text-slate-400">{euro(cap)}</span>
+            <span className="text-white">{money(committed)}</span>
+            <span className="text-slate-400">{money(cap)}</span>
           </div>
           <div className="w-full bg-slate-800 rounded-full h-1.5">
             <div className="bg-brand h-1.5 rounded-full" style={{ width: `${pct}%` }} />

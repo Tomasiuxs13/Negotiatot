@@ -19,8 +19,8 @@ describe("deliverableCount", () => {
   });
 
   it("ignores numbers that aren't piece counts", () => {
-    // The €500 must not be read as five hundred videos.
-    expect(deliverableCount({ text: "€500 for the bundle" })).toBe(1);
+    // The $500 must not be read as five hundred videos.
+    expect(deliverableCount({ text: "$500 for the bundle" })).toBe(1);
   });
 
   it("falls back to the Playbook bundle the draft will actually propose", () => {
