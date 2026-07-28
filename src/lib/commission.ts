@@ -72,11 +72,21 @@ export function nextTier(
   };
 }
 
-/** Parses "50: 40" lines from the Playbook into a sorted ladder. */
+/**
+ * Parses "50: 40" rungs from the Playbook into a sorted ladder.
+ *
+ * Rungs are accepted one per line or comma-separated on one line, with or without a
+ * currency symbol. Being strict here was a silent failure: a ladder typed on a single
+ * line parsed to nothing, and the unparsed text still reached the model, which read
+ * "0:20, 15:30" as percentages and invented a commission structure from it.
+ */
 export function parseTiers(lines: string[]): CommissionTier[] {
   return lines
-    .map((line) => {
-      const [from, amount] = line.split(":").map((part) => Number(part.trim()));
+    .flatMap((line) => line.split(","))
+    .map((entry) => {
+      const [from, amount] = entry
+        .split(":")
+        .map((part) => Number(part.replace(/[€$£\s]/g, "").trim()));
       return Number.isFinite(from) && Number.isFinite(amount)
         ? { minOrders: from, amount }
         : null;
@@ -292,6 +302,44 @@ export function describeCommission(commission: Commission): string {
   if (commission.type === "none" || commission.value <= 0) return "no commission";
   if (commission.type === "percent") return `${commission.value}% commission per sale`;
   return `€${commission.value} per order`;
+}
+
+/**
+ * The commission and discount actually in play: whatever the deal specifies, else the
+ * Playbook's standard offer. Without this fallback a deal created before the fields
+ * existed carried no commission at all, and the engine priced it as a flat-fee deal
+ * while the Playbook said every creator earns per sale.
+ */
+export function resolveOffer(
+  deal: {
+    commission_type?: string | null;
+    commission_value?: number | null;
+    discount_type?: string | null;
+    discount_value?: number | null;
+  },
+  econ: Record<string, number> = {}
+): { commission: Commission; discount: Discount } {
+  const dealCom = dealCommission(deal);
+  const dealDisc = dealDiscount(deal);
+
+  const fallbackCommission: Commission =
+    econ.commissionPerOrder > 0
+      ? { type: "per_order", value: econ.commissionPerOrder }
+      : econ.commissionPercent > 0
+        ? { type: "percent", value: econ.commissionPercent }
+        : NO_COMMISSION;
+
+  const fallbackDiscount: Discount =
+    econ.discountFixed > 0
+      ? { type: "fixed", value: econ.discountFixed }
+      : econ.discountPercent > 0
+        ? { type: "percent", value: econ.discountPercent }
+        : NO_DISCOUNT;
+
+  return {
+    commission: dealCom.type === "none" ? fallbackCommission : dealCom,
+    discount: dealDisc.type === "none" ? fallbackDiscount : dealDisc,
+  };
 }
 
 /** Reads an audience discount off a deal row, tolerating the older schema. */

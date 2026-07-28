@@ -19,6 +19,7 @@ import {
   nextTier,
   parseTiers,
   describeTiers,
+  resolveOffer,
   type Commission,
   type CommissionTier,
   type Discount,
@@ -349,5 +350,67 @@ describe("volume tiers", () => {
     expect(parsed).toEqual(tiers);
     expect(describeTiers(parsed)).toBe("€20/sale from 0, €30/sale from 25, €40/sale from 50");
     expect(describeTiers([])).toBe("no volume tiers");
+  });
+});
+
+describe("parseTiers robustness", () => {
+  it("accepts a whole ladder typed on one line", () => {
+    // Exactly how it was entered in the Playbook — and it silently parsed to nothing,
+    // leaving the model to guess the structure from the raw text.
+    expect(parseTiers(["0:20, 15:30, 30:40 "])).toEqual([
+      { minOrders: 0, amount: 20 },
+      { minOrders: 15, amount: 30 },
+      { minOrders: 30, amount: 40 },
+    ]);
+  });
+
+  it("tolerates currency symbols and loose spacing", () => {
+    expect(parseTiers(["0: €20", " 25 : $30 "])).toEqual([
+      { minOrders: 0, amount: 20 },
+      { minOrders: 25, amount: 30 },
+    ]);
+  });
+
+  it("still reads one rung per line", () => {
+    expect(parseTiers(["0: 20", "25: 30"])).toHaveLength(2);
+  });
+
+  it("drops entries it cannot read rather than inventing them", () => {
+    expect(parseTiers(["nonsense", "0: 20"])).toEqual([{ minOrders: 0, amount: 20 }]);
+  });
+});
+
+describe("resolveOffer", () => {
+  const econ = { commissionPerOrder: 20, commissionPercent: 0, discountFixed: 0, discountPercent: 0 };
+
+  it("falls back to the Playbook's standard offer when the deal says nothing", () => {
+    // The Sigcruiser case: €20/sale was set in the Playbook but never reached the model,
+    // because the deal predated the field and carried no commission of its own.
+    const { commission } = resolveOffer({}, econ);
+    expect(commission).toEqual({ type: "per_order", value: 20 });
+  });
+
+  it("prefers a per-order CPA over a percentage when both are configured", () => {
+    const { commission } = resolveOffer({}, { ...econ, commissionPercent: 15 });
+    expect(commission.type).toBe("per_order");
+  });
+
+  it("lets the deal override the standard offer", () => {
+    const { commission } = resolveOffer(
+      { commission_type: "percent", commission_value: 12 },
+      econ
+    );
+    expect(commission).toEqual({ type: "percent", value: 12 });
+  });
+
+  it("falls back for the audience discount too", () => {
+    const { discount } = resolveOffer({}, { ...econ, discountFixed: 20 });
+    expect(discount).toEqual({ type: "fixed", value: 20 });
+  });
+
+  it("stays empty when neither deal nor Playbook offers anything", () => {
+    const { commission, discount } = resolveOffer({}, {});
+    expect(commission).toEqual(NO_COMMISSION);
+    expect(discount).toEqual(NO_DISCOUNT);
   });
 });

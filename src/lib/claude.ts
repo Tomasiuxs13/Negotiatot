@@ -3,12 +3,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Deal, DealAnalysis, Message } from "./types";
 import type { PriorDeal } from "./partners";
 import {
-  dealCommission,
-  dealDiscount,
   describeCommission,
   describeDiscount,
   describeTiers,
   parseTiers,
+  resolveOffer,
 } from "./commission";
 
 export const MODEL = "claude-opus-4-8";
@@ -48,7 +47,8 @@ function tierGuidance(style: Record<string, unknown> | null): string {
   const tiers = Array.isArray(raw) ? parseTiers(raw.map(String)) : [];
   if (tiers.length === 0) return "";
   return [
-    `Commission volume tiers: ${describeTiers(tiers)}.`,
+    `Commission volume tiers (EUROS PER SALE — these are flat amounts, never percentages):`,
+    describeTiers(tiers) + ".",
     `The volume reached sets one rate paid on EVERY sale, so crossing a rung lifts the`,
     `creator's whole payout, not just later sales. Use this when they push on the fixed`,
     `fee: a higher tier costs nothing unless they actually sell, so it is the cheapest`,
@@ -74,7 +74,11 @@ function playbookBlock(ctx: PlaybookContext): string {
     `"minIntegrations" is the fewest pieces of content worth doing on that platform — a one-off costs the same to set up as a bundle. If the creator offers fewer, negotiate up to that number before conceding on price: volume is your cheapest concession and the per-video rate improves. Say the bundle you want in the draft.`,
     `Unit economics (for breakeven math): ${JSON.stringify(ctx.unitEconomics)}`,
     `Work orders out along this chain and show it: views × linkCtr% = clicks, clicks × orderConversion% = orders, orders × aov × grossMargin% × repeatFactor = gross profit. Both rates are given — do not invent your own click-through or conversion assumption.`,
-    `Negotiation style & concession rules: ${JSON.stringify(ctx.negotiationStyle)}`,
+    `Negotiation style & concession rules: ${JSON.stringify(
+      Object.fromEntries(
+        Object.entries(ctx.negotiationStyle ?? {}).filter(([k]) => k !== "commissionTiers")
+      )
+    )}`,
     tierGuidance(ctx.negotiationStyle),
   ]
     .filter(Boolean)
@@ -86,9 +90,8 @@ function playbookBlock(ctx: PlaybookContext): string {
  * the fixed fee against the full margin and the deal quietly overspends by whatever the
  * commission turns out to cost.
  */
-function commissionBlock(deal: Deal): string {
-  const commission = dealCommission(deal);
-  const discount = dealDiscount(deal);
+function commissionBlock(deal: Deal, econ: Record<string, number> | null): string {
+  const { commission, discount } = resolveOffer(deal, econ ?? {});
   if (commission.type === "none" && discount.type === "none") return "";
 
   const lines = [``, `## Performance side of this deal`];
@@ -466,7 +469,7 @@ export async function analyzeDeal(params: {
   if (params.reportText) facts.push(`Analytics report (text):\n"""${params.reportText}"""`);
   const history = historyBlock(params.history, deal.creator);
   if (history) facts.push(history);
-  const commission = commissionBlock(deal);
+  const commission = commissionBlock(deal, playbook.unitEconomics as Record<string, number>);
   if (commission) facts.push(commission);
   const structure = structureBlock(playbook.unitEconomics);
   if (structure) facts.push(structure);
@@ -691,7 +694,7 @@ export async function recommendNextMove(params: {
     `Manager's numbers — anchor €${deal.anchor ?? "?"}, target €${deal.target ?? "?"}, walk-away €${deal.walkaway ?? "?"}, breakeven €${deal.breakeven ?? "?"}`,
     `Avg views: ${deal.avg_views ?? "unknown"} · engagement: ${deal.engagement_rate ?? "unknown"}%`,
     analysis ? `Prior analysis summary: ${analysis.verdictSummary}` : "",
-    commissionBlock(deal),
+    commissionBlock(deal, playbook.unitEconomics as Record<string, number>),
     structureBlock(playbook.unitEconomics),
     historyBlock(params.history, deal.creator),
     ``,
