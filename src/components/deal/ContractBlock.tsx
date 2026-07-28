@@ -57,6 +57,15 @@ export default function ContractBlock({
 
   const confirm = () => {
     if (!contract || !draft) return;
+    // A re-confirmation rebuilds the whole schedule — that deserves a pause even with
+    // the server refusing the genuinely dangerous cases.
+    if (
+      contract.status === "confirmed" &&
+      !window.confirm(
+        "Re-confirming replaces every generated content item, payment, and shipment with the terms shown. Continue?"
+      )
+    )
+      return;
     setError(null);
     startTransition(async () => {
       const res = await confirmContractAction(contract.id, draft, signedAt || null);
@@ -129,7 +138,8 @@ export default function ContractBlock({
         </h3>
         <p className="text-xs text-slate-500 mb-4 max-w-[70ch]">
           Check what was extracted, fix anything wrong, then confirm — this creates the content
-          items, payments, and shipment. Re-confirming replaces previously generated items.
+          items, payments, and shipment. Re-confirming replaces all of them; it will refuse if
+          any payment is already approved or paid, or any content has results logged.
         </p>
 
         {/* Deliverables */}

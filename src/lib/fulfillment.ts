@@ -221,6 +221,12 @@ export function getPaymentItems(dealId: number): PaymentItem[] {
     .all(dealId) as PaymentItem[];
 }
 
+export function getPaymentItem(id: number): PaymentItem | undefined {
+  return db.prepare("SELECT * FROM payment_items WHERE id = ?").get(id) as
+    | PaymentItem
+    | undefined;
+}
+
 export function getAllPaymentItems(): (PaymentItem & { creator: string })[] {
   return db
     .prepare(
@@ -270,6 +276,12 @@ export function updatePaymentItem(
     params.push(fields.status);
     if (fields.status === "approved") sets.push("approved_at = datetime('now')");
     if (fields.status === "paid") sets.push("paid_at = datetime('now')");
+    // Leaving a settled state must take its timestamp along. An undone approval that
+    // kept approved_at exported to accounting as "Ready to approve" with a June
+    // settlement date — the row claimed both things at once.
+    if (fields.status === "approvable" || fields.status === "pending") {
+      sets.push("approved_at = NULL", "paid_at = NULL");
+    }
   }
   if (fields.amount !== undefined) {
     sets.push("amount = ?");

@@ -339,11 +339,21 @@ const PAYMENT_TONE: Record<string, string> = {
 export function PaymentItemsBlock({ dealId, payments }: { dealId: number; payments: PaymentItem[] }) {
   const [isPending, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ description: string; amount: string; trigger: PaymentTrigger }>({
     description: "",
     amount: "",
     trigger: "on_verification",
   });
+
+  /** Every payment action goes through here so a server-side refusal is shown, not eaten. */
+  const runPayment = (action: () => Promise<{ error?: string }>) => {
+    setActionError(null);
+    startTransition(async () => {
+      const result = await action();
+      if (result?.error) setActionError(result.error);
+    });
+  };
 
   const add = () => {
     if (!draft.description.trim() || !draft.amount) return;
@@ -383,6 +393,8 @@ export function PaymentItemsBlock({ dealId, payments }: { dealId: number; paymen
         </p>
       )}
 
+      {actionError && <p className="text-xs text-red-600 mb-2">{actionError}</p>}
+
       <div className="divide-y divide-slate-100">
         {payments.map((p) => (
           <div key={p.id} className="flex items-center gap-3 py-2.5">
@@ -396,11 +408,7 @@ export function PaymentItemsBlock({ dealId, payments }: { dealId: number; paymen
             <span className="font-tabular text-sm font-semibold text-slate-900">{money(p.amount)}</span>
             {p.status === "approvable" && (
               <button
-                onClick={() =>
-                  startTransition(async () => {
-                    await setPaymentStatusAction(p.id, dealId, "approved");
-                  })
-                }
+                onClick={() => runPayment(() => setPaymentStatusAction(p.id, dealId, "approved"))}
                 disabled={isPending}
                 className="text-xs font-medium text-brand-dark hover:underline disabled:opacity-50"
               >
@@ -409,11 +417,7 @@ export function PaymentItemsBlock({ dealId, payments }: { dealId: number; paymen
             )}
             {p.status === "approved" && (
               <button
-                onClick={() =>
-                  startTransition(async () => {
-                    await setPaymentStatusAction(p.id, dealId, "paid");
-                  })
-                }
+                onClick={() => runPayment(() => setPaymentStatusAction(p.id, dealId, "paid"))}
                 disabled={isPending}
                 className="text-xs font-medium text-brand-dark hover:underline disabled:opacity-50"
               >
@@ -425,11 +429,7 @@ export function PaymentItemsBlock({ dealId, payments }: { dealId: number; paymen
             )}
             {p.status === "approved" && (
               <button
-                onClick={() =>
-                  startTransition(async () => {
-                    await setPaymentStatusAction(p.id, dealId, "approvable");
-                  })
-                }
+                onClick={() => runPayment(() => setPaymentStatusAction(p.id, dealId, "approvable"))}
                 disabled={isPending}
                 className="text-xs text-slate-400 hover:text-slate-700 disabled:opacity-50"
                 title="Undo approval"
@@ -437,16 +437,22 @@ export function PaymentItemsBlock({ dealId, payments }: { dealId: number; paymen
                 undo
               </button>
             )}
-            <button
-              onClick={() =>
-                startTransition(async () => {
-                  await deletePaymentItemAction(p.id, dealId);
-                })
-              }
-              className="text-slate-300 hover:text-red-600"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>close</span>
-            </button>
+            {/* Deleting a payment removes money from every total and export — it gets a
+                confirm, and paid rows are refused server-side regardless. */}
+            {p.status !== "paid" && (
+              <button
+                onClick={() => {
+                  if (!window.confirm(`Delete the ${money(p.amount)} payment "${p.description}"?`))
+                    return;
+                  runPayment(() => deletePaymentItemAction(p.id, dealId));
+                }}
+                disabled={isPending}
+                aria-label={`Delete payment ${p.description}`}
+                className="text-slate-300 hover:text-red-600 disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>close</span>
+              </button>
+            )}
           </div>
         ))}
       </div>

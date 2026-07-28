@@ -5,6 +5,8 @@ import { after } from "next/server";
 import sharp from "sharp";
 import { getDeal, getSetting, logUsage, updateDeal } from "@/lib/db";
 import { hasApiKey, parseContract, MODEL, type ImageMediaType } from "@/lib/claude";
+import { money } from "@/lib/format";
+import { canTransition, isPaymentStatus } from "@/lib/payment-transitions";
 import { saveFile, deleteFile } from "@/lib/files";
 import {
   confirmContract,
@@ -18,6 +20,8 @@ import {
   getContentItems,
   getContract,
   getContractById,
+  getPaymentItem,
+  getPaymentItems,
   getShipments,
   parseTerms,
   refreshPaymentStatuses,
@@ -145,9 +149,43 @@ export async function confirmContractAction(
 
   const dealId = contract.deal_id;
 
+  // Re-confirming replaces everything generated before, so it must refuse when any of
+  // it has become real. Without these guards, a second Confirm click duplicated the
+  // entire payment schedule (the delete loop below covered content and shipments but
+  // never payments — $6,000 owed became $12,000), and re-confirming a running deal
+  // silently destroyed logged actuals.
+  const existingPayments = getPaymentItems(dealId);
+  const settled = existingPayments.filter((p) => p.status === "paid" || p.status === "approved");
+  if (settled.length > 0) {
+    const total = settled.reduce((sum, p) => sum + p.amount, 0);
+    return {
+      error:
+        `${money(total)} on this deal is already approved or paid. Re-confirming would ` +
+        `replace the payment schedule those rows belong to. Undo the approvals first, or ` +
+        `adjust the payment items by hand instead of re-confirming.`,
+    };
+  }
+  const measured = getContentItems(dealId).filter(
+    (c) =>
+      c.actual_views != null ||
+      c.actual_clicks != null ||
+      c.actual_orders != null ||
+      c.actual_revenue != null ||
+      c.posted_url != null
+  );
+  if (measured.length > 0) {
+    return {
+      error:
+        `${measured.length} content item${measured.length === 1 ? " has" : "s have"} posted ` +
+        `links or logged results. Re-confirming would delete them and their numbers. ` +
+        `Edit the content and payment items by hand instead.`,
+    };
+  }
+
   // Replace anything generated from a previous confirmation of this contract.
   for (const item of getContentItems(dealId)) deleteContentItem(item.id);
   for (const shipment of getShipments(dealId)) deleteShipment(shipment.id);
+  for (const payment of existingPayments) deletePaymentItem(payment.id);
 
   const contentIds: number[] = [];
   for (const deliverable of terms.deliverables ?? []) {
@@ -202,7 +240,9 @@ export async function confirmContractAction(
 
   confirmContract(contractId, terms, signedAt);
   updateDeal(dealId, {
-    stage: "agreed",
+    // Re-confirming a finished deal must not reopen it — "completed" is an outcome,
+    // not a workflow position.
+    stage: deal.stage === "completed" ? "completed" : "agreed",
     deal_type: terms.product ? (paymentCount > 0 ? "gifted_plus_paid" : "gifted") : "paid",
     agreed_price: terms.totalFee ?? deal.agreed_price ?? deal.current_offer,
     status_label: "Contract confirmed",
@@ -270,6 +310,17 @@ export async function setPaymentStatusAction(
   dealId: number,
   status: PaymentStatus
 ) {
+  // A server action is a network endpoint: the item may be gone, belong to another
+  // deal, or the status may be any string a stale client sends. The type annotation
+  // enforces none of that at runtime — these checks are the actual guarantee.
+  const item = getPaymentItem(itemId);
+  if (!item) return { error: "Payment not found — it may have been deleted." };
+  if (item.deal_id !== dealId) return { error: "Payment belongs to a different deal." };
+  if (!isPaymentStatus(status)) return { error: "Not a valid payment status." };
+
+  const allowed = canTransition(item.status, status);
+  if (!allowed.ok) return { error: allowed.reason };
+
   updatePaymentItem(itemId, { status });
   refresh(dealId);
   return {};
@@ -297,6 +348,14 @@ export async function addPaymentItemAction(
 }
 
 export async function deletePaymentItemAction(itemId: number, dealId: number) {
+  const item = getPaymentItem(itemId);
+  if (!item) return { error: "Payment not found — it may already be deleted." };
+  if (item.deal_id !== dealId) return { error: "Payment belongs to a different deal." };
+  // A paid row is settled history: deleting it silently removes real money from every
+  // total and export with no audit trail. Correcting one is a manual, deliberate act.
+  if (item.status === "paid") {
+    return { error: "This payment is already paid — a settled payment can't be deleted." };
+  }
   deletePaymentItem(itemId);
   refresh(dealId);
   return {};

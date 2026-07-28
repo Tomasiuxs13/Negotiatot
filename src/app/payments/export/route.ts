@@ -2,9 +2,19 @@ import { getAllPaymentItems } from "@/lib/fulfillment";
 import { PAYMENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL } from "@/lib/fulfillment-types";
 import { filterPayments } from "@/lib/payment-filters";
 
-/** Escapes a value for CSV: quotes it and doubles any inner quotes. */
+/**
+ * Escapes a value for CSV: quotes it, doubles inner quotes, and defuses formulas.
+ *
+ * Partner names and payment descriptions are free text (typed at intake, or parsed out
+ * of a contract by the model), and this file is opened in Excel by whoever pays the
+ * invoices. A value starting with = + - @ or a tab is a live formula there — a partner
+ * named `=HYPERLINK(...)` would execute on the finance machine. A leading apostrophe
+ * makes Excel treat it as text; numbers pass through untouched so amounts stay sortable.
+ */
 function cell(value: unknown): string {
-  const text = value == null ? "" : String(value);
+  if (typeof value === "number") return `"${value}"`;
+  let text = value == null ? "" : String(value);
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
   return `"${text.replace(/"/g, '""')}"`;
 }
 

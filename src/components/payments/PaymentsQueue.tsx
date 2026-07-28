@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import type { PaymentItem } from "@/lib/fulfillment-types";
 import { PAYMENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL, pendingReason } from "@/lib/fulfillment-types";
 import { money } from "@/lib/format";
@@ -29,6 +29,16 @@ export default function PaymentsQueue({
   sortHrefs?: { creator: string; amount: string };
 }) {
   const [isPending, startTransition] = useTransition();
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  /** The action can refuse (guarded transitions) — a refusal must be visible, not eaten. */
+  const setStatus = (id: number, dealId: number, status: "approved" | "approvable" | "paid") => {
+    setActionError(null);
+    startTransition(async () => {
+      const result = await setPaymentStatusAction(id, dealId, status);
+      if (result?.error) setActionError(result.error);
+    });
+  };
 
   if (payments.length === 0) {
     return (
@@ -44,6 +54,11 @@ export default function PaymentsQueue({
 
   return (
     <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden max-w-5xl">
+      {actionError && (
+        <p className="text-xs text-red-600 px-4 py-2 border-b border-red-100 bg-red-50">
+          {actionError}
+        </p>
+      )}
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
@@ -93,11 +108,7 @@ export default function PaymentsQueue({
               <td className="px-4 py-3 text-right">
                 {p.status === "approvable" && (
                   <button
-                    onClick={() =>
-                      startTransition(async () => {
-                        await setPaymentStatusAction(p.id, p.deal_id, "approved");
-                      })
-                    }
+                    onClick={() => setStatus(p.id, p.deal_id, "approved")}
                     disabled={isPending}
                     className="bg-brand hover:bg-brand-dark text-white rounded-md py-1 px-3 text-xs font-medium transition-colors disabled:opacity-60"
                   >
@@ -107,11 +118,7 @@ export default function PaymentsQueue({
                 {p.status === "approved" && (
                   <span className="inline-flex items-center gap-2">
                     <button
-                      onClick={() =>
-                        startTransition(async () => {
-                          await setPaymentStatusAction(p.id, p.deal_id, "approvable");
-                        })
-                      }
+                      onClick={() => setStatus(p.id, p.deal_id, "approvable")}
                       disabled={isPending}
                       className="text-xs text-slate-400 hover:text-slate-700 disabled:opacity-50"
                       title="Undo approval"
@@ -119,11 +126,7 @@ export default function PaymentsQueue({
                       undo
                     </button>
                     <button
-                      onClick={() =>
-                        startTransition(async () => {
-                          await setPaymentStatusAction(p.id, p.deal_id, "paid");
-                        })
-                      }
+                      onClick={() => setStatus(p.id, p.deal_id, "paid")}
                       disabled={isPending}
                       className="border border-slate-200 hover:border-slate-400 text-slate-700 rounded-md py-1 px-3 text-xs font-medium transition-colors disabled:opacity-60"
                     >
