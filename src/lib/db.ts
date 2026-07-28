@@ -595,6 +595,7 @@ function seedIfEmpty() {
         "Performance bonus up to €300",
         "Raise price — steps ≤ 10%, never past walk-away",
       ],
+      commissionTiers: ["0: 20", "25: 30", "50: 40"],
       nonNegotiables: ["Draft approval before publish", "Net-30 payment", "Trackable link + promo code"],
     }));
   });

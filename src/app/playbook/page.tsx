@@ -23,7 +23,10 @@ export default function PlaybookPage() {
       minPaidFee: 100,
       ...(getSetting<Record<string, unknown>>("unit_economics") ?? {}),
     },
-    negotiationStyle: getSetting<Record<string, unknown>>("negotiation_style") ?? {},
+    negotiationStyle: {
+      commissionTiers: [],
+      ...(getSetting<Record<string, unknown>>("negotiation_style") ?? {}),
+    },
   };
 
   const campaigns = getCampaigns();

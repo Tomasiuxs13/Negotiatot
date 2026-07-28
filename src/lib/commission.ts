@@ -26,6 +26,71 @@ export interface Economics {
   repeatFactor?: number;
 }
 
+/** One rung of a volume ladder: from `minOrders` sales, each sale pays `amount`. */
+export interface CommissionTier {
+  minOrders: number;
+  amount: number;
+}
+
+/**
+ * The per-sale rate at a given volume.
+ *
+ * Modelled the way influencer affiliate programs usually run it: the volume reached
+ * sets ONE rate that applies to every sale ("hit 50 and you're on €40"), rather than
+ * progressive brackets where the first sales stay on the lower rate. That makes the
+ * ladder a motivator — the creator's whole payout improves when they cross a rung —
+ * which is the reason to offer tiers at all.
+ */
+export function rateForVolume(tiers: CommissionTier[], orders: number): number {
+  const applicable = tiers
+    .filter((t) => orders >= t.minOrders)
+    .sort((a, b) => a.minOrders - b.minOrders)
+    .at(-1);
+  return applicable?.amount ?? 0;
+}
+
+/** Total CPA across a run of sales, using the rate the final volume earns. */
+export function tieredCommission(tiers: CommissionTier[], orders: number): number {
+  if (orders <= 0 || tiers.length === 0) return 0;
+  return rateForVolume(tiers, orders) * orders;
+}
+
+/** The next rung up, and what reaching it is worth — the pitch to put in a draft. */
+export function nextTier(
+  tiers: CommissionTier[],
+  orders: number
+): { tier: CommissionTier; ordersAway: number; extraTotal: number } | null {
+  const above = tiers
+    .filter((t) => t.minOrders > orders)
+    .sort((a, b) => a.minOrders - b.minOrders)[0];
+  if (!above) return null;
+  return {
+    tier: above,
+    ordersAway: above.minOrders - orders,
+    // What their whole payout becomes at that rung, versus now.
+    extraTotal: above.amount * above.minOrders - rateForVolume(tiers, orders) * orders,
+  };
+}
+
+/** Parses "50: 40" lines from the Playbook into a sorted ladder. */
+export function parseTiers(lines: string[]): CommissionTier[] {
+  return lines
+    .map((line) => {
+      const [from, amount] = line.split(":").map((part) => Number(part.trim()));
+      return Number.isFinite(from) && Number.isFinite(amount)
+        ? { minOrders: from, amount }
+        : null;
+    })
+    .filter((t): t is CommissionTier => t != null)
+    .sort((a, b) => a.minOrders - b.minOrders);
+}
+
+/** Reads back as the Playbook stores it. */
+export function describeTiers(tiers: CommissionTier[]): string {
+  if (tiers.length === 0) return "no volume tiers";
+  return tiers.map((t) => `€${t.amount}/sale from ${t.minOrders}`).join(", ");
+}
+
 export type DiscountType = "none" | "percent" | "fixed";
 
 /** The offer the creator's audience gets — a coupon code, in percent or euros off. */

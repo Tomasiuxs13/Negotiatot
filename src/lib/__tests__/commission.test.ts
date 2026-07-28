@@ -14,7 +14,13 @@ import {
   offerCostPerOrder,
   describeDiscount,
   dealDiscount,
+  rateForVolume,
+  tieredCommission,
+  nextTier,
+  parseTiers,
+  describeTiers,
   type Commission,
+  type CommissionTier,
   type Discount,
 } from "../commission";
 
@@ -293,5 +299,55 @@ describe("describeDiscount / dealDiscount", () => {
       type: "fixed",
       value: 20,
     });
+  });
+});
+
+describe("volume tiers", () => {
+  // The user's programme: €20/sale, rising to €40 as volume grows.
+  const tiers: CommissionTier[] = [
+    { minOrders: 0, amount: 20 },
+    { minOrders: 25, amount: 30 },
+    { minOrders: 50, amount: 40 },
+  ];
+
+  it("pays the rate the volume reached, on every sale", () => {
+    expect(rateForVolume(tiers, 0)).toBe(20);
+    expect(rateForVolume(tiers, 24)).toBe(20);
+    expect(rateForVolume(tiers, 25)).toBe(30); // rung is inclusive
+    expect(rateForVolume(tiers, 60)).toBe(40);
+  });
+
+  it("applies the reached rate retroactively, not progressively", () => {
+    // 50 sales at €40 = €2,000 — not 25×20 + 25×30 = €1,250.
+    expect(tieredCommission(tiers, 50)).toBe(2000);
+    expect(tieredCommission(tiers, 10)).toBe(200);
+  });
+
+  it("costs nothing with no sales or no ladder", () => {
+    expect(tieredCommission(tiers, 0)).toBe(0);
+    expect(tieredCommission([], 50)).toBe(0);
+  });
+
+  it("falls back to zero below the lowest rung", () => {
+    expect(rateForVolume([{ minOrders: 10, amount: 25 }], 5)).toBe(0);
+  });
+
+  it("names the next rung and what reaching it is worth", () => {
+    // At 20 sales they're earning €400. At 25 they'd earn €750 — worth €350 more.
+    const next = nextTier(tiers, 20)!;
+    expect(next.tier.amount).toBe(30);
+    expect(next.ordersAway).toBe(5);
+    expect(next.extraTotal).toBe(350);
+  });
+
+  it("has nothing to pitch at the top rung", () => {
+    expect(nextTier(tiers, 100)).toBeNull();
+  });
+
+  it("parses and prints the Playbook's ladder, sorting as it goes", () => {
+    const parsed = parseTiers(["50: 40", "0: 20", "25: 30", "nonsense"]);
+    expect(parsed).toEqual(tiers);
+    expect(describeTiers(parsed)).toBe("€20/sale from 0, €30/sale from 25, €40/sale from 50");
+    expect(describeTiers([])).toBe("no volume tiers");
   });
 });

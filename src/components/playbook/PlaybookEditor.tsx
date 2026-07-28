@@ -46,6 +46,7 @@ interface NegotiationStyle {
   warnAtWalkawayPct: number;
   maxStepPct: number;
   concessionLadder: string[];
+  commissionTiers?: string[];
   nonNegotiables: string[];
 }
 
@@ -241,6 +242,25 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
               setStyle((prev) => ({ ...prev, concessionLadder: e.target.value.split("\n").filter(Boolean) }))
             }
           />
+          <h3 className="font-headline text-sm font-semibold text-slate-900 mt-4 mb-1.5">
+            Commission volume tiers
+          </h3>
+          <p className="text-xs text-slate-500 mb-2">
+            One rung per line as <code className="text-slate-600">from: €/sale</code> — e.g.{" "}
+            <code className="text-slate-600">0: 20</code>, <code className="text-slate-600">50: 40</code>.
+            The volume reached sets one rate paid on every sale, so crossing a rung lifts the
+            creator&apos;s whole payout.
+          </p>
+          <textarea
+            rows={3}
+            placeholder={"0: 20\n25: 30\n50: 40"}
+            className="w-full border border-slate-200 rounded-lg bg-white px-3 py-2 text-sm text-slate-800 font-tabular focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand resize-y"
+            value={(style.commissionTiers ?? []).join("\n")}
+            onChange={(e) =>
+              setStyle((prev) => ({ ...prev, commissionTiers: e.target.value.split("\n").filter(Boolean) }))
+            }
+          />
+
           <h3 className="font-headline text-sm font-semibold text-slate-900 mt-4 mb-1.5">Non-negotiables</h3>
           <p className="text-xs text-slate-500 mb-2">One per line — the Copilot will never trade these away.</p>
           <textarea

@@ -7,6 +7,8 @@ import {
   dealDiscount,
   describeCommission,
   describeDiscount,
+  describeTiers,
+  parseTiers,
 } from "./commission";
 
 export const MODEL = "claude-opus-4-8";
@@ -36,6 +38,25 @@ interface PlaybookContext {
   negotiationStyle: Record<string, unknown> | null;
 }
 
+/**
+ * A volume ladder is the one concession that costs nothing unless it works, so it's
+ * worth the model knowing it exists and how to pitch it.
+ */
+function tierGuidance(style: Record<string, unknown> | null): string {
+  const raw = style?.commissionTiers;
+  const tiers = Array.isArray(raw) ? parseTiers(raw.map(String)) : [];
+  if (tiers.length === 0) return "";
+  return [
+    `Commission volume tiers: ${describeTiers(tiers)}.`,
+    `The volume reached sets one rate paid on EVERY sale, so crossing a rung lifts the`,
+    `creator's whole payout, not just later sales. Use this when they push on the fixed`,
+    `fee: a higher tier costs nothing unless they actually sell, so it is the cheapest`,
+    `concession available. Estimate the volume this creator should do, say which rung`,
+    `that lands on and what the next one would be worth to them in euros, and cost the`,
+    `deal at the rate their expected volume earns.`,
+  ].join("\n");
+}
+
 function playbookBlock(ctx: PlaybookContext): string {
   const perPlatform = Object.entries(ctx.rulesByPlatform)
     .map(([p, rules]) => `Economics targets for ${p}: ${JSON.stringify(rules)}`)
@@ -49,6 +70,7 @@ function playbookBlock(ctx: PlaybookContext): string {
     `"minIntegrations" is the fewest pieces of content worth doing on that platform — a one-off costs the same to set up as a bundle. If the creator offers fewer, negotiate up to that number before conceding on price: volume is your cheapest concession and the per-video rate improves. Say the bundle you want in the draft.`,
     `Unit economics (for breakeven math): ${JSON.stringify(ctx.unitEconomics)}`,
     `Negotiation style & concession rules: ${JSON.stringify(ctx.negotiationStyle)}`,
+    tierGuidance(ctx.negotiationStyle),
   ]
     .filter(Boolean)
     .join("\n");
