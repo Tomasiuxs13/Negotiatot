@@ -57,7 +57,11 @@ export async function addTheirReply(dealId: number, text: string) {
   return {};
 }
 
-export async function generateOpeningOffer(dealId: number) {
+/**
+ * Runs the Copilot's next move. Used both for the opening offer and to redo an existing
+ * recommendation against changed rules — the work is identical either way.
+ */
+export async function runRecommendation(dealId: number) {
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
   if (!hasApiKey()) return { error: NO_KEY_ERROR };

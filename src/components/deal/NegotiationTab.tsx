@@ -5,6 +5,7 @@ import { buildRounds, currentGap } from "@/lib/negotiation";
 import CopilotCard from "./CopilotCard";
 import ReplyForm from "./ReplyForm";
 import GenerateOfferButton from "./GenerateOfferButton";
+import RegenerateRecoButton from "./RegenerateRecoButton";
 
 function Bubble({ msg, creator }: { msg: Message; creator: string }) {
   const them = msg.sender === "them";
@@ -73,7 +74,12 @@ export default function NegotiationTab({ deal, messages }: { deal: Deal; message
             </p>
           </div>
         ) : reco ? (
-          <CopilotCard dealId={deal.id} reco={reco} />
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-end">
+              <RegenerateRecoButton dealId={deal.id} busy={deal.job_status != null} />
+            </div>
+            <CopilotCard dealId={deal.id} reco={reco} />
+          </div>
         ) : thread.length === 0 ? (
           <GenerateOfferButton dealId={deal.id} />
         ) : (

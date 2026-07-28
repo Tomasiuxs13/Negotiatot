@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { generateOpeningOffer } from "@/app/deals/[id]/actions";
+import { runRecommendation } from "@/app/deals/[id]/actions";
 
 export default function GenerateOfferButton({ dealId }: { dealId: number }) {
   const [isPending, startTransition] = useTransition();
@@ -10,7 +10,7 @@ export default function GenerateOfferButton({ dealId }: { dealId: number }) {
   const run = () => {
     setError(null);
     startTransition(async () => {
-      const result = await generateOpeningOffer(dealId);
+      const result = await runRecommendation(dealId);
       if (result?.error) setError(result.error);
     });
   };
