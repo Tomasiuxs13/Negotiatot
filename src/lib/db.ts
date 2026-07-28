@@ -98,6 +98,10 @@ CREATE TABLE IF NOT EXISTS usage_log (
     db.exec("ALTER TABLE deals ADD COLUMN commission_type TEXT");
   if (!cols.includes("commission_value"))
     db.exec("ALTER TABLE deals ADD COLUMN commission_value REAL");
+  // The coupon the audience gets — its cost lands on us, so it belongs on the deal.
+  if (!cols.includes("discount_type")) db.exec("ALTER TABLE deals ADD COLUMN discount_type TEXT");
+  if (!cols.includes("discount_value"))
+    db.exec("ALTER TABLE deals ADD COLUMN discount_value REAL");
   if (!cols.includes("job_status")) db.exec("ALTER TABLE deals ADD COLUMN job_status TEXT");
   if (!cols.includes("job_error")) db.exec("ALTER TABLE deals ADD COLUMN job_error TEXT");
   if (!cols.includes("job_started_at")) db.exec("ALTER TABLE deals ADD COLUMN job_started_at TEXT");
@@ -579,7 +583,8 @@ function seedIfEmpty() {
 
     db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("unit_economics", JSON.stringify({
       aov: 120, conversionRate: 3.0, grossMargin: 60, repeatFactor: 1.35,
-      commissionPercent: 0, productCost: 0, minPaidFee: 100,
+      commissionPercent: 0, commissionPerOrder: 0, discountPercent: 0, discountFixed: 0,
+      productCost: 0, minPaidFee: 100,
     }));
     db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("negotiation_style", JSON.stringify({
       style: "balanced", anchorBelowTargetPct: [12, 15], warnAtWalkawayPct: 90, maxStepPct: 10,
@@ -963,7 +968,7 @@ export function updateDeal(dealId: number, fields: Record<string, unknown>) {
     "job_status", "job_error", "job_started_at",
     "partner_id", "campaign_id", "deal_type",
     "decline_reason", "decline_note", "declined_at", "revisit_on",
-    "commission_type", "commission_value",
+    "commission_type", "commission_value", "discount_type", "discount_value",
   ];
   const keys = Object.keys(fields).filter((k) => allowed.includes(k));
   if (keys.length === 0) return;

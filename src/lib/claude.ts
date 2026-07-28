@@ -2,7 +2,12 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { Deal, DealAnalysis, Message } from "./types";
 import type { PriorDeal } from "./partners";
-import { dealCommission, describeCommission } from "./commission";
+import {
+  dealCommission,
+  dealDiscount,
+  describeCommission,
+  describeDiscount,
+} from "./commission";
 
 export const MODEL = "claude-opus-4-8";
 
@@ -56,19 +61,35 @@ function playbookBlock(ctx: PlaybookContext): string {
  */
 function commissionBlock(deal: Deal): string {
   const commission = dealCommission(deal);
-  if (commission.type === "none") return "";
-  return [
+  const discount = dealDiscount(deal);
+  if (commission.type === "none" && discount.type === "none") return "";
+
+  const lines = [``, `## Performance side of this deal`];
+  if (commission.type !== "none") {
+    lines.push(`The creator is paid ${describeCommission(commission)} on top of any fixed fee.`);
+  }
+  if (discount.type !== "none") {
+    lines.push(
+      `Their audience gets ${describeDiscount(discount)}. That coupon is OUR cost, not the`,
+      `creator's: cost of goods is unchanged, so every euro off the price is a euro off our`,
+      `margin. A percentage commission is then paid on what the customer actually paid,`,
+      `after the discount.`
+    );
+  }
+  lines.push(
+    `Fee, commission and discount all come out of the same margin, so every number you`,
+    `produce (anchor, target, walk-away, breakeven) must be the FIXED FEE **net of** them:`,
+    `estimate the orders this content should drive, price the commission and coupon that`,
+    `implies, and subtract both from what the deal can bear.`,
     ``,
-    `## Performance side of this deal`,
-    `On top of the fixed fee, this creator is paid ${describeCommission(commission)}.`,
-    `The fee and the commission come out of the same margin, so every number you produce`,
-    `(anchor, target, walk-away, breakeven) must be the FIXED FEE **net of** expected`,
-    `commission: estimate the orders this content should drive from the unit economics,`,
-    `price the commission that implies, and subtract it from what the deal can bear.`,
-    `Say the expected commission in euros in your reasoning, and treat it as leverage —`,
-    `a creator earning on every sale has already been given upside the fee shouldn't`,
-    `pay for twice.`,
-  ].join("\n");
+    `Treat these as tradeable levers, not fixed terms. They cost different amounts and are`,
+    `worth different amounts to the creator, so when they push on price, name the swap and`,
+    `its euro cost — a richer commission or a better code for their audience often buys`,
+    `more goodwill per euro than cash does, and a creator earning on every sale has`,
+    `already been given upside the fee shouldn't pay for twice. State the expected`,
+    `commission and discount cost in euros in your reasoning.`
+  );
+  return lines.join("\n");
 }
 
 /**

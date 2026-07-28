@@ -2,7 +2,7 @@ import type { Deal } from "@/lib/types";
 import type { ContentItem, PaymentItem } from "@/lib/fulfillment-types";
 import { fulfillmentSummary } from "@/lib/fulfillment-rules";
 import { euro } from "@/lib/format";
-import { dealCommission, trueDealCost } from "@/lib/commission";
+import { dealCommission, dealDiscount, trueDealCost } from "@/lib/commission";
 
 /**
  * What a signed deal is actually about: the fee, how much of the work has landed,
@@ -31,14 +31,19 @@ export default function DealProgress({
 
   // What the deal really cost: the fee plus commission actually earned on real orders.
   const commission = dealCommission(deal);
-  const hasCommissionCost = commission.type !== "none" && Boolean(deal.actual_orders) && aov > 0;
+  const discount = dealDiscount(deal);
+  const hasPerOrderCost =
+    (commission.type !== "none" || discount.type !== "none") &&
+    Boolean(deal.actual_orders) &&
+    aov > 0;
   const cost =
-    hasCommissionCost || productCost > 0
+    hasPerOrderCost || productCost > 0
       ? trueDealCost({
           fee,
           expectedOrders: deal.actual_orders ?? 0,
           aov,
           commission,
+          discount,
           productCost,
         })
       : null;
@@ -73,6 +78,7 @@ export default function DealProgress({
               cost.commission > 0
                 ? `+ ${euro(cost.commission)} commission on ${deal.actual_orders} orders`
                 : null,
+              cost.discount > 0 ? `+ ${euro(cost.discount)} discount codes` : null,
               cost.product > 0 ? `+ ${euro(cost.product)} product` : null,
             ]
               .filter(Boolean)

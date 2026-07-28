@@ -20,6 +20,8 @@ export default function NewDealForm({
   presetPartner,
   stage,
   defaultCommission = 0,
+  defaultDiscount = 0,
+  defaultDiscountType = "none",
 }: {
   campaigns?: { id: number; name: string }[];
   partners?: { id: number; name: string }[];
@@ -27,6 +29,9 @@ export default function NewDealForm({
   stage?: string;
   /** Your standard affiliate rate, from the Playbook. */
   defaultCommission?: number;
+  /** Your standard audience coupon, from the Playbook. */
+  defaultDiscount?: number;
+  defaultDiscountType?: string;
 }) {
   const isLeadCapture = stage === "lead" || stage === "contacted";
   const router = useRouter();
@@ -210,6 +215,35 @@ export default function NewDealForm({
             step="0.5"
             defaultValue={defaultCommission > 0 ? String(defaultCommission) : ""}
             placeholder="e.g. 10"
+            className={`${inputClass} w-32`}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+          Audience discount{" "}
+          <span className="font-normal text-slate-500">
+            — their coupon code; the discount is our cost, so it prices into the fee
+          </span>
+        </label>
+        <div className="flex gap-2">
+          <select
+            name="discount_type"
+            defaultValue={defaultDiscountType}
+            className={`${inputClass} w-40`}
+          >
+            <option value="none">No discount</option>
+            <option value="percent">% off</option>
+            <option value="fixed">€ off</option>
+          </select>
+          <input
+            name="discount_value"
+            type="number"
+            min="0"
+            step="0.5"
+            defaultValue={defaultDiscount > 0 ? String(defaultDiscount) : ""}
+            placeholder="e.g. 20"
             className={`${inputClass} w-32`}
           />
         </div>

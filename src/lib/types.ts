@@ -106,6 +106,9 @@ export interface Deal {
   /** CPA paid on top of the fixed fee: "percent" of order value, or "per_order" euros. */
   commission_type: "percent" | "per_order" | null;
   commission_value: number | null;
+  /** Coupon offered to the creator's audience — "percent" or "fixed" euros off. */
+  discount_type: "percent" | "fixed" | null;
+  discount_value: number | null;
   job_status: "analyzing" | "recommending" | null;
   job_error: string | null;
   job_started_at: string | null;

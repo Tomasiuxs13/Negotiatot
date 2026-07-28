@@ -18,6 +18,12 @@ export default async function NewDealPage({
   // Your standard program rate, so a hybrid deal doesn't need it retyped every time.
   const econ = getSetting<Record<string, number>>("unit_economics");
   const defaultCommission = econ?.commissionPercent ?? 0;
+  const defaultDiscount = (econ?.discountFixed || econ?.discountPercent) ?? 0;
+  const defaultDiscountType = econ?.discountFixed
+    ? "fixed"
+    : econ?.discountPercent
+      ? "percent"
+      : "none";
   return (
     <>
       <PageHeader
@@ -37,6 +43,8 @@ export default async function NewDealPage({
               presetPartner={presetPartner}
               stage={stage}
               defaultCommission={defaultCommission}
+              defaultDiscount={defaultDiscount}
+              defaultDiscountType={defaultDiscountType}
             />
           </div>
 

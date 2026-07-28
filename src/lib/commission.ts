@@ -26,11 +26,58 @@ export interface Economics {
   repeatFactor?: number;
 }
 
-/** What one order costs you in commission. */
-export function commissionPerOrder(commission: Commission, aov: number): number {
+export type DiscountType = "none" | "percent" | "fixed";
+
+/** The offer the creator's audience gets — a coupon code, in percent or euros off. */
+export interface Discount {
+  type: DiscountType;
+  value: number;
+}
+
+export const NO_DISCOUNT: Discount = { type: "none", value: 0 };
+
+/**
+ * What one order costs you in audience discount.
+ *
+ * A discount code isn't a marketing freebie: cost of goods doesn't change, so every
+ * euro off the price is a euro straight off your margin — the same as paying it out.
+ */
+export function discountPerOrder(discount: Discount, aov: number): number {
+  if (discount.type === "none" || discount.value <= 0) return 0;
+  const off = discount.type === "percent" ? aov * (discount.value / 100) : discount.value;
+  return Math.min(off, aov);
+}
+
+/**
+ * What one order costs you in commission.
+ *
+ * A percentage is taken on what the customer actually paid — after any discount code —
+ * because that's the figure affiliate networks settle on.
+ */
+export function commissionPerOrder(
+  commission: Commission,
+  aov: number,
+  discount: Discount = NO_DISCOUNT
+): number {
   if (commission.type === "none" || commission.value <= 0) return 0;
-  if (commission.type === "percent") return aov * (commission.value / 100);
-  return commission.value;
+  if (commission.type === "per_order") return commission.value;
+  const paid = aov - discountPerOrder(discount, aov);
+  return paid * (commission.value / 100);
+}
+
+/** Everything the creator's audience and the creator cost you on a single order. */
+export function offerCostPerOrder(params: {
+  aov: number;
+  commission?: Commission;
+  discount?: Discount;
+}): { discount: number; commission: number; total: number } {
+  const discount = discountPerOrder(params.discount ?? NO_DISCOUNT, params.aov);
+  const commission = commissionPerOrder(
+    params.commission ?? NO_COMMISSION,
+    params.aov,
+    params.discount ?? NO_DISCOUNT
+  );
+  return { discount, commission, total: discount + commission };
 }
 
 /** What the performance side of the deal is expected to cost in total. */
@@ -60,16 +107,21 @@ export function breakevenFee(params: {
   expectedOrders: number;
   economics: Economics;
   commission?: Commission;
+  /** Coupon the audience gets — its cost lands on you, not the creator. */
+  discount?: Discount;
   /** What the gifted product costs YOU — cost of goods, not its retail price. */
   productCost?: number;
 }): number {
   const { expectedOrders, economics } = params;
-  const commission = params.commission ?? NO_COMMISSION;
   if (expectedOrders <= 0) return 0;
 
   const profit = grossProfitPerOrder(economics) * expectedOrders;
-  const cpa = expectedCommission(commission, economics.aov, expectedOrders);
-  return Math.max(0, profit - cpa - (params.productCost ?? 0));
+  const perOrder = offerCostPerOrder({
+    aov: economics.aov,
+    commission: params.commission,
+    discount: params.discount,
+  });
+  return Math.max(0, profit - perOrder.total * expectedOrders - (params.productCost ?? 0));
 }
 
 /**
@@ -96,15 +148,31 @@ export function trueDealCost(params: {
   expectedOrders: number;
   aov: number;
   commission?: Commission;
+  discount?: Discount;
   productCost?: number;
-}): { fee: number; commission: number; product: number; total: number } {
-  const commission = expectedCommission(
-    params.commission ?? NO_COMMISSION,
-    params.aov,
-    params.expectedOrders
-  );
+}): {
+  fee: number;
+  commission: number;
+  discount: number;
+  product: number;
+  total: number;
+} {
+  const perOrder = offerCostPerOrder({
+    aov: params.aov,
+    commission: params.commission,
+    discount: params.discount,
+  });
+  const orders = Math.max(0, params.expectedOrders);
+  const commission = perOrder.commission * orders;
+  const discount = perOrder.discount * orders;
   const product = params.productCost ?? 0;
-  return { fee: params.fee, commission, product, total: params.fee + commission + product };
+  return {
+    fee: params.fee,
+    commission,
+    discount,
+    product,
+    total: params.fee + commission + discount + product,
+  };
 }
 
 export type DealStructure = "paid" | "gifted_plus_commission" | "not_viable";
@@ -146,11 +214,29 @@ export function suggestStructure(params: {
   };
 }
 
+/** Plain-language form of the audience offer. */
+export function describeDiscount(discount: Discount): string {
+  if (discount.type === "none" || discount.value <= 0) return "no discount code";
+  return discount.type === "percent"
+    ? `${discount.value}% off for their audience`
+    : `€${discount.value} off for their audience`;
+}
+
 /** Plain-language form, for prompts and UI. */
 export function describeCommission(commission: Commission): string {
   if (commission.type === "none" || commission.value <= 0) return "no commission";
   if (commission.type === "percent") return `${commission.value}% commission per sale`;
   return `€${commission.value} per order`;
+}
+
+/** Reads an audience discount off a deal row, tolerating the older schema. */
+export function dealDiscount(deal: {
+  discount_type?: string | null;
+  discount_value?: number | null;
+}): Discount {
+  const type = deal.discount_type;
+  if (type !== "percent" && type !== "fixed") return NO_DISCOUNT;
+  return { type, value: deal.discount_value ?? 0 };
 }
 
 /** Reads a commission off a deal row, tolerating the pre-commission schema. */

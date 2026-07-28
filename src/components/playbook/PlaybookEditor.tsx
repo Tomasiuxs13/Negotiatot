@@ -29,7 +29,10 @@ const ECON_LABELS: Record<string, string> = {
   conversionRate: "Conversion rate (%)",
   grossMargin: "Gross margin (%)",
   repeatFactor: "Repeat-purchase factor (×)",
-  commissionPercent: "Default affiliate commission (%)",
+  commissionPercent: "Default commission (% of sale)",
+  commissionPerOrder: "Default commission (€ per order)",
+  discountPercent: "Default audience discount (%)",
+  discountFixed: "Default audience discount (€)",
   productCost: "Gifted product — your cost (€)",
   minPaidFee: "Smallest fee worth paying (€)",
 };

@@ -9,7 +9,13 @@ import {
   feeReduction,
   trueDealCost,
   NO_COMMISSION,
+  NO_DISCOUNT,
+  discountPerOrder,
+  offerCostPerOrder,
+  describeDiscount,
+  dealDiscount,
   type Commission,
+  type Discount,
 } from "../commission";
 
 const economics = { aov: 120, grossMarginPct: 60, repeatFactor: 1 };
@@ -95,7 +101,7 @@ describe("feeReduction", () => {
 describe("trueDealCost", () => {
   it("adds the expected commission to the agreed fee", () => {
     const cost = trueDealCost({ fee: 2000, expectedOrders: 50, aov: 120, commission: tenPct });
-    expect(cost).toEqual({ fee: 2000, commission: 600, product: 0, total: 2600 });
+    expect(cost).toEqual({ fee: 2000, commission: 600, discount: 0, product: 0, total: 2600 });
   });
 
   it("counts the gifted product — free to them isn't free to you", () => {
@@ -106,7 +112,7 @@ describe("trueDealCost", () => {
       commission: tenPct,
       productCost: 140,
     });
-    expect(cost).toEqual({ fee: 2000, commission: 600, product: 140, total: 2740 });
+    expect(cost).toEqual({ fee: 2000, commission: 600, discount: 0, product: 140, total: 2740 });
   });
 
   it("is just the fee on a flat deal", () => {
@@ -195,5 +201,97 @@ describe("dealCommission", () => {
     expect(dealCommission({ commission_type: "nonsense", commission_value: 5 })).toEqual(
       NO_COMMISSION
     );
+  });
+});
+
+describe("audience discount", () => {
+  const twentyOff: Discount = { type: "fixed", value: 20 };
+
+  it("costs you the face value of the coupon", () => {
+    // Cost of goods doesn't change, so €20 off is €20 straight off margin.
+    expect(discountPerOrder(twentyOff, 120)).toBe(20);
+    expect(discountPerOrder({ type: "percent", value: 15 }, 120)).toBe(18);
+    expect(discountPerOrder(NO_DISCOUNT, 120)).toBe(0);
+  });
+
+  it("never gives away more than the order is worth", () => {
+    expect(discountPerOrder({ type: "fixed", value: 500 }, 120)).toBe(120);
+  });
+
+  it("pays percentage commission on what the customer actually paid", () => {
+    // €120 − €20 coupon = €100 paid; 20% of that is €20, not €24.
+    expect(commissionPerOrder({ type: "percent", value: 20 }, 120, twentyOff)).toBe(20);
+  });
+
+  it("pays a flat CPA regardless of the coupon", () => {
+    expect(commissionPerOrder({ type: "per_order", value: 15 }, 120, twentyOff)).toBe(15);
+  });
+
+  it("stacks both levers into one per-order cost", () => {
+    const cost = offerCostPerOrder({
+      aov: 120,
+      commission: { type: "percent", value: 20 },
+      discount: twentyOff,
+    });
+    expect(cost).toEqual({ discount: 20, commission: 20, total: 40 });
+  });
+});
+
+describe("breakevenFee with a discount code", () => {
+  it("treats the coupon as a cost, not a freebie", () => {
+    // 50 orders: €3,600 margin − €1,000 coupon − €1,000 commission = €1,600 of fee.
+    const fee = breakevenFee({
+      expectedOrders: 50,
+      economics,
+      commission: { type: "percent", value: 20 },
+      discount: { type: "fixed", value: 20 },
+    });
+    expect(fee).toBe(1600);
+  });
+
+  it("shows how much a discount code costs against commission alone", () => {
+    const withoutCode = breakevenFee({
+      expectedOrders: 50,
+      economics,
+      commission: { type: "percent", value: 20 },
+    });
+    // 20% of the full €120 = €24/order, so €3,600 − €1,200 = €2,400.
+    expect(withoutCode).toBe(2400);
+  });
+});
+
+describe("trueDealCost with every lever", () => {
+  it("itemises fee, commission, coupon and product", () => {
+    const cost = trueDealCost({
+      fee: 500,
+      expectedOrders: 50,
+      aov: 120,
+      commission: { type: "percent", value: 20 },
+      discount: { type: "fixed", value: 20 },
+      productCost: 80,
+    });
+    expect(cost).toEqual({
+      fee: 500,
+      commission: 1000,
+      discount: 1000,
+      product: 80,
+      total: 2580,
+    });
+  });
+});
+
+describe("describeDiscount / dealDiscount", () => {
+  it("reads naturally", () => {
+    expect(describeDiscount({ type: "fixed", value: 20 })).toBe("€20 off for their audience");
+    expect(describeDiscount({ type: "percent", value: 15 })).toBe("15% off for their audience");
+    expect(describeDiscount(NO_DISCOUNT)).toBe("no discount code");
+  });
+
+  it("tolerates deals from before discounts existed", () => {
+    expect(dealDiscount({})).toEqual(NO_DISCOUNT);
+    expect(dealDiscount({ discount_type: "fixed", discount_value: 20 })).toEqual({
+      type: "fixed",
+      value: 20,
+    });
   });
 });

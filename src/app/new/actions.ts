@@ -84,6 +84,14 @@ export async function createDealAction(
       ? commissionTypeRaw
       : null;
 
+  // The audience coupon: their benefit, our cost.
+  const discountTypeRaw = String(formData.get("discount_type") ?? "none").trim();
+  const discountValue = Number(formData.get("discount_value")) || 0;
+  const discountType =
+    (discountTypeRaw === "percent" || discountTypeRaw === "fixed") && discountValue > 0
+      ? discountTypeRaw
+      : null;
+
   // Resolve the partner: an explicit pick, an existing name match, or a new record.
   // Email is a contact attribute, so it lives on the partner rather than the deal.
   const partnerIdRaw = String(formData.get("partner_id") ?? "").trim();
@@ -133,6 +141,9 @@ export async function createDealAction(
   });
   if (commissionType) {
     updateDeal(id, { commission_type: commissionType, commission_value: commissionValue });
+  }
+  if (discountType) {
+    updateDeal(id, { discount_type: discountType, discount_value: discountValue });
   }
 
   // Keep the partner's channel list in step with the deal's platforms.
