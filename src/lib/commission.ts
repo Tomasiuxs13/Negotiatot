@@ -361,3 +361,61 @@ export function dealCommission(deal: {
   if (type !== "percent" && type !== "per_order") return NO_COMMISSION;
   return { type, value: deal.commission_value ?? 0 };
 }
+
+/**
+ * Orders a piece of content should drive, along the chain the Playbook defines:
+ * views → clicks → orders. Computed here rather than asked of the model, so the
+ * forecast is the same every run and can't drift into an invented assumption.
+ */
+export function expectedOrdersFrom(params: {
+  views: number;
+  linkCtrPct: number;
+  orderConversionPct: number;
+  pieces?: number;
+}): number {
+  const { views, linkCtrPct, orderConversionPct } = params;
+  if (views <= 0 || linkCtrPct <= 0 || orderConversionPct <= 0) return 0;
+  const perPiece = views * (linkCtrPct / 100) * (orderConversionPct / 100);
+  return perPiece * Math.max(1, params.pieces ?? 1);
+}
+
+/**
+ * What the creator should expect to earn, and whether the tiers above them are
+ * realistically in reach.
+ *
+ * The reachability check matters: dangling "€40/sale once you pass 50" at a channel
+ * that will drive two orders is a promise that reads well and pays nothing, which is
+ * how a first collaboration becomes a last one.
+ */
+export function earningsForecast(params: {
+  expectedOrders: number;
+  commission: Commission;
+  aov: number;
+  discount?: Discount;
+  tiers?: CommissionTier[];
+}): {
+  orders: number;
+  perOrder: number;
+  total: number;
+  reachableTiers: CommissionTier[];
+  unreachableTiers: CommissionTier[];
+} {
+  const orders = Math.max(0, params.expectedOrders);
+  const tiers = params.tiers ?? [];
+
+  // With a ladder configured, the rate follows the volume they're actually likely to do.
+  const perOrder =
+    tiers.length > 0
+      ? rateForVolume(tiers, Math.floor(orders))
+      : commissionPerOrder(params.commission, params.aov, params.discount ?? NO_DISCOUNT);
+
+  // Allow some upside over the forecast before calling a rung out of reach.
+  const withUpside = orders * 3;
+  return {
+    orders,
+    perOrder,
+    total: perOrder * orders,
+    reachableTiers: tiers.filter((t) => t.minOrders <= withUpside),
+    unreachableTiers: tiers.filter((t) => t.minOrders > withUpside),
+  };
+}

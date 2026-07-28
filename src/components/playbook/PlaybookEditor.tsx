@@ -40,6 +40,13 @@ const ECON_LABELS: Record<string, string> = {
 };
 
 /** What the manager sets themselves vs what comes from finance vs sensible defaults. */
+const BRAND_LABELS: Record<string, string> = {
+  senderName: "Your name",
+  senderRole: "Your role",
+  brandName: "Brand name",
+  productName: "Product you gift",
+};
+
 const OFFER_FIELDS = [
   "productCost",
   "productRetail",
@@ -68,6 +75,9 @@ interface NegotiationStyle {
 export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }) {
   const [platforms, setPlatforms] = useState(initial.platforms);
   const [econ, setEcon] = useState(initial.unitEconomics as Record<string, number>);
+  const [brand, setBrand] = useState(
+    (initial.brandProfile ?? {}) as Record<string, string>
+  );
   const [globals, setGlobals] = useState(
     (initial.globalRules ?? {}) as Record<string, string | number>
   );
@@ -94,6 +104,7 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
       const result = await savePlaybookAction({
         platforms,
         globalRules: globals,
+        brandProfile: brand,
         unitEconomics: econ,
         negotiationStyle: style as unknown as Record<string, unknown>,
       });
@@ -127,6 +138,35 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
           >
             {isPending ? "Saving…" : "Save changes"}
           </button>
+        </div>
+      </div>
+
+      {/* Drafts are signed and describe a product, so the model needs both. Without
+          them it writes "our product" and signs off as a department. */}
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5 mb-4">
+        <h3 className="font-headline text-sm font-semibold text-slate-900 mb-1">
+          Who the message is from
+        </h3>
+        <p className="text-xs text-slate-500 mb-3">
+          Used to sign drafts and name what you&apos;re gifting — creators reply to people, not
+          to &quot;the partnerships team&quot;.
+        </p>
+        <div className="grid grid-cols-4 gap-4">
+          {Object.entries(brand).map(([key, value]) => (
+            <div key={key}>
+              <label className="block text-xs text-slate-600 mb-1">{BRAND_LABELS[key] ?? key}</label>
+              <input
+                className={`${inputClass} w-full text-left`}
+                type="text"
+                value={String(value ?? "")}
+                placeholder={key === "productName" ? "e.g. Alpha 3 headset" : ""}
+                onChange={(e) => {
+                  setBrand((prev) => ({ ...prev, [key]: e.target.value }));
+                  setStatus("idle");
+                }}
+              />
+            </div>
+          ))}
         </div>
       </div>
 

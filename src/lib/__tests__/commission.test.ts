@@ -20,6 +20,8 @@ import {
   parseTiers,
   describeTiers,
   resolveOffer,
+  expectedOrdersFrom,
+  earningsForecast,
   type Commission,
   type CommissionTier,
   type Discount,
@@ -412,5 +414,63 @@ describe("resolveOffer", () => {
     const { commission, discount } = resolveOffer({}, {});
     expect(commission).toEqual(NO_COMMISSION);
     expect(discount).toEqual(NO_DISCOUNT);
+  });
+});
+
+describe("expectedOrdersFrom", () => {
+  it("walks views through clicks to orders", () => {
+    // 10,000 views × 1% = 100 clicks × 3% = 3 orders.
+    expect(expectedOrdersFrom({ views: 10000, linkCtrPct: 1, orderConversionPct: 3 })).toBe(3);
+  });
+
+  it("scales with the number of pieces in the bundle", () => {
+    expect(
+      expectedOrdersFrom({ views: 10000, linkCtrPct: 1, orderConversionPct: 3, pieces: 3 })
+    ).toBe(9);
+  });
+
+  it("is zero when any link in the chain is missing", () => {
+    expect(expectedOrdersFrom({ views: 0, linkCtrPct: 1, orderConversionPct: 3 })).toBe(0);
+    expect(expectedOrdersFrom({ views: 10000, linkCtrPct: 0, orderConversionPct: 3 })).toBe(0);
+  });
+});
+
+describe("earningsForecast", () => {
+  const tiers: CommissionTier[] = [
+    { minOrders: 0, amount: 20 },
+    { minOrders: 15, amount: 30 },
+    { minOrders: 30, amount: 40 },
+  ];
+
+  it("tells a small channel which rungs it will never reach", () => {
+    // Sigcruiser: ~923 views a video gives well under one order.
+    const orders = expectedOrdersFrom({ views: 923, linkCtrPct: 1, orderConversionPct: 3, pieces: 3 });
+    const f = earningsForecast({ expectedOrders: orders, commission: NO_COMMISSION, aov: 120, tiers });
+    expect(f.orders).toBeLessThan(1);
+    expect(f.unreachableTiers.map((t) => t.minOrders)).toEqual([15, 30]);
+    expect(f.total).toBeLessThan(20);
+  });
+
+  it("counts a rung as reachable when a good run would get there", () => {
+    // 6 expected orders — 15 is plausible on a strong video, 30 is not.
+    const f = earningsForecast({ expectedOrders: 6, commission: NO_COMMISSION, aov: 120, tiers });
+    expect(f.reachableTiers.map((t) => t.minOrders)).toEqual([0, 15]);
+    expect(f.unreachableTiers.map((t) => t.minOrders)).toEqual([30]);
+  });
+
+  it("prices at the rate the expected volume actually earns", () => {
+    const f = earningsForecast({ expectedOrders: 20, commission: NO_COMMISSION, aov: 120, tiers });
+    expect(f.perOrder).toBe(30);
+    expect(f.total).toBe(600);
+  });
+
+  it("falls back to the flat commission when no ladder is set", () => {
+    const f = earningsForecast({
+      expectedOrders: 10,
+      commission: { type: "per_order", value: 25 },
+      aov: 120,
+    });
+    expect(f.perOrder).toBe(25);
+    expect(f.total).toBe(250);
   });
 });

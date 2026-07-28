@@ -4,6 +4,7 @@ import fs from "fs";
 import type { Deal, Message } from "./types";
 import { ALL_STAGES } from "./types";
 import {
+  DEFAULT_BRAND_PROFILE,
   DEFAULT_GLOBAL_RULES,
   DEFAULT_NEGOTIATION_STYLE,
   DEFAULT_PLATFORM_RULES,
@@ -960,6 +961,14 @@ export function getGlobalRules(): Record<string, unknown> {
   return {
     ...DEFAULT_GLOBAL_RULES,
     ...(getSetting<Record<string, unknown>>("global_rules") ?? {}),
+  };
+}
+
+/** Sender identity and product name, for drafts. */
+export function getBrandProfile(): Record<string, string> {
+  return {
+    ...DEFAULT_BRAND_PROFILE,
+    ...(getSetting<Record<string, string>>("brand_profile") ?? {}),
   };
 }
 

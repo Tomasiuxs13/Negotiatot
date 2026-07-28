@@ -85,6 +85,18 @@ export const DEFAULT_UNIT_ECONOMICS: Record<string, number> = {
   minPaidFee: 100,
 };
 
+/**
+ * Who the message is from and what's being offered. Without a product name the model
+ * can only write "our product", which buries the most tangible thing on the table; with
+ * no sender it signs off as a department, and creators reply to people.
+ */
+export const DEFAULT_BRAND_PROFILE: Record<string, string> = {
+  senderName: "",
+  senderRole: "Creator Partnerships",
+  brandName: "",
+  productName: "",
+};
+
 export const DEFAULT_NEGOTIATION_STYLE: Record<string, unknown> = {
   style: "balanced",
   anchorBelowTargetPct: [12, 15],

@@ -2,6 +2,7 @@ import PageHeader from "@/components/PageHeader";
 import PlaybookEditor from "@/components/playbook/PlaybookEditor";
 import CampaignsEditor from "@/components/playbook/CampaignsEditor";
 import {
+  getBrandProfile,
   getCampaigns,
   getCampaignSpend,
   getGlobalRules,
@@ -22,6 +23,7 @@ export default function PlaybookPage() {
       tiktok: getPlaybook("tiktok") ?? {},
     },
     globalRules: getGlobalRules(),
+    brandProfile: getBrandProfile(),
     unitEconomics: getUnitEconomics(),
     negotiationStyle: getNegotiationStyle(),
   };

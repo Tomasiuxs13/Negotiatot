@@ -6,6 +6,7 @@ import {
   getDeal,
   getMessages,
   getPartnerDeals,
+  getBrandProfile,
   getGlobalRules,
   getNegotiationStyle,
   getPlaybook,
@@ -64,6 +65,7 @@ export function playbookContext(platforms: string[], campaignId?: number | null)
     rulesByPlatform,
     campaignName,
     globalRules: getGlobalRules(),
+    brandProfile: getBrandProfile(),
     unitEconomics: getUnitEconomics(),
     negotiationStyle: getNegotiationStyle(),
   };

@@ -6,6 +6,8 @@ import {
   describeCommission,
   describeDiscount,
   describeTiers,
+  earningsForecast,
+  expectedOrdersFrom,
   parseTiers,
   resolveOffer,
 } from "./commission";
@@ -34,6 +36,7 @@ interface PlaybookContext {
   rulesByPlatform: Record<string, Record<string, unknown> | null>;
   campaignName?: string;
   globalRules?: Record<string, unknown> | null;
+  brandProfile?: Record<string, string> | null;
   unitEconomics: Record<string, unknown> | null;
   negotiationStyle: Record<string, unknown> | null;
 }
@@ -160,6 +163,84 @@ function structureBlock(econ: Record<string, unknown> | null): string {
     );
   }
   return lines.join("\n");
+}
+
+/**
+ * What this creator should realistically earn, computed rather than guessed, and which
+ * tiers are actually within reach.
+ *
+ * Dangling "€40/sale once you pass 50" at a channel that will drive two orders reads
+ * well and pays nothing — the fastest way to make a first collaboration the last one.
+ */
+function forecastBlock(deal: Deal, ctx: PlaybookContext): string {
+  const econ = (ctx.unitEconomics ?? {}) as Record<string, number>;
+  const views = deal.avg_views ?? 0;
+  if (!views) return "";
+
+  const { commission, discount } = resolveOffer(deal, econ);
+  const raw = ctx.negotiationStyle?.commissionTiers;
+  const tiers = Array.isArray(raw) ? parseTiers(raw.map(String)) : [];
+  if (commission.type === "none" && tiers.length === 0) return "";
+
+  const orders = expectedOrdersFrom({
+    views,
+    linkCtrPct: Number(econ.linkCtr ?? 0),
+    orderConversionPct: Number(econ.orderConversion ?? 0),
+  });
+  if (orders <= 0) return "";
+
+  const f = earningsForecast({
+    expectedOrders: orders,
+    commission,
+    aov: Number(econ.aov ?? 0),
+    discount,
+    tiers,
+  });
+
+  const lines = [
+    ``,
+    `## What this creator should actually earn (computed — use these figures)`,
+    `At ${Math.round(views).toLocaleString("en")} views a piece, the Playbook's rates give`,
+    `about ${f.orders.toFixed(1)} orders per piece, i.e. roughly €${f.total.toFixed(0)} to the`,
+    `creator per piece at €${f.perOrder}/sale. Quantify the offer in the draft using this —`,
+    `"if N of your viewers buy that's about €X" lands, a bare rate does not.`,
+  ];
+  if (f.unreachableTiers.length > 0) {
+    lines.push(
+      `Do NOT pitch these tiers — this channel will not reach them and promising them is a`,
+      `payout that never arrives: ${describeTiers(f.unreachableTiers)}.`
+    );
+  }
+  if (f.total < 30) {
+    lines.push(
+      `Commission here is realistically negligible. Be straight about that: lead on the`,
+      `product and the upside if a video outperforms, and do not imply meaningful earnings.`
+    );
+  }
+  return lines.join("\n");
+}
+
+/** Who is writing, and what is actually being gifted. */
+function brandBlock(ctx: PlaybookContext): string {
+  const b = ctx.brandProfile ?? {};
+  const econ = (ctx.unitEconomics ?? {}) as Record<string, number>;
+  const retail = Number(econ.productRetail ?? 0);
+  const lines: string[] = [];
+  if (b.senderName) {
+    lines.push(
+      `Drafts are written by ${b.senderName}${b.senderRole ? `, ${b.senderRole}` : ""}${
+        b.brandName ? ` at ${b.brandName}` : ""
+      }. Sign off in their name — never "the partnerships team".`
+    );
+  }
+  if (b.productName) {
+    lines.push(
+      `The product being gifted is the ${b.productName}${
+        retail > 0 ? ` (retails at €${retail})` : ""
+      }. Name it in the draft — "our product" wastes the most tangible thing on the table.`
+    );
+  }
+  return lines.length ? [``, `## Voice and product`, ...lines].join("\n") : "";
 }
 
 function dealPlatformList(deal: Deal): string[] {
@@ -705,6 +786,8 @@ export async function recommendNextMove(params: {
     analysis ? `Prior analysis summary: ${analysis.verdictSummary}` : "",
     commissionBlock(deal, playbook.unitEconomics as Record<string, number>),
     structureBlock(playbook.unitEconomics),
+    forecastBlock(deal, playbook),
+    brandBlock(playbook),
     historyBlock(params.history, deal.creator),
     ``,
     `## Conversation so far`,
@@ -717,6 +800,8 @@ export async function recommendNextMove(params: {
     `- Trade scope before price: work down the concession ladder (extra deliverables, usage rights, bundles, bonuses) before raising the offer, and price steps must respect the max step %.`,
     `- Mirror their concession size; keep headroom.`,
     `- Drafts must be ready to send: specific numbers, no placeholders, in the same language the creator writes in, matching the manager's configured style.`,
+    `- Sell the value, don't just list terms. Put a number on what the creator gets — the product by name and retail price, what the commission is worth at their actual view count, what a strong video could earn. A list of mechanics reads like paperwork; a quantified offer reads like an opportunity.`,
+    `- Never justify a no-fee or low-fee structure by the creator's size. "Given where your channel is right now" reads as "you're too small to pay" and loses deals. Frame performance terms as uncapped upside they own, not as a consolation for not being paid.`,
     `- Format drafts as a real email, not a paragraph: greeting on its own line, blank line between paragraphs, 1-3 sentences each. Put a multi-part offer in "- " bullets on separate lines — a creator should be able to see what they get at a glance. Finish with one clear question and a sign-off.`,
     `- A draft is read by the CREATOR. Never disclose internal figures in one: cost of goods, gross margin, breakeven, walk-away, target price, CPM ceilings, or what you can "afford". Quote only what is being offered to them — fee, commission, tier thresholds, their discount code, and the product's retail price. Internal numbers belong in the reasoning, which the manager alone sees.`,
   ]

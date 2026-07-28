@@ -7,6 +7,7 @@ export interface PlaybookPayload {
   platforms: Record<string, Record<string, unknown>>;
   /** Market and budget — one set, not one per platform. */
   globalRules?: Record<string, unknown>;
+  brandProfile?: Record<string, string>;
   unitEconomics: Record<string, unknown>;
   negotiationStyle: Record<string, unknown>;
   measurementWindows?: Record<string, number>;
@@ -19,6 +20,7 @@ export async function savePlaybookAction(payload: PlaybookPayload): Promise<{ er
       setPlaybook(platform, rules);
     }
     if (payload.globalRules) setSetting("global_rules", payload.globalRules);
+    if (payload.brandProfile) setSetting("brand_profile", payload.brandProfile);
     setSetting("unit_economics", payload.unitEconomics);
     setSetting("negotiation_style", payload.negotiationStyle);
     if (payload.measurementWindows) setSetting("measurement_windows", payload.measurementWindows);
