@@ -247,11 +247,18 @@ function commissionBlock(deal: Deal, econ: Record<string, number> | null): strin
   }
   if (discount.type !== "none") {
     lines.push(
-      `Their audience gets ${describeDiscount(discount)}. It is a standing offer every`,
-      `creator gets, funded as marketing and measured in blended AOV and ROAS — do not`,
-      `cost it against this deal or against the creator's fee. It still matters for one`,
-      `calculation: a percentage commission is paid on what the customer actually paid,`,
-      `so compute that after the discount.`
+      `Their audience gets ${describeDiscount(discount)}.`,
+      `ALWAYS state this in the draft, with its value spelled out — it is one of the`,
+      `strongest things on the table. It is what makes the creator's recommendation worth`,
+      `acting on rather than just another ad read, and a code their viewers actually use`,
+      `is what turns their audience's goodwill into the orders they earn commission on.`,
+      `Never leave it as "a discount code" without the number.`,
+      `For OUR accounting it is a standing offer every creator gets, funded as marketing`,
+      `and measured in blended AOV and ROAS — so do not cost it against this deal or`,
+      `against the creator's fee. That is an internal accounting point only and changes`,
+      `nothing about how prominently it is offered to the creator. It still matters for`,
+      `one calculation: a percentage commission is paid on what the customer actually`,
+      `paid, so compute that after the discount.`
     );
   }
   lines.push(
@@ -993,7 +1000,8 @@ export async function recommendNextMove(params: {
     `- Trade scope before price: work down the concession ladder (extra deliverables, usage rights, bundles, bonuses) before raising the offer, and price steps must respect the max step %.`,
     `- Mirror their concession size; keep headroom.`,
     `- Drafts must be ready to send: specific numbers, no placeholders, in the same language the creator writes in, matching the manager's configured style.`,
-    `- Sell the value, don't just list terms. Put a number on what the creator gets — the product by name and what it would cost them, and what the commission is worth at their actual view count. A list of mechanics reads like paperwork; a quantified offer reads like an opportunity.`,
+    `- Sell the value, don't just list terms. Put a number on what the creator gets — the product by name and what it would cost them, what the commission is worth at their actual view count, and how much their audience saves with the code. A list of mechanics reads like paperwork; a quantified offer reads like an opportunity.`,
+    `- If an audience discount is on the table, the draft must say how much it is worth in the reader's own terms — the amount off, and the percentage when the product's price is known. "A discount code for your audience" is a wasted line; "$20 off, about 17%" is a reason for their viewers to act and for the creator to say yes.`,
     `- Every figure in a draft must come from this prompt. You may not invent, round up or "for example" your way to an order count, an earnings total, a commission rung or a product value. If you write "if N of your viewers buy", N is the computed forecast above and nothing else — an illustrative number that flatters the offer is a promise the creator will hold the manager to, and it is the single most damaging thing you can put in a draft. When the honest number is unimpressive, omit it and sell something else that is true.`,
     `- State each term exactly once. The product, the code, the trackable link, the approval step — each belongs in one place, either the offer list or the house-rules line, never both. Repeating a term is padding, and repeating a price reads as overselling.`,
     `- If no cash fee is being offered, say so plainly and early — one sentence, before the terms: this is a product and performance partnership rather than a paid placement. Leaving it unsaid is not tact. The creator assumes a rate is coming, replies asking for it, and feels misled when the answer is none, which costs a round and the goodwill you opened with. Naming the structure is not the same as apologising for it.`,
