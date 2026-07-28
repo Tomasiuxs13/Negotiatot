@@ -647,9 +647,9 @@ const RECO_SCHEMA = {
       type: "object",
       additionalProperties: false,
       properties: {
-        balanced: { type: "string" },
-        warm: { type: "string" },
-        firm: { type: "string" },
+        balanced: { type: "string", description: "A ready-to-send message, formatted as an email rather than one block of prose. Use real line breaks (\\n): greeting on its own line, a blank line between paragraphs, and paragraphs of 1-3 sentences. When the offer has three or more components, list them as short \"- \" bullets on their own lines instead of running them into a sentence. End with a single clear question and a sign-off line. No markdown headings or bold — plain text that can be pasted straight into an email." },
+        warm: { type: "string", description: "A ready-to-send message, formatted as an email rather than one block of prose. Use real line breaks (\\n): greeting on its own line, a blank line between paragraphs, and paragraphs of 1-3 sentences. When the offer has three or more components, list them as short \"- \" bullets on their own lines instead of running them into a sentence. End with a single clear question and a sign-off line. No markdown headings or bold — plain text that can be pasted straight into an email." },
+        firm: { type: "string", description: "A ready-to-send message, formatted as an email rather than one block of prose. Use real line breaks (\\n): greeting on its own line, a blank line between paragraphs, and paragraphs of 1-3 sentences. When the offer has three or more components, list them as short \"- \" bullets on their own lines instead of running them into a sentence. End with a single clear question and a sign-off line. No markdown headings or bold — plain text that can be pasted straight into an email." },
       },
       required: ["balanced", "warm", "firm"],
     },
@@ -717,6 +717,7 @@ export async function recommendNextMove(params: {
     `- Trade scope before price: work down the concession ladder (extra deliverables, usage rights, bundles, bonuses) before raising the offer, and price steps must respect the max step %.`,
     `- Mirror their concession size; keep headroom.`,
     `- Drafts must be ready to send: specific numbers, no placeholders, in the same language the creator writes in, matching the manager's configured style.`,
+    `- Format drafts as a real email, not a paragraph: greeting on its own line, blank line between paragraphs, 1-3 sentences each. Put a multi-part offer in "- " bullets on separate lines — a creator should be able to see what they get at a glance. Finish with one clear question and a sign-off.`,
     `- A draft is read by the CREATOR. Never disclose internal figures in one: cost of goods, gross margin, breakeven, walk-away, target price, CPM ceilings, or what you can "afford". Quote only what is being offered to them — fee, commission, tier thresholds, their discount code, and the product's retail price. Internal numbers belong in the reasoning, which the manager alone sees.`,
   ]
     .filter(Boolean)
