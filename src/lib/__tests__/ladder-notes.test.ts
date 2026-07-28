@@ -21,8 +21,9 @@ describe("ladderNotes", () => {
     expect(n.scopeNote).toBe("Fee covers 3x youtube integrations · about $906 each");
   });
 
-  it("counts commission, coupon and product into the real cost", () => {
-    // $2,717 fee + 71 × ($20 + $20) + $80 product.
+  it("counts commission and product, but not the audience coupon", () => {
+    // $2,717 fee + 71 × $20 commission + $80 product. The coupon is marketing spend
+    // measured in blended AOV, not a charge against this deal.
     const n = ladderNotes({
       targetFee: 2717,
       pieces: 3,
@@ -32,7 +33,7 @@ describe("ladderNotes", () => {
       discount: code,
       productCost: 80,
     });
-    expect(n.costNote).toBe("Total cost about $5,637 with commission, code and product");
+    expect(n.costNote).toBe("Total cost about $4,217 with commission and product");
   });
 
   it("stays quiet about cost when the fee is the whole cost", () => {

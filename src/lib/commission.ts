@@ -211,6 +211,7 @@ export function marginAtZeroFee(params: {
   expectedOrders: number;
   economics: Economics;
   commission?: Commission;
+  /** Used to price a percentage commission correctly; not charged to the deal itself. */
   discount?: Discount;
   productCost?: number;
 }): number {
@@ -219,12 +220,15 @@ export function marginAtZeroFee(params: {
   if (expectedOrders <= 0) return -productCost;
 
   const profit = grossProfitPerOrder(economics) * expectedOrders;
-  const perOrder = offerCostPerOrder({
-    aov: economics.aov,
-    commission: params.commission,
-    discount: params.discount,
-  });
-  return profit - perOrder.total * expectedOrders - productCost;
+  // Commission only. The audience coupon is a standing marketing decision that shows up
+  // in blended AOV and ROAS, not a charge against this deal — the same basis trueDealCost
+  // uses, so viability and cost can't tell two different stories about the same deal.
+  const perOrderCommission = commissionPerOrder(
+    params.commission ?? NO_COMMISSION,
+    economics.aov,
+    params.discount ?? NO_DISCOUNT
+  );
+  return profit - perOrderCommission * expectedOrders - productCost;
 }
 
 /**
@@ -245,6 +249,14 @@ export function feeReduction(params: {
 /**
  * What the deal actually costs: the fee, plus the CPA you expect to pay, plus the
  * product you gave away. A "free" product is only free to the creator.
+ *
+ * The audience coupon is deliberately NOT in the total. It is a standing marketing
+ * decision applied to every creator, and it lands where discounts land — in blended AOV
+ * and ROAS — rather than as a charge against one deal. Attributing its face value here
+ * also only ever counted one side of it: the code is given because it lifts conversion,
+ * but `orderConversion` is a single flat rate, so the deal was billed for the discount
+ * and credited nothing for the volume it produces. It stays in the breakdown as a
+ * figure, and out of the number anyone negotiates against.
  */
 export function trueDealCost(params: {
   fee: number;
@@ -272,9 +284,10 @@ export function trueDealCost(params: {
   return {
     fee: params.fee,
     commission,
+    /** Reported for visibility; excluded from `total` — see the note above. */
     discount,
     product,
-    total: params.fee + commission + discount + product,
+    total: params.fee + commission + product,
   };
 }
 

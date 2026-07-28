@@ -46,7 +46,7 @@ export function ladderNotes(params: {
     // Only worth saying when the extras actually move the number; on a flat-fee deal
     // with no commission, coupon or gift, repeating the fee as "total cost" is noise.
     if (cost.total > cost.fee) {
-      costNote = `Total cost about ${money(cost.total)} with commission, code and product`;
+      costNote = `Total cost about ${money(cost.total)} with commission and product`;
     }
   }
 

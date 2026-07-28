@@ -247,10 +247,11 @@ function commissionBlock(deal: Deal, econ: Record<string, number> | null): strin
   }
   if (discount.type !== "none") {
     lines.push(
-      `Their audience gets ${describeDiscount(discount)}. That coupon is OUR cost, not the`,
-      `creator's: cost of goods is unchanged, so every dollar off the price is a dollar off our`,
-      `margin. A percentage commission is then paid on what the customer actually paid,`,
-      `after the discount.`
+      `Their audience gets ${describeDiscount(discount)}. It is a standing offer every`,
+      `creator gets, funded as marketing and measured in blended AOV and ROAS — do not`,
+      `cost it against this deal or against the creator's fee. It still matters for one`,
+      `calculation: a percentage commission is paid on what the customer actually paid,`,
+      `so compute that after the discount.`
     );
   }
   lines.push(
@@ -260,15 +261,21 @@ function commissionBlock(deal: Deal, econ: Record<string, number> | null): strin
     `Commission is upside they earn on sales they drive, and the coupon is our marketing`,
     `decision; making the creator fund either one produces an offer far below market that`,
     `an established channel will simply decline.`,
-    `Affordability is checked separately, and that is where these costs belong: report the`,
-    `TOTAL deal cost (fee + expected commission + expected coupon + gifted product) in your`,
-    `reasoning, and flag it if that total breaches maxPerDeal, the monthly cap, or breakeven.`,
+    `Affordability is checked separately: report the TOTAL deal cost as`,
+    `fee + expected commission + gifted product, and flag it if that total breaches`,
+    `maxPerDeal, the monthly cap, or breakeven.`,
+    `The audience coupon is NOT part of that total and must not appear in it. It is a`,
+    `standing marketing decision applied to every creator, and it lands in blended AOV and`,
+    `ROAS rather than as a charge against one deal. Charging it here only ever counted one`,
+    `side of it anyway: the code exists because it lifts conversion, but the conversion`,
+    `rate you are given is a single flat number, so the deal would be billed for the`,
+    `discount and credited nothing for the volume it creates.`,
     ``,
     `Treat these as tradeable levers, not fixed terms. They cost different amounts and are`,
     `worth different amounts to the creator, so when they push on price, name the swap and`,
     `its dollar cost — a richer commission or a better code for their audience often buys`,
-    `more goodwill per dollar than cash does. State the expected commission and coupon cost`,
-    `in dollars in your reasoning.`
+    `more goodwill per dollar than cash does. State the expected commission cost in dollars`,
+    `in your reasoning.`
   );
   return lines.join("\n");
 }
@@ -762,9 +769,9 @@ export async function analyzeDeal(params: {
       `- Value each deliverable separately using that platform's realistic avg views × that platform's max CPM for the format, then sum into bundle-level numbers.`,
       `- Target = the summed fair value, discounted for quality issues (view trend, geo shortfall, engagement). This is a market rate for the placement: do NOT reduce it by expected commission, audience-coupon cost or the gifted product.`,
       `- Walk-away = the summed hard ceiling implied by the playbook max CPMs on realistic views, capped by maxPerDeal. Also do not net performance costs out of it.`,
-      `- Breakeven = total predicted clicks across deliverables × conversion × AOV × margin × repeat factor from unit economics, less commission, coupon and gifted-product cost. This is the largest fee that still breaks even, so it floors at $0 — if those costs already exceed the margin, Breakeven is 0 and the shortfall goes in the summary as a viability warning, not into the number.`,
+      `- Breakeven = total predicted clicks across deliverables × conversion × AOV × margin × repeat factor from unit economics, less expected commission and gifted-product cost. Do NOT deduct the audience coupon here either. This is the largest fee that still breaks even, so it floors at $0 — if those costs already exceed the margin, Breakeven is 0 and the shortfall goes in the summary as a viability warning, not into the number.`,
       `- Anchor = the opening offer per the playbook's anchoring rule (below target, defensible with data).`,
-      `- Then run the affordability check separately, since the fee no longer absorbs these costs: total deal cost = target fee + expected commission + expected coupon cost + gifted product. Say that total in the summary, and flag it explicitly if it breaches maxPerDeal, the monthly cap, or breakeven. A market-rate fee the budget cannot cover is a real finding — report it as one rather than quietly shrinking the offer to fit.`,
+      `- Then run the affordability check separately, since the fee no longer absorbs these costs: total deal cost = target fee + expected commission + gifted product. The audience coupon is excluded — it belongs to blended AOV and ROAS, not to one deal — so never add it to this total. Say the total in the summary, and flag it explicitly if it breaches maxPerDeal, the monthly cap, or breakeven. A market-rate fee the budget cannot cover is a real finding — report it as one rather than quietly shrinking the offer to fit.`,
       `In the number explanations, show the per-deliverable breakdown when there is more than one deliverable.`,
       `Grade each metric against the playbook thresholds. Flag data-quality and audience risks. Be honest about uncertainty when inputs are thin.`,
       params.channelUrl

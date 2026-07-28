@@ -78,12 +78,19 @@ export default function DealProgress({
               cost.commission > 0
                 ? `+ ${money(cost.commission)} commission on ${deal.actual_orders} orders`
                 : null,
-              cost.discount > 0 ? `+ ${money(cost.discount)} discount codes` : null,
               cost.product > 0 ? `+ ${money(cost.product)} product` : null,
             ]
               .filter(Boolean)
               .join(" · ")}
           </div>
+          {/* Shown, but never with a "+": the coupon is marketing spend measured in
+              blended AOV, so it is not part of this total and must not read as though
+              the lines above it don't add up. */}
+          {cost.discount > 0 && (
+            <div className="text-xs text-slate-400 mt-0.5">
+              {money(cost.discount)} in discount codes, counted in blended AOV
+            </div>
+          )}
         </div>
       )}
 

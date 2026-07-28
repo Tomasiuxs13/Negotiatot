@@ -153,6 +153,8 @@ describe("breakevenFee with gifted product", () => {
 describe("marginAtZeroFee", () => {
   it("shows the loss that breakevenFee hides behind its floor", () => {
     // The Sigcruiser case: an $80 product against well under one expected order.
+    // 0.83 × $97.20 profit = $80.68, less 0.83 × $20 commission = $64.08, less the $80
+    // product. The coupon is not charged to the deal.
     const params = {
       expectedOrders: 0.83,
       economics: { aov: 120, grossMarginPct: 60, repeatFactor: 1.35 },
@@ -161,7 +163,7 @@ describe("marginAtZeroFee", () => {
       productCost: 80,
     };
     expect(breakevenFee(params)).toBe(0); // "no room for a fee"
-    expect(marginAtZeroFee(params)).toBeCloseTo(-32.52, 2); // ...because it loses money
+    expect(marginAtZeroFee(params)).toBeCloseTo(-15.92, 2); // ...because it loses money
   });
 
   it("agrees with breakevenFee whenever the deal is profitable", () => {
@@ -280,15 +282,17 @@ describe("audience discount", () => {
 });
 
 describe("breakevenFee with a discount code", () => {
-  it("treats the coupon as a cost, not a freebie", () => {
-    // 50 orders: $3,600 margin − $1,000 coupon − $1,000 commission = $1,600 of fee.
+  it("does not charge the coupon to the deal", () => {
+    // The coupon is standing marketing spend, measured in blended AOV and ROAS, so only
+    // commission comes off: 50 orders × $120 × 60% = $3,600 margin, less 20% commission
+    // on the $100 the customer actually paid ($20 × 50 = $1,000) = $2,600 of fee.
     const fee = breakevenFee({
       expectedOrders: 50,
       economics,
       commission: { type: "percent", value: 20 },
       discount: { type: "fixed", value: 20 },
     });
-    expect(fee).toBe(1600);
+    expect(fee).toBe(2600);
   });
 
   it("shows how much a discount code costs against commission alone", () => {
@@ -303,7 +307,9 @@ describe("breakevenFee with a discount code", () => {
 });
 
 describe("trueDealCost with every lever", () => {
-  it("itemises fee, commission, coupon and product", () => {
+  it("reports the coupon but leaves it out of the total", () => {
+    // The coupon is visible as a figure — it is real money — but the total a manager
+    // negotiates against is fee + commission + product only.
     const cost = trueDealCost({
       fee: 500,
       expectedOrders: 50,
@@ -317,7 +323,7 @@ describe("trueDealCost with every lever", () => {
       commission: 1000,
       discount: 1000,
       product: 80,
-      total: 2580,
+      total: 1580,
     });
   });
 });
