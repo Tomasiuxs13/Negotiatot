@@ -129,15 +129,24 @@ function commissionBlock(deal: Deal, econ: Record<string, number> | null): strin
  */
 function structureBlock(econ: Record<string, unknown> | null): string {
   const productCost = Number(econ?.productCost ?? 0);
+  const productRetail = Number(econ?.productRetail ?? 0);
   const minPaidFee = Number(econ?.minPaidFee ?? 0);
   if (productCost <= 0 && minPaidFee <= 0) return "";
 
   const lines: string[] = [``, `## Deal structure`];
   if (productCost > 0) {
     lines.push(
-      `Every creator is gifted product costing us €${productCost} (cost of goods, not its`,
-      `retail price). That is a real cost of this deal: subtract it from what the fixed fee`,
-      `can bear, exactly like commission, and include it when you state total deal cost.`
+      `Every creator is gifted product. It costs us €${productCost} — cost of goods, an`,
+      `INTERNAL figure. Subtract it from what the fixed fee can bear, exactly like`,
+      `commission, and include it when you state total deal cost to the manager.`,
+      productRetail > 0
+        ? `When describing the gift TO THE CREATOR, quote its retail price of €${productRetail} —` +
+          ` that is what they would pay and can verify on the site. Never quote the cost figure` +
+          ` to them: it is lower than the shelf price, so it both undersells the gift and` +
+          ` discloses our margin.`
+        : `Do NOT put a euro value on the gift in any draft — the only figure available is our` +
+          ` cost, which is lower than the shelf price and must not be disclosed. Describe the` +
+          ` product by name instead. (Set a retail price in the Playbook to quote one.)`
     );
   }
   if (minPaidFee > 0) {
@@ -708,6 +717,7 @@ export async function recommendNextMove(params: {
     `- Trade scope before price: work down the concession ladder (extra deliverables, usage rights, bundles, bonuses) before raising the offer, and price steps must respect the max step %.`,
     `- Mirror their concession size; keep headroom.`,
     `- Drafts must be ready to send: specific numbers, no placeholders, in the same language the creator writes in, matching the manager's configured style.`,
+    `- A draft is read by the CREATOR. Never disclose internal figures in one: cost of goods, gross margin, breakeven, walk-away, target price, CPM ceilings, or what you can "afford". Quote only what is being offered to them — fee, commission, tier thresholds, their discount code, and the product's retail price. Internal numbers belong in the reasoning, which the manager alone sees.`,
   ]
     .filter(Boolean)
     .join("\n");

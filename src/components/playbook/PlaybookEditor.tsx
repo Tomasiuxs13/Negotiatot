@@ -34,13 +34,15 @@ const ECON_LABELS: Record<string, string> = {
   commissionPerOrder: "Default commission (€ per order)",
   discountPercent: "Default audience discount (%)",
   discountFixed: "Default audience discount (€)",
-  productCost: "Gifted product — your cost (€)",
+  productCost: "Gifted product — your cost (€, internal)",
+  productRetail: "Gifted product — retail price (€, quoted to creators)",
   minPaidFee: "Smallest fee worth paying (€)",
 };
 
 /** What the manager sets themselves vs what comes from finance vs sensible defaults. */
 const OFFER_FIELDS = [
   "productCost",
+  "productRetail",
   "minPaidFee",
   "commissionPercent",
   "commissionPerOrder",

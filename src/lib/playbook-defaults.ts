@@ -80,6 +80,8 @@ export const DEFAULT_UNIT_ECONOMICS: Record<string, number> = {
   discountPercent: 0,
   discountFixed: 0,
   productCost: 0,
+  /** What the product sells for — the number a creator can look up, and the one to quote. */
+  productRetail: 0,
   minPaidFee: 100,
 };
 
@@ -105,6 +107,7 @@ export const MANAGER_FIELDS = new Set([
   "minGeoShare",
   "monthlyCap",
   "productCost",
+  "productRetail",
   "minPaidFee",
   "commissionPercent",
   "commissionPerOrder",
