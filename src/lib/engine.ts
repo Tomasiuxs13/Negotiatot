@@ -6,8 +6,11 @@ import {
   getDeal,
   getMessages,
   getPartnerDeals,
+  getGlobalRules,
+  getNegotiationStyle,
   getPlaybook,
   getSetting,
+  getUnitEconomics,
   logUsage,
   updateDeal,
 } from "./db";
@@ -60,8 +63,9 @@ export function playbookContext(platforms: string[], campaignId?: number | null)
   return {
     rulesByPlatform,
     campaignName,
-    unitEconomics: getSetting<Record<string, unknown>>("unit_economics"),
-    negotiationStyle: getSetting<Record<string, unknown>>("negotiation_style"),
+    globalRules: getGlobalRules(),
+    unitEconomics: getUnitEconomics(),
+    negotiationStyle: getNegotiationStyle(),
   };
 }
 

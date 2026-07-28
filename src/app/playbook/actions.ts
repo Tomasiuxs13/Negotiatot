@@ -5,6 +5,8 @@ import { setPlaybook, setSetting } from "@/lib/db";
 
 export interface PlaybookPayload {
   platforms: Record<string, Record<string, unknown>>;
+  /** Market and budget — one set, not one per platform. */
+  globalRules?: Record<string, unknown>;
   unitEconomics: Record<string, unknown>;
   negotiationStyle: Record<string, unknown>;
   measurementWindows?: Record<string, number>;
@@ -16,6 +18,7 @@ export async function savePlaybookAction(payload: PlaybookPayload): Promise<{ er
       if (!["youtube", "instagram", "tiktok"].includes(platform)) continue;
       setPlaybook(platform, rules);
     }
+    if (payload.globalRules) setSetting("global_rules", payload.globalRules);
     setSetting("unit_economics", payload.unitEconomics);
     setSetting("negotiation_style", payload.negotiationStyle);
     if (payload.measurementWindows) setSetting("measurement_windows", payload.measurementWindows);

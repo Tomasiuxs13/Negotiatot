@@ -34,6 +34,7 @@ function getClient(): Anthropic {
 interface PlaybookContext {
   rulesByPlatform: Record<string, Record<string, unknown> | null>;
   campaignName?: string;
+  globalRules?: Record<string, unknown> | null;
   unitEconomics: Record<string, unknown> | null;
   negotiationStyle: Record<string, unknown> | null;
 }
@@ -66,9 +67,13 @@ function playbookBlock(ctx: PlaybookContext): string {
     ctx.campaignName
       ? `These rules are already resolved for the campaign "${ctx.campaignName}" — campaign-specific overrides (e.g. a different target geo or CPM ceiling) are baked into the values below. Judge this deal only against these numbers.`
       : ``,
+    ctx.globalRules
+      ? `Target market and budget (these apply to every platform): ${JSON.stringify(ctx.globalRules)}`
+      : ``,
     perPlatform,
     `"minIntegrations" is the fewest pieces of content worth doing on that platform — a one-off costs the same to set up as a bundle. If the creator offers fewer, negotiate up to that number before conceding on price: volume is your cheapest concession and the per-video rate improves. Say the bundle you want in the draft.`,
     `Unit economics (for breakeven math): ${JSON.stringify(ctx.unitEconomics)}`,
+    `Work orders out along this chain and show it: views × linkCtr% = clicks, clicks × orderConversion% = orders, orders × aov × grossMargin% × repeatFactor = gross profit. Both rates are given — do not invent your own click-through or conversion assumption.`,
     `Negotiation style & concession rules: ${JSON.stringify(ctx.negotiationStyle)}`,
     tierGuidance(ctx.negotiationStyle),
   ]

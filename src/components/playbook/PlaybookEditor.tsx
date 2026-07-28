@@ -18,15 +18,16 @@ const RULE_LABELS: Record<string, string> = {
   minAvgViews: "Min avg views",
   minEngagementRate: "Min engagement rate (%)",
   maxFakeFollowers: "Max fake followers (%)",
-  minGeoShare: "Min target-geo share (%)",
-  geoLabel: "Target geo",
+  minGeoShare: "Min audience in that market (%)",
+  geoLabel: "Target market",
   maxPerDeal: "Max per deal (€)",
-  monthlyCap: "Monthly cap (€)",
+  monthlyCap: "Monthly budget (€)",
 };
 
 const ECON_LABELS: Record<string, string> = {
   aov: "Average order value (€)",
-  conversionRate: "Conversion rate (%)",
+  linkCtr: "Viewers who click the link (%)",
+  orderConversion: "Clickers who buy (%)",
   grossMargin: "Gross margin (%)",
   repeatFactor: "Repeat-purchase factor (×)",
   commissionPercent: "Default commission (% of sale)",
@@ -36,6 +37,18 @@ const ECON_LABELS: Record<string, string> = {
   productCost: "Gifted product — your cost (€)",
   minPaidFee: "Smallest fee worth paying (€)",
 };
+
+/** What the manager sets themselves vs what comes from finance vs sensible defaults. */
+const OFFER_FIELDS = [
+  "productCost",
+  "minPaidFee",
+  "commissionPercent",
+  "commissionPerOrder",
+  "discountPercent",
+  "discountFixed",
+];
+const FINANCE_FIELDS = ["aov", "linkCtr", "orderConversion", "grossMargin", "repeatFactor"];
+const PLATFORM_BASIC = ["minIntegrations", "minAvgViews", "maxPerDeal"];
 
 const inputClass =
   "w-28 border border-slate-200 rounded-md bg-white px-2.5 py-1.5 text-sm text-right font-tabular text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand";
@@ -53,6 +66,9 @@ interface NegotiationStyle {
 export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }) {
   const [platforms, setPlatforms] = useState(initial.platforms);
   const [econ, setEcon] = useState(initial.unitEconomics as Record<string, number>);
+  const [globals, setGlobals] = useState(
+    (initial.globalRules ?? {}) as Record<string, string | number>
+  );
   const [style, setStyle] = useState(initial.negotiationStyle as unknown as NegotiationStyle);
   const [activePlatform, setActivePlatform] = useState<string>("youtube");
   const [isPending, startTransition] = useTransition();
@@ -75,6 +91,7 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
     startTransition(async () => {
       const result = await savePlaybookAction({
         platforms,
+        globalRules: globals,
         unitEconomics: econ,
         negotiationStyle: style as unknown as Record<string, unknown>,
       });
@@ -111,6 +128,37 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
         </div>
       </div>
 
+      {/* Applies everywhere — previously duplicated on each platform tab, where the
+          copies could disagree and only YouTube's budget was ever read. */}
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5 mb-4">
+        <h3 className="font-headline text-sm font-semibold text-slate-900 mb-1">
+          Your market &amp; budget
+        </h3>
+        <p className="text-xs text-slate-500 mb-3">
+          Set once — these apply to every platform.
+        </p>
+        <div className="grid grid-cols-3 gap-4">
+          {Object.entries(globals).map(([key, value]) => (
+            <div key={key}>
+              <label className="block text-xs text-slate-600 mb-1">{RULE_LABELS[key] ?? key}</label>
+              <input
+                className={typeof value === "number" ? `${inputClass} w-full` : `${inputClass} w-full text-left`}
+                type={typeof value === "number" ? "number" : "text"}
+                step="any"
+                value={String(value)}
+                onChange={(e) => {
+                  setGlobals((prev) => ({
+                    ...prev,
+                    [key]: typeof value === "number" ? Number(e.target.value) : e.target.value,
+                  }));
+                  setStatus("idle");
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-4 items-start">
         {/* Economics targets */}
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
@@ -118,26 +166,62 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
             Economics targets — {PLATFORM_LABEL[activePlatform]}
           </h3>
           <div className="divide-y divide-slate-100">
-            {Object.entries(rules).map(([key, value]) => (
-              <div key={key} className="flex items-center justify-between gap-4 py-2 first:pt-0 last:pb-0">
-                <span className="text-sm text-slate-600">{RULE_LABELS[key] ?? key}</span>
-                <input
-                  className={typeof value === "number" ? inputClass : `${inputClass} text-left w-32`}
-                  type={typeof value === "number" ? "number" : "text"}
-                  step="any"
-                  value={String(value)}
-                  onChange={(e) => setRule(key, e.target.value)}
-                />
-              </div>
-            ))}
+            {Object.entries(rules)
+              .filter(([key]) => PLATFORM_BASIC.includes(key))
+              .map(([key, value]) => (
+                <div key={key} className="flex items-center justify-between gap-4 py-2 first:pt-0 last:pb-0">
+                  <span className="text-sm text-slate-600">{RULE_LABELS[key] ?? key}</span>
+                  <input
+                    className={typeof value === "number" ? inputClass : `${inputClass} text-left w-32`}
+                    type={typeof value === "number" ? "number" : "text"}
+                    step="any"
+                    value={String(value)}
+                    onChange={(e) => setRule(key, e.target.value)}
+                  />
+                </div>
+              ))}
           </div>
+
+          {/* Quality and price ceilings ship with sensible values and rarely need
+              touching — hidden so the page opens on the handful that matter. */}
+          <details className="mt-3 group">
+            <summary className="text-xs font-medium text-slate-500 hover:text-slate-800 cursor-pointer list-none flex items-center gap-1">
+              <span className="material-symbols-outlined group-open:rotate-90 transition-transform" style={{ fontSize: 14 }}>
+                chevron_right
+              </span>
+              Price ceilings &amp; quality filters — good defaults, edit rarely
+            </summary>
+            <div className="divide-y divide-slate-100 mt-2">
+              {Object.entries(rules)
+                .filter(([key]) => !PLATFORM_BASIC.includes(key))
+                .map(([key, value]) => (
+                  <div key={key} className="flex items-center justify-between gap-4 py-2">
+                    <span className="text-sm text-slate-600">{RULE_LABELS[key] ?? key}</span>
+                    <input
+                      className={typeof value === "number" ? inputClass : `${inputClass} text-left w-32`}
+                      type={typeof value === "number" ? "number" : "text"}
+                      step="any"
+                      value={String(value)}
+                      onChange={(e) => setRule(key, e.target.value)}
+                    />
+                  </div>
+                ))}
+            </div>
+          </details>
         </div>
 
         {/* Unit economics */}
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
-          <h3 className="font-headline text-sm font-semibold text-slate-900 mb-3">Unit economics</h3>
+          <h3 className="font-headline text-sm font-semibold text-slate-900 mb-1">
+            Your standard offer
+          </h3>
+          <p className="text-xs text-slate-500 mb-3">
+            What every creator gets by default. Prefilled on each new deal.
+          </p>
           <div className="divide-y divide-slate-100">
-            {Object.entries(econ).map(([key, value]) => (
+            {Object.entries(econ)
+              .filter(([key]) => OFFER_FIELDS.includes(key))
+              .map(([key, value]) => (
               <div key={key} className="flex items-center justify-between gap-4 py-2 first:pt-0 last:pb-0">
                 <span className="text-sm text-slate-600">{ECON_LABELS[key] ?? key}</span>
                 <input
@@ -153,10 +237,37 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
               </div>
             ))}
           </div>
-          <p className="text-xs text-slate-500 mt-3 max-w-[48ch]">
-            These four numbers let Counterpart compute a breakeven price per channel — the strongest
-            anchor in any negotiation, because it&apos;s yours, not the market&apos;s.
+
+          <h3 className="font-headline text-sm font-semibold text-slate-900 mt-5 mb-1">
+            From your finance team
+          </h3>
+          <p className="text-xs text-slate-500 mb-3 max-w-[48ch]">
+            Ask once, then leave alone. These turn views into a breakeven price —{" "}
+            <span className="text-slate-600">
+              views × click % = clicks, clicks × buy % = orders
+            </span>{" "}
+            — which is the strongest anchor you have, because it&apos;s yours rather than the
+            market&apos;s.
           </p>
+          <div className="divide-y divide-slate-100">
+            {Object.entries(econ)
+              .filter(([key]) => FINANCE_FIELDS.includes(key))
+              .map(([key, value]) => (
+                <div key={key} className="flex items-center justify-between gap-4 py-2">
+                  <span className="text-sm text-slate-600">{ECON_LABELS[key] ?? key}</span>
+                  <input
+                    className={inputClass}
+                    type="number"
+                    step="any"
+                    value={value}
+                    onChange={(e) => {
+                      setEcon((prev) => ({ ...prev, [key]: Number(e.target.value) }));
+                      setStatus("idle");
+                    }}
+                  />
+                </div>
+              ))}
+          </div>
         </div>
 
         {/* Negotiation style */}

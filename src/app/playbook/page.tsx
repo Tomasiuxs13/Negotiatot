@@ -1,32 +1,29 @@
 import PageHeader from "@/components/PageHeader";
 import PlaybookEditor from "@/components/playbook/PlaybookEditor";
 import CampaignsEditor from "@/components/playbook/CampaignsEditor";
-import { getCampaigns, getCampaignSpend, getPlaybook, getSetting } from "@/lib/db";
+import {
+  getCampaigns,
+  getCampaignSpend,
+  getGlobalRules,
+  getNegotiationStyle,
+  getPlaybook,
+  getUnitEconomics,
+} from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export default function PlaybookPage() {
   const initial = {
-    // Merge defaults so fields added after an install still appear in the editor.
+    // Defaults are merged by the getters themselves, so the page and the engine can
+    // never disagree about what the rules are.
     platforms: {
-      youtube: { minIntegrations: 1, ...(getPlaybook("youtube") ?? {}) },
-      instagram: { minIntegrations: 2, ...(getPlaybook("instagram") ?? {}) },
-      tiktok: { minIntegrations: 3, ...(getPlaybook("tiktok") ?? {}) },
+      youtube: getPlaybook("youtube") ?? {},
+      instagram: getPlaybook("instagram") ?? {},
+      tiktok: getPlaybook("tiktok") ?? {},
     },
-    // Merge a default so the commission field appears on installs that predate it.
-    unitEconomics: {
-      commissionPercent: 0,
-      commissionPerOrder: 0,
-      discountPercent: 0,
-      discountFixed: 0,
-      productCost: 0,
-      minPaidFee: 100,
-      ...(getSetting<Record<string, unknown>>("unit_economics") ?? {}),
-    },
-    negotiationStyle: {
-      commissionTiers: [],
-      ...(getSetting<Record<string, unknown>>("negotiation_style") ?? {}),
-    },
+    globalRules: getGlobalRules(),
+    unitEconomics: getUnitEconomics(),
+    negotiationStyle: getNegotiationStyle(),
   };
 
   const campaigns = getCampaigns();

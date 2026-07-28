@@ -3,6 +3,13 @@ import path from "path";
 import fs from "fs";
 import type { Deal, Message } from "./types";
 import { ALL_STAGES } from "./types";
+import {
+  DEFAULT_GLOBAL_RULES,
+  DEFAULT_NEGOTIATION_STYLE,
+  DEFAULT_PLATFORM_RULES,
+  DEFAULT_UNIT_ECONOMICS,
+  type PlatformKey,
+} from "./playbook-defaults";
 import type { Campaign } from "./campaigns";
 import type { Partner, PartnerChannel } from "./partners";
 
@@ -606,6 +613,60 @@ seedIfEmpty();
 // Runs after seeding so demo deals get partners too; no-ops once every deal is linked.
 backfillPartners();
 
+/**
+ * Target market and monthly budget used to live on each platform, which let them
+ * disagree — and only YouTube's cap was ever read, so editing the others did nothing.
+ * Lift them to one global set, preferring YouTube's values since those were the ones
+ * actually in force.
+ */
+function liftGlobalRules() {
+  if (getSetting("global_rules")) return;
+
+  const platforms = ["youtube", "instagram", "tiktok"] as const;
+  const stored = platforms.map((p) => {
+    const row = db.prepare("SELECT rules FROM playbook WHERE platform = ?").get(p) as
+      | { rules: string }
+      | undefined;
+    return { platform: p, rules: row ? (JSON.parse(row.rules) as Record<string, unknown>) : null };
+  });
+
+  const inForce = stored.find((s) => s.rules)?.rules ?? {};
+  setSetting("global_rules", {
+    ...DEFAULT_GLOBAL_RULES,
+    ...(inForce.geoLabel !== undefined ? { geoLabel: inForce.geoLabel } : {}),
+    ...(inForce.minGeoShare !== undefined ? { minGeoShare: inForce.minGeoShare } : {}),
+    ...(inForce.monthlyCap !== undefined ? { monthlyCap: inForce.monthlyCap } : {}),
+  });
+
+  // Drop the now-global keys so the per-platform editor stops showing them.
+  for (const { platform, rules } of stored) {
+    if (!rules) continue;
+    delete rules.geoLabel;
+    delete rules.minGeoShare;
+    delete rules.monthlyCap;
+    delete rules.targetCpc; // never read anywhere, and unanswerable for most managers
+    setPlaybook(platform, rules);
+  }
+}
+liftGlobalRules();
+
+/**
+ * "conversionRate" never said what it converted from, so the model treated it as
+ * click-to-order and invented a click-through rate to reach it. Split into two named
+ * rates and carry the old value onto the one it actually meant.
+ */
+function nameTheConversionRates() {
+  const econ = getSetting<Record<string, number>>("unit_economics");
+  if (!econ || econ.conversionRate === undefined) return;
+  const { conversionRate, ...rest } = econ;
+  setSetting("unit_economics", {
+    ...rest,
+    orderConversion: rest.orderConversion ?? conversionRate,
+    linkCtr: rest.linkCtr ?? DEFAULT_UNIT_ECONOMICS.linkCtr,
+  });
+}
+nameTheConversionRates();
+
 export function getDeals(): Deal[] {
   failStaleJobs();
   return db.prepare("SELECT * FROM deals ORDER BY updated_at DESC").all() as Deal[];
@@ -880,9 +941,40 @@ export function getMessages(dealId: number): Message[] {
   return db.prepare("SELECT * FROM messages WHERE deal_id = ? ORDER BY created_at, id").all(dealId) as Message[];
 }
 
+/**
+ * A platform's rules with defaults filled in. Merged on read so a field added after an
+ * install still reaches the engine, instead of applying only once someone happens to
+ * re-save the Playbook page.
+ */
 export function getPlaybook(platform: string): Record<string, unknown> | null {
-  const row = db.prepare("SELECT rules FROM playbook WHERE platform = ?").get(platform) as { rules: string } | undefined;
-  return row ? JSON.parse(row.rules) : null;
+  const row = db.prepare("SELECT rules FROM playbook WHERE platform = ?").get(platform) as
+    | { rules: string }
+    | undefined;
+  const defaults = DEFAULT_PLATFORM_RULES[platform as PlatformKey];
+  if (!row) return defaults ? { ...defaults } : null;
+  return { ...(defaults ?? {}), ...JSON.parse(row.rules) };
+}
+
+/** Target market and monthly budget — one set of values, not one per platform. */
+export function getGlobalRules(): Record<string, unknown> {
+  return {
+    ...DEFAULT_GLOBAL_RULES,
+    ...(getSetting<Record<string, unknown>>("global_rules") ?? {}),
+  };
+}
+
+export function getUnitEconomics(): Record<string, number> {
+  return {
+    ...DEFAULT_UNIT_ECONOMICS,
+    ...(getSetting<Record<string, number>>("unit_economics") ?? {}),
+  };
+}
+
+export function getNegotiationStyle(): Record<string, unknown> {
+  return {
+    ...DEFAULT_NEGOTIATION_STYLE,
+    ...(getSetting<Record<string, unknown>>("negotiation_style") ?? {}),
+  };
 }
 
 export function getSetting<T>(key: string): T | null {
@@ -1022,13 +1114,14 @@ export function getPipelineKpis(): PipelineKpis {
     0
   );
 
-  const yt = getPlaybook("youtube") as { maxCpmIntegration?: number; monthlyCap?: number } | null;
+  const yt = getPlaybook("youtube") as { maxCpmIntegration?: number } | null;
+  const globals = getGlobalRules() as { monthlyCap?: number };
 
   return {
     activeDeals: active.length,
     waitingOnYou: active.filter((d) => d.your_move === 1).length,
     committed,
-    monthlyCap: yt?.monthlyCap ?? 25000,
+    monthlyCap: globals.monthlyCap ?? 25000,
     avgClosedCpm,
     targetCpm: yt?.maxCpmIntegration ?? 28,
     savedVsFirstAsk,
