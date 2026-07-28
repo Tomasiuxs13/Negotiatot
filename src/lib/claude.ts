@@ -44,6 +44,20 @@ interface PlaybookContext {
   negotiationStyle: Record<string, unknown> | null;
 }
 
+/**
+ * The model's final answer out of a response that may contain several text blocks.
+ *
+ * When a server-side tool runs — web search here — the assistant's content is a
+ * sequence: an interim text block, the search, then the real answer. Taking the FIRST
+ * text block returned the model's placeholder ("set after research search") and stored
+ * it as a complete analysis, with no error anywhere, because the request had genuinely
+ * succeeded. The answer is always the last text block.
+ */
+function finalText(response: Anthropic.Message): string | undefined {
+  const texts = response.content.filter((b) => b.type === "text").map((b) => b.text);
+  return texts.at(-1);
+}
+
 /** Every tier the manager configured, whether or not this creator can reach it. */
 function configuredTiers(style: Record<string, unknown> | null): CommissionTier[] {
   const raw = style?.commissionTiers;
@@ -453,7 +467,7 @@ const ANALYSIS_SCHEMA = {
     },
     theirAsk: {
       type: ["number", "null"],
-      description: "The creator's asking price in EUR if stated in the message or rate card, else null",
+      description: "The creator's asking price in USD if stated in the message or rate card, else null",
     },
     extractedChannelUrl: {
       type: ["string", "null"],
@@ -525,7 +539,7 @@ const CONTRACT_SCHEMA = {
         additionalProperties: false,
         properties: {
           description: { type: "string" },
-          amount: { type: "number", description: "EUR" },
+          amount: { type: "number", description: "USD" },
           trigger: {
             type: "string",
             enum: ["on_signing", "on_delivery", "on_verification", "date"],
@@ -600,7 +614,7 @@ export async function parseContract(params: {
       "Extract the operative terms from this influencer marketing contract so they can be tracked.",
       "Rules:",
       "- Capture every deliverable and every payment, exactly as agreed. Do not invent terms.",
-      "- Amounts in EUR as numbers. If a currency other than EUR is used, still return the number and note the currency in notes.",
+      "- Amounts in USD as numbers. If a currency other than USD is used, still return the number and note the currency in notes.",
       "- If a deadline is relative to receiving a product, use dueDaysAfterDelivery rather than guessing a date.",
       "- If something important is ambiguous or missing (no deadline, no payment trigger), say so in notes.",
       params.text ? `\nContract text:\n"""${params.text}"""` : "",
@@ -625,7 +639,7 @@ export async function parseContract(params: {
   if (response.stop_reason === "refusal") {
     throw new Error("The contract could not be read (refused).");
   }
-  const text = response.content.find((b) => b.type === "text")?.text;
+  const text = finalText(response);
   if (!text) throw new Error("Empty contract parse response.");
 
   return {
@@ -756,7 +770,7 @@ export async function analyzeDeal(params: {
     max_tokens: 16000,
     thinking: { type: "adaptive" as const },
     system:
-      "You are Counterpart, a negotiation copilot for influencer marketing managers. You do rigorous, playbook-driven deal analysis. All prices in EUR, integers. You value channels on real average views, never follower counts. You never invent statistics — when an input is missing and can't be researched, say so in the relevant metric/flag and widen your uncertainty.",
+      "You are Counterpart, a negotiation copilot for influencer marketing managers. You do rigorous, playbook-driven deal analysis. All prices in USD, integers. You value channels on real average views, never follower counts. You never invent statistics — when an input is missing and can't be researched, say so in the relevant metric/flag and widen your uncertainty.",
     ...(tools ? { tools } : {}),
     output_config: {
       format: { type: "json_schema" as const, schema: ANALYSIS_SCHEMA as unknown as Record<string, unknown> },
@@ -792,7 +806,7 @@ export async function analyzeDeal(params: {
   if (response.stop_reason === "refusal") {
     throw new Error("Analysis was refused by the model. Try rephrasing the inputs.");
   }
-  const text = response.content.find((b) => b.type === "text")?.text;
+  const text = finalText(response);
   if (!text) throw new Error("Empty analysis response from Claude.");
   const parsed = JSON.parse(text) as {
     verdict: DealAnalysis["verdict"];
@@ -805,6 +819,16 @@ export async function analyzeDeal(params: {
     theirAsk: number | null;
     extractedChannelUrl: string | null;
   };
+
+  // A structurally valid but empty analysis is worse than a failed one: it rendered as a
+  // confident "GOOD DEAL" over blank panels, with no error recorded anywhere, because the
+  // API call really had succeeded. The schema always requires the four numbers, so their
+  // absence means this is not an answer — fail loudly and keep the previous analysis.
+  if (parsed.numbers.length === 0 || parsed.metrics.length === 0) {
+    throw new Error(
+      "Claude returned an incomplete analysis (no metrics or numbers). Re-run the analysis."
+    );
+  }
 
   const byLabel = Object.fromEntries(parsed.numbers.map((n) => [n.label, Math.round(n.value)]));
   return {
@@ -873,7 +897,7 @@ const RECO_SCHEMA = {
     theirCurrentPosition: {
       type: ["number", "null"],
       description:
-        "The creator's latest asking price in EUR as stated in the conversation (their current position after all counters), else null if they haven't named a price",
+        "The creator's latest asking price in USD as stated in the conversation (their current position after all counters), else null if they haven't named a price",
     },
   },
   required: ["headline", "proposedOffer", "pills", "reasoning", "drafts", "theirCurrentPosition"],
@@ -962,7 +986,7 @@ export async function recommendNextMove(params: {
   if (response.stop_reason === "refusal") {
     throw new Error("Recommendation was refused by the model.");
   }
-  const text = response.content.find((b) => b.type === "text")?.text;
+  const text = finalText(response);
   if (!text) throw new Error("Empty recommendation response from Claude.");
   const parsed = JSON.parse(text) as Omit<RecoResult, "usage">;
   return {
