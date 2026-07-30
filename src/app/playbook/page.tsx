@@ -21,6 +21,7 @@ export default function PlaybookPage() {
       youtube: getPlaybook("youtube") ?? {},
       instagram: getPlaybook("instagram") ?? {},
       tiktok: getPlaybook("tiktok") ?? {},
+      facebook: getPlaybook("facebook") ?? {},
     },
     globalRules: getGlobalRules(),
     brandProfile: getBrandProfile(),

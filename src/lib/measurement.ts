@@ -13,6 +13,9 @@ export const DEFAULT_WINDOWS: Record<string, number> = {
   youtube: 30,
   instagram: 14,
   tiktok: 14,
+  // Facebook feed distribution decays like Instagram's — most of a post's views land
+  // in the first two weeks.
+  facebook: 14,
 };
 
 /** Fallback for a platform we don't know — long enough to be safe, short enough to matter. */

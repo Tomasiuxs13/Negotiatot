@@ -1,4 +1,7 @@
-export type Platform = "youtube" | "instagram" | "tiktok";
+export type Platform = "youtube" | "instagram" | "tiktok" | "facebook";
+
+/** Every platform the app works with — drives the DB constraint, pickers and filters. */
+export const ALL_PLATFORMS: Platform[] = ["youtube", "instagram", "tiktok", "facebook"];
 export type Stage =
   | "lead"
   | "contacted"
@@ -173,6 +176,8 @@ export const PLATFORM_META: Record<Platform, { label: string; icon: string }> = 
   youtube: { label: "YouTube", icon: "play_circle" },
   instagram: { label: "Instagram", icon: "photo_camera" },
   tiktok: { label: "TikTok", icon: "music_note" },
+  // Material Symbols has no brand icons, so like the others this is a metaphor.
+  facebook: { label: "Facebook", icon: "thumb_up" },
 };
 
 /** All platforms on a deal — falls back to the primary platform column. */

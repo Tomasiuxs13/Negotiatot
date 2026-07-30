@@ -25,6 +25,7 @@ const FILTERS = [
   { key: "youtube", label: "YouTube" },
   { key: "instagram", label: "Instagram" },
   { key: "tiktok", label: "TikTok" },
+  { key: "facebook", label: "Facebook" },
 ];
 
 export default async function PipelinePage({

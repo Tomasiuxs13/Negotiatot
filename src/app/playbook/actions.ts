@@ -16,7 +16,7 @@ export interface PlaybookPayload {
 export async function savePlaybookAction(payload: PlaybookPayload): Promise<{ error?: string }> {
   try {
     for (const [platform, rules] of Object.entries(payload.platforms)) {
-      if (!["youtube", "instagram", "tiktok"].includes(platform)) continue;
+      if (!["youtube", "instagram", "tiktok", "facebook"].includes(platform)) continue;
       setPlaybook(platform, rules);
     }
     if (payload.globalRules) setSetting("global_rules", payload.globalRules);

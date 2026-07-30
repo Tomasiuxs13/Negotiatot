@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import type { Deal, Message } from "./types";
-import { ALL_STAGES } from "./types";
+import { ALL_PLATFORMS, ALL_STAGES } from "./types";
 import {
   DEFAULT_BRAND_PROFILE,
   DEFAULT_GLOBAL_RULES,
@@ -28,9 +28,9 @@ db.exec(`
 CREATE TABLE IF NOT EXISTS deals (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   creator TEXT NOT NULL,
-  platform TEXT NOT NULL CHECK (platform IN ('youtube','instagram','tiktok')),
+  platform TEXT NOT NULL CHECK (platform IN ('youtube','instagram','tiktok','facebook')),
   format TEXT,
-  stage TEXT NOT NULL DEFAULT 'analyzing' CHECK (stage IN ('lead','contacted','analyzing','offer_sent','negotiating','agreed','declined')),
+  stage TEXT NOT NULL DEFAULT 'analyzing' CHECK (stage IN ('lead','contacted','analyzing','offer_sent','negotiating','agreed','completed','declined')),
   round INTEGER NOT NULL DEFAULT 0,
   your_move INTEGER NOT NULL DEFAULT 0,
   first_ask INTEGER,
@@ -299,33 +299,41 @@ for (const table of ["content_items", "payment_items", "shipments", "contracts"]
 }
 
 /**
- * SQLite can't ALTER a CHECK constraint, so adding a stage means rebuilding the table
- * from its own stored DDL with the constraint swapped. Driven by ALL_STAGES, so future
- * stages migrate an existing database on next boot without another bespoke migration.
+ * SQLite can't ALTER a CHECK constraint, so widening one means rebuilding the table
+ * from its own stored DDL with the constraint swapped. Driven by the ALL_* constants,
+ * so a future stage or platform migrates an existing database on next boot without
+ * another bespoke migration.
  */
-function widenStageConstraint() {
+function widenCheckConstraint(column: "stage" | "platform", values: readonly string[]) {
   const row = db
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'deals'")
     .get() as { sql: string } | undefined;
   if (!row) return;
 
-  const wanted = `CHECK (stage IN (${ALL_STAGES.map((s) => `'${s}'`).join(",")}))`;
+  const wanted = `CHECK (${column} IN (${values.map((v) => `'${v}'`).join(",")}))`;
   if (row.sql.includes(wanted)) return;
 
   const rebuilt = row.sql
-    .replace(/CHECK\s*\(\s*stage\s+IN\s*\([^)]*\)\s*\)/i, wanted)
+    .replace(new RegExp(`CHECK\\s*\\(\\s*${column}\\s+IN\\s*\\([^)]*\\)\\s*\\)`, "i"), wanted)
     .replace(/CREATE TABLE\s+"?deals"?/i, "CREATE TABLE deals_migrate");
 
+  // The pragma is process-wide state: restoring it in a finally block means a failed
+  // rebuild throws with FK enforcement back on, instead of silently orphaning every
+  // child row deleted for the rest of the process's life.
   db.pragma("foreign_keys = OFF");
-  db.transaction(() => {
-    db.exec(rebuilt);
-    db.exec("INSERT INTO deals_migrate SELECT * FROM deals");
-    db.exec("DROP TABLE deals");
-    db.exec("ALTER TABLE deals_migrate RENAME TO deals");
-  })();
-  db.pragma("foreign_keys = ON");
+  try {
+    db.transaction(() => {
+      db.exec(rebuilt);
+      db.exec("INSERT INTO deals_migrate SELECT * FROM deals");
+      db.exec("DROP TABLE deals");
+      db.exec("ALTER TABLE deals_migrate RENAME TO deals");
+    })();
+  } finally {
+    db.pragma("foreign_keys = ON");
+  }
 }
-widenStageConstraint();
+widenCheckConstraint("stage", ALL_STAGES);
+widenCheckConstraint("platform", ALL_PLATFORMS);
 
 /**
  * One-time backfill: deals used to store the creator as a plain string. Give every

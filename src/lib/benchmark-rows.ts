@@ -64,7 +64,7 @@ export interface BenchmarkRow {
   roas: number | null;
 }
 
-const KNOWN: Platform[] = ["youtube", "instagram", "tiktok"];
+const KNOWN: Platform[] = ["youtube", "instagram", "tiktok", "facebook"];
 
 const isPlatform = (value: string | null): value is Platform =>
   value != null && (KNOWN as string[]).includes(value);

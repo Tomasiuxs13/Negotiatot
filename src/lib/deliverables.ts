@@ -15,7 +15,7 @@
 // matches on "video"), but "stories" doesn't share a stem with "story" and has to be
 // spelled out.
 const PIECE_PATTERN =
-  /(\d+)\s*(?:×|x)?\s*(?:youtube|instagram|tiktok|video|integration|short|reel|stor(?:y|ies)|post)/gi;
+  /(\d+)\s*(?:×|x)?\s*(?:youtube|instagram|tiktok|facebook|video|integration|short|reel|stor(?:y|ies)|post)/gi;
 
 export function deliverableCount(params: {
   /** The deal's deliverables or format text, if the manager wrote one. */

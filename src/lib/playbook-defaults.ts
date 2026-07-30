@@ -7,7 +7,7 @@
  * and the page looked correct. Defaults now reach both.
  */
 
-export type PlatformKey = "youtube" | "instagram" | "tiktok";
+export type PlatformKey = "youtube" | "instagram" | "tiktok" | "facebook";
 
 /**
  * Per-platform buying rules. Engagement floors are deliberately platform-specific:
@@ -46,6 +46,20 @@ export const DEFAULT_PLATFORM_RULES: Record<PlatformKey, Record<string, number>>
     minEngagementRate: 6,
     maxFakeFollowers: 20,
     maxPerDeal: 3000,
+  },
+  facebook: {
+    minIntegrations: 2,
+    // Facebook video inventory is cheap relative to YouTube — pages reach older,
+    // high-intent audiences but per-view attention is lower, so the ceilings sit
+    // between TikTok's and Instagram's.
+    maxCpmIntegration: 14,
+    maxCpmShort: 6,
+    minAvgViews: 20000,
+    // Page engagement is structurally the lowest of the four — 0.5–1% is normal for
+    // pages over 100k. A floor above 1% would reject nearly every real Facebook page.
+    minEngagementRate: 0.8,
+    maxFakeFollowers: 20,
+    maxPerDeal: 3500,
   },
 };
 

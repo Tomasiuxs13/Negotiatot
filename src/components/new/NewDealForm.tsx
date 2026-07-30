@@ -12,6 +12,7 @@ const PLATFORMS = [
   { value: "youtube", label: "YouTube" },
   { value: "instagram", label: "Instagram" },
   { value: "tiktok", label: "TikTok" },
+  { value: "facebook", label: "Facebook" },
 ];
 
 export default function NewDealForm({

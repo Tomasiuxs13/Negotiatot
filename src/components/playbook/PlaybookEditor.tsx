@@ -3,11 +3,12 @@
 import { useState, useTransition } from "react";
 import { savePlaybookAction, type PlaybookPayload } from "@/app/playbook/actions";
 
-const PLATFORMS = ["youtube", "instagram", "tiktok"] as const;
+const PLATFORMS = ["youtube", "instagram", "tiktok", "facebook"] as const;
 const PLATFORM_LABEL: Record<string, string> = {
   youtube: "YouTube",
   instagram: "Instagram",
   tiktok: "TikTok",
+  facebook: "Facebook",
 };
 
 const RULE_LABELS: Record<string, string> = {

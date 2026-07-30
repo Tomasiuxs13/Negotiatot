@@ -55,7 +55,7 @@ export async function createDealAction(
   const platforms = formData
     .getAll("platforms")
     .map(String)
-    .filter((p) => ["youtube", "instagram", "tiktok"].includes(p));
+    .filter((p) => ["youtube", "instagram", "tiktok", "facebook"].includes(p));
   const deliverables = String(formData.get("deliverables") ?? "").trim() || null;
   const campaignIdRaw = String(formData.get("campaign_id") ?? "").trim();
   const campaignId = campaignIdRaw ? Number(campaignIdRaw) : null;

@@ -17,7 +17,7 @@ import {
 const inputClass =
   "w-full border border-slate-200 rounded-md bg-white px-2.5 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand";
 
-const PLATFORMS: Platform[] = ["youtube", "instagram", "tiktok"];
+const PLATFORMS: Platform[] = ["youtube", "instagram", "tiktok", "facebook"];
 
 export default function PartnerProfile({
   partner,

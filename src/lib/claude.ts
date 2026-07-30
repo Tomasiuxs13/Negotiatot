@@ -550,7 +550,7 @@ const CONTRACT_SCHEMA = {
           description: { type: "string", description: "e.g. 'YouTube integration, 60-90s'" },
           platform: {
             type: ["string", "null"],
-            description: "One of: youtube, instagram, tiktok. Null if the deliverable is not platform-specific.",
+            description: "One of: youtube, instagram, tiktok, facebook. Null if the deliverable is not platform-specific.",
           },
           quantity: { type: "number" },
           dueDate: { type: ["string", "null"], description: "YYYY-MM-DD if an absolute date is stated" },
