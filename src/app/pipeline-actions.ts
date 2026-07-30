@@ -32,6 +32,11 @@ export async function moveDealStage(dealId: number, stage: Stage) {
   if (stage === "agreed" && deal.agreed_price == null) {
     fields.agreed_price = deal.current_offer ?? deal.current_ask ?? null;
   }
+  // Stamp when the deal was won — the monthly budget keys on this, and it must not
+  // move when the deal is edited later. Completed-without-Agreed still counts as won.
+  if ((stage === "agreed" || stage === "completed") && deal.agreed_at == null) {
+    fields.agreed_at = new Date().toISOString().slice(0, 19).replace("T", " ");
+  }
   updateDeal(dealId, fields);
   revalidatePath("/");
   revalidatePath("/pipeline");

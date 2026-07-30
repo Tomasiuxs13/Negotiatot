@@ -31,6 +31,7 @@ import { deliverableCount } from "@/lib/deliverables";
 import { ladderNotes } from "@/lib/ladder-notes";
 import AnalysisTab from "@/components/deal/AnalysisTab";
 import NegotiationTab from "@/components/deal/NegotiationTab";
+import DealNotes from "@/components/deal/DealNotes";
 
 export const dynamic = "force-dynamic";
 
@@ -354,9 +355,10 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
         history={<HistoryTab />}
       />
 
-      {/* Below the tabs so it's visible from every tab — a promise like "ask again in
-          three months" shouldn't hide behind the tab that happened to be open. */}
-      <div className="max-w-4xl mt-4">
+      {/* Below the tabs so they're visible from every tab — a note or a promise like
+          "ask again in three months" shouldn't hide behind the tab that was open. */}
+      <div className="max-w-4xl mt-4 grid grid-cols-2 gap-4 items-start">
+        <DealNotes dealId={deal.id} initialNotes={deal.notes ?? ""} />
         <RemindersBlock
           reminders={getRemindersFor({ dealId: deal.id })}
           dealId={deal.id}

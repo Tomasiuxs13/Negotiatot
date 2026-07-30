@@ -115,6 +115,20 @@ CREATE TABLE IF NOT EXISTS usage_log (
   // not overwrite a human correction with a fresh model estimate.
   if (!cols.includes("audience_locked"))
     db.exec("ALTER TABLE deals ADD COLUMN audience_locked INTEGER NOT NULL DEFAULT 0");
+  // When the deal was actually won. Monthly KPIs used updated_at, which every edit
+  // bumps — logging actuals on a March deal pulled its whole fee into July's budget.
+  if (!cols.includes("agreed_at")) {
+    db.exec("ALTER TABLE deals ADD COLUMN agreed_at TEXT");
+    // Best available backfill: the last-touched time of already-won deals. Wrong for
+    // deals edited after closing, but the honest alternative is NULL, which would
+    // silently drop them from every monthly figure.
+    db.exec(
+      "UPDATE deals SET agreed_at = updated_at WHERE stage IN ('agreed','completed') AND agreed_at IS NULL"
+    );
+  }
+  // Free-text notes on the deal — context only a human knows ("prefers email",
+  // "agency negotiates for him"). Fed to the Copilot as background, never as rules.
+  if (!cols.includes("notes")) db.exec("ALTER TABLE deals ADD COLUMN notes TEXT");
   if (!cols.includes("job_status")) db.exec("ALTER TABLE deals ADD COLUMN job_status TEXT");
   if (!cols.includes("job_error")) db.exec("ALTER TABLE deals ADD COLUMN job_error TEXT");
   if (!cols.includes("job_started_at")) db.exec("ALTER TABLE deals ADD COLUMN job_started_at TEXT");
@@ -896,17 +910,28 @@ export function upsertPartnerChannel(fields: {
     .get(fields.partnerId, fields.platform) as { id: number } | undefined;
 
   if (existing) {
-    db.prepare(
-      `UPDATE partner_channels SET handle = ?, url = ?, followers = ?, avg_views = ?,
-         engagement_rate = ?, updated_at = datetime('now') WHERE id = ?`
-    ).run(
-      fields.handle ?? null,
-      fields.url ?? null,
-      fields.followers ?? null,
-      fields.avgViews ?? null,
-      fields.engagementRate ?? null,
-      existing.id
-    );
+    // Partial update, like updatePartner: only fields the caller actually supplied are
+    // written. The old full-row overwrite turned every omitted field into NULL — and
+    // since intake never passes handle or followers, creating a second deal for a
+    // returning creator silently wiped the reach data pricing depends on.
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    const set = (column: string, value: unknown) => {
+      if (value !== undefined) {
+        sets.push(`${column} = ?`);
+        params.push(value);
+      }
+    };
+    set("handle", fields.handle);
+    set("url", fields.url);
+    set("followers", fields.followers);
+    set("avg_views", fields.avgViews);
+    set("engagement_rate", fields.engagementRate);
+    if (sets.length > 0) {
+      db.prepare(
+        `UPDATE partner_channels SET ${sets.join(", ")}, updated_at = datetime('now') WHERE id = ?`
+      ).run(...params, existing.id);
+    }
     return existing.id;
   }
   const info = db
@@ -989,10 +1014,26 @@ export function getCampaignSpend(campaignId: number): number {
   return row.spend;
 }
 
-export function setJob(dealId: number, status: "analyzing" | "recommending") {
-  db.prepare(
-    "UPDATE deals SET job_status = ?, job_error = NULL, job_started_at = datetime('now') WHERE id = ?"
-  ).run(status, dealId);
+/**
+ * Claims the deal's single job slot. Returns false when a live job already holds it —
+ * the caller should refuse, not queue. Without this, "Run analysis" then "Regenerate"
+ * ten seconds later ran two jobs against one deal: the second overwrote the first's
+ * flag, the first's finish cleared the second's, and the poller reported done while a
+ * background write was still coming. A job older than the stale window is presumed
+ * dead (matching failStaleJobs) and its slot is taken over.
+ */
+export function setJob(dealId: number, status: "analyzing" | "recommending"): boolean {
+  const result = db
+    .prepare(
+      `UPDATE deals SET job_status = ?, job_error = NULL, job_started_at = datetime('now')
+       WHERE id = ? AND (
+         job_status IS NULL
+         OR job_started_at IS NULL
+         OR job_started_at < datetime('now', '-15 minutes')
+       )`
+    )
+    .run(status, dealId);
+  return result.changes > 0;
 }
 
 export function clearJob(dealId: number, error?: string) {
@@ -1156,8 +1197,8 @@ export function touchDeal(dealId: number) {
 export function updateDeal(dealId: number, fields: Record<string, unknown>) {
   const allowed = [
     "stage", "round", "your_move", "first_ask", "current_ask", "current_offer",
-    "agreed_price", "anchor", "target", "walkaway", "breakeven", "avg_views",
-    "engagement_rate", "audience_locked", "status_label", "status_tone", "campaign", "analysis", "channel_url",
+    "agreed_price", "agreed_at", "anchor", "target", "walkaway", "breakeven", "avg_views",
+    "engagement_rate", "audience_locked", "notes", "status_label", "status_tone", "campaign", "analysis", "channel_url",
     "actual_views", "actual_clicks", "actual_orders", "actual_revenue", "actuals_logged_at",
     "job_status", "job_error", "job_started_at",
     "partner_id", "campaign_id", "deal_type",
@@ -1191,9 +1232,10 @@ export function getPipelineKpis(): PipelineKpis {
   // Won deals, whether still being delivered or fully wrapped up.
   const agreed = deals.filter((d) => d.stage === "agreed" || d.stage === "completed");
 
-  // SQLite datetime('now') stores "YYYY-MM-DD HH:MM:SS" in UTC.
+  // SQLite datetime('now') stores "YYYY-MM-DD HH:MM:SS" in UTC. Keyed on agreed_at —
+  // when the deal was won — never updated_at, which any edit bumps.
   const currentMonth = new Date().toISOString().slice(0, 7);
-  const inThisMonth = (d: Deal) => (d.updated_at ?? "").slice(0, 7) === currentMonth;
+  const inThisMonth = (d: Deal) => (d.agreed_at ?? "").slice(0, 7) === currentMonth;
   const agreedThisMonth = agreed.filter(inThisMonth);
 
   // Committed this month = deals closed this month + offers currently on the table.

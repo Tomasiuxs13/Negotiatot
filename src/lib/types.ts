@@ -89,8 +89,12 @@ export interface Deal {
   breakeven: number | null;
   avg_views: number | null;
   engagement_rate: number | null;
+  /** When the deal was won; monthly KPIs key on this, never on updated_at. */
+  agreed_at?: string | null;
   /** 1 when the manager set the audience figures by hand; re-runs must not overwrite them. */
   audience_locked?: number;
+  /** The manager's free-text notes — context for the Copilot, never instructions. */
+  notes?: string | null;
   status_label: string | null;
   status_tone: StatusTone;
   campaign: string | null;

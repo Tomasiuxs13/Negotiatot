@@ -243,6 +243,8 @@ export async function confirmContractAction(
     // Re-confirming a finished deal must not reopen it — "completed" is an outcome,
     // not a workflow position.
     stage: deal.stage === "completed" ? "completed" : "agreed",
+    // A confirmed contract IS the win; keep the first win date on re-confirmation.
+    agreed_at: deal.agreed_at ?? new Date().toISOString().slice(0, 19).replace("T", " "),
     deal_type: terms.product ? (paymentCount > 0 ? "gifted_plus_paid" : "gifted") : "paid",
     agreed_price: terms.totalFee ?? deal.agreed_price ?? deal.current_offer,
     status_label: "Contract confirmed",

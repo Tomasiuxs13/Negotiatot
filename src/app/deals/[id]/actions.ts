@@ -38,7 +38,7 @@ export async function addTheirReply(dealId: number, text: string) {
     round,
     your_move: 1,
     stage: deal.stage === "offer_sent" || deal.stage === "analyzing" ? "negotiating" : deal.stage,
-    status_label: `Round ${round} · Copilot drafting…`,
+    status_label: `Round ${round} · your move`,
     status_tone: "warn",
   });
 
@@ -49,7 +49,12 @@ export async function addTheirReply(dealId: number, text: string) {
     return { error: `Message saved, but recommendations are unavailable: ${NO_KEY_ERROR}` };
   }
 
-  setJob(dealId, "recommending");
+  if (!setJob(dealId, "recommending")) {
+    return { error: "Message saved — but the Copilot is already working on this deal. Regenerate when it finishes." };
+  }
+  // "Drafting" is only claimed once the job actually is — a refused job that left this
+  // label up promised a draft that was never coming.
+  updateDeal(dealId, { status_label: `Round ${round} · Copilot drafting…` });
   after(() => performRecommendation(dealId));
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/");
@@ -66,7 +71,9 @@ export async function runRecommendation(dealId: number) {
   if (!deal) return { error: "Deal not found" };
   if (!hasApiKey()) return { error: NO_KEY_ERROR };
 
-  setJob(dealId, "recommending");
+  if (!setJob(dealId, "recommending")) {
+    return { error: "The Copilot is already working on this deal — wait for it to finish." };
+  }
   after(() => performRecommendation(dealId));
   revalidatePath(`/deals/${dealId}`);
   return {};
@@ -77,7 +84,9 @@ export async function runAnalysis(dealId: number) {
   if (!deal) return { error: "Deal not found" };
   if (!hasApiKey()) return { error: NO_KEY_ERROR };
 
-  setJob(dealId, "analyzing");
+  if (!setJob(dealId, "analyzing")) {
+    return { error: "The Copilot is already working on this deal — wait for it to finish." };
+  }
   updateDeal(dealId, { status_label: "Analyzing…", status_tone: "neutral" });
   after(() => performAnalysis(dealId));
   revalidatePath(`/deals/${dealId}`);
@@ -141,6 +150,15 @@ export async function saveActuals(
   revalidatePath("/benchmarks");
   revalidatePath("/");
   revalidatePath("/pipeline");
+  return {};
+}
+
+export async function saveDealNotesAction(dealId: number, notes: string) {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  if (notes.length > 5000) return { error: "Notes are too long — keep them under 5,000 characters." };
+  updateDeal(dealId, { notes: notes.trim() || null });
+  revalidatePath(`/deals/${dealId}`);
   return {};
 }
 
