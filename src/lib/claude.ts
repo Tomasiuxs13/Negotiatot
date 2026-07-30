@@ -42,6 +42,8 @@ interface PlaybookContext {
   brandProfile?: Record<string, string> | null;
   unitEconomics: Record<string, unknown> | null;
   negotiationStyle: Record<string, unknown> | null;
+  /** This creator's typical views per platform, from their partner record. */
+  channelReach?: Record<string, number>;
 }
 
 /**
@@ -140,6 +142,64 @@ function dealViability(deal: Deal, ctx: PlaybookContext) {
     productCost,
   });
   return { orders, margin, pieces };
+}
+
+/**
+ * Per-platform reach from the partner record. The deal itself carries one blended
+ * avg_views; on any multi-platform deal the model needs the split, or it prices every
+ * platform's placement on the same number.
+ */
+function reachBlock(ctx: PlaybookContext): string {
+  const reach = ctx.channelReach ?? {};
+  const entries = Object.entries(reach).filter(([, v]) => Number.isFinite(v) && v > 0);
+  if (entries.length === 0) return "";
+  return (
+    `This creator's typical views per platform (from their partner record): ` +
+    entries.map(([p, v]) => `${p} ~${Math.round(v).toLocaleString("en")}`).join(", ") +
+    `. Prefer these per-platform figures over the deal's single avg-views number when` +
+    ` valuing platform-specific deliverables.`
+  );
+}
+
+/** True when the deliverables describe one production distributed to several platforms. */
+function isCrosspost(deal: Deal): boolean {
+  const text = deal.deliverables ?? deal.format ?? "";
+  return /cross.?post|same\s+(?:video|content|short)|repost/i.test(text);
+}
+
+/**
+ * Cross-posting breaks the platform-equals-deliverable assumption the rest of the
+ * prompt makes: one Short on three platforms is one production with three audiences,
+ * not three deliverables. Without this block the model priced only the primary
+ * platform's reach and negotiated for minIntegrations on every platform — demanding
+ * extra productions from a creator whose whole offer was "film once, post everywhere".
+ */
+function crosspostBlock(deal: Deal, ctx: PlaybookContext): string {
+  if (!isCrosspost(deal)) return "";
+  const reach = ctx.channelReach ?? {};
+  const reachLine = Object.entries(reach)
+    .map(([p, v]) => `${p} ~${Math.round(v).toLocaleString("en")}`)
+    .join(", ");
+  return [
+    ``,
+    `## Cross-posted content`,
+    `This deal is ONE production distributed to several platforms, not separate content`,
+    `per platform. Price it accordingly:`,
+    `- Fair value = the SUM over platforms of (that platform's expected views for this`,
+    `  format × that platform's max CPM for the short/mention format). Combined reach is`,
+    `  what the money buys; the effort is priced once.`,
+    reachLine
+      ? `- Expected views per platform from this creator's record: ${reachLine}. Use these` +
+        ` per-platform figures, not the single blended number.`
+      : `- No per-platform reach is on record — say so in your reasoning and state the` +
+        ` assumption you used for each platform's share.`,
+    `- Do NOT apply minIntegrations per platform here. The bundle size is the number of`,
+    `  productions, and a platform's minimum piece count does not apply to distribution.`,
+    `- Judge quality gates on the platform where the content is native first; a shortfall`,
+    `  against one platform's view floor is not disqualifying when combined reach clears it.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 /** Pieces this deal covers, from its own text or the Playbook bundle it will propose. */
@@ -744,6 +804,10 @@ export async function analyzeDeal(params: {
   if (params.reportText) facts.push(`Analytics report (text):\n"""${params.reportText}"""`);
   const history = historyBlock(params.history, deal.creator);
   if (history) facts.push(history);
+  const reach = reachBlock(playbook);
+  if (reach) facts.push(reach);
+  const crosspost = crosspostBlock(deal, playbook);
+  if (crosspost) facts.push(crosspost);
   const commission = commissionBlock(deal, playbook.unitEconomics as Record<string, number>);
   if (commission) facts.push(commission);
   const structure = structureBlock(playbook.unitEconomics, dealViability(deal, playbook) ?? undefined);
@@ -988,6 +1052,8 @@ export async function recommendNextMove(params: {
     structureBlock(playbook.unitEconomics, dealViability(deal, playbook) ?? undefined),
     forecastBlock(deal, playbook),
     brandBlock(playbook),
+    reachBlock(playbook),
+    crosspostBlock(deal, playbook),
     historyBlock(params.history, deal.creator),
     ``,
     `## Conversation so far`,

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PartnerProfile from "@/components/partners/PartnerProfile";
-import { getPartner, getPartnerChannels, getPartnerDeals } from "@/lib/db";
+import { getPartner, getPartnerChannels, getPartnerDeals, getRemindersFor } from "@/lib/db";
+import RemindersBlock from "@/components/RemindersBlock";
 import { getPartnerOnboarding } from "@/lib/fulfillment";
 import { partnerStats, partnerStatus } from "@/lib/partners";
 import PartnerStatusPill from "@/components/partners/PartnerStatusPill";
@@ -53,6 +54,8 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
 
       <div className="space-y-4 max-w-5xl">
         <PartnerProfile partner={partner} channels={channels} dealCount={deals.length} />
+
+        <RemindersBlock reminders={getRemindersFor({ partnerId: partner.id })} partnerId={partner.id} />
 
         <div className="grid grid-cols-5 gap-3">
           {kpis.map((k) => (

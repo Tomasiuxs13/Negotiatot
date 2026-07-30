@@ -13,6 +13,7 @@ import {
 } from "./playbook-defaults";
 import type { Campaign } from "./campaigns";
 import type { Partner, PartnerChannel } from "./partners";
+import type { Reminder } from "./reminders";
 
 const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -186,6 +187,23 @@ CREATE TABLE IF NOT EXISTS usage_log (
     status TEXT NOT NULL DEFAULT 'todo',
     position INTEGER NOT NULL DEFAULT 0,
     completed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  /*
+   * The manager's own follow-ups — "they said ask again in Q4", "chase the invoice".
+   * Distinct from onboarding_tasks (a templated checklist the app generates) and from
+   * attention items (derived from data): a reminder is something a human promised to
+   * do at a date only they know. Attached to a partner or a deal so it deep-links and
+   * dies with its subject.
+   */
+  db.exec(`CREATE TABLE IF NOT EXISTS reminders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    due_on TEXT NOT NULL,
+    partner_id INTEGER REFERENCES partners(id) ON DELETE CASCADE,
+    deal_id INTEGER REFERENCES deals(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','done')),
+    done_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
   // The first shape of this table keyed everything to a deal. It never shipped, so
@@ -732,6 +750,68 @@ export function getPartnerChannels(partnerId: number): PartnerChannel[] {
   return db
     .prepare("SELECT * FROM partner_channels WHERE partner_id = ? ORDER BY platform")
     .all(partnerId) as PartnerChannel[];
+}
+
+/* ------------------------------------------------------------- reminders */
+
+export function createReminder(fields: {
+  title: string;
+  dueOn: string;
+  partnerId?: number | null;
+  dealId?: number | null;
+}): number {
+  const info = db
+    .prepare(
+      "INSERT INTO reminders (title, due_on, partner_id, deal_id) VALUES (?, ?, ?, ?)"
+    )
+    .run(fields.title, fields.dueOn, fields.partnerId ?? null, fields.dealId ?? null);
+  return Number(info.lastInsertRowid);
+}
+
+/** Reminders shown on a deal or partner page — open first, soonest first. */
+export function getRemindersFor(scope: { partnerId?: number; dealId?: number }): Reminder[] {
+  if (scope.dealId != null) {
+    return db
+      .prepare(
+        "SELECT * FROM reminders WHERE deal_id = ? ORDER BY status = 'done', due_on"
+      )
+      .all(scope.dealId) as Reminder[];
+  }
+  if (scope.partnerId != null) {
+    // A partner page shows the partner's own reminders AND those on their deals — the
+    // person is the subject either way.
+    return db
+      .prepare(
+        `SELECT r.* FROM reminders r
+         LEFT JOIN deals d ON d.id = r.deal_id
+         WHERE r.partner_id = ? OR d.partner_id = ?
+         ORDER BY r.status = 'done', r.due_on`
+      )
+      .all(scope.partnerId, scope.partnerId) as Reminder[];
+  }
+  return [];
+}
+
+export function getOpenReminders(): Reminder[] {
+  return db
+    .prepare("SELECT * FROM reminders WHERE status = 'open' ORDER BY due_on")
+    .all() as Reminder[];
+}
+
+export function getReminder(id: number): Reminder | undefined {
+  return db.prepare("SELECT * FROM reminders WHERE id = ?").get(id) as Reminder | undefined;
+}
+
+export function setReminderStatus(id: number, status: "open" | "done") {
+  db.prepare(
+    `UPDATE reminders SET status = ?,
+       done_at = CASE WHEN ? = 'done' THEN datetime('now') ELSE NULL END
+     WHERE id = ?`
+  ).run(status, status, id);
+}
+
+export function deleteReminder(id: number) {
+  db.prepare("DELETE FROM reminders WHERE id = ?").run(id);
 }
 
 /** Typical reach per platform for every partner, for allocating bundle fees. */

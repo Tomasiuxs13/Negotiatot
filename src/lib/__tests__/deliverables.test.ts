@@ -31,10 +31,19 @@ describe("deliverableCount", () => {
     ).toBe(3);
   });
 
-  it("sums minIntegrations across every platform on the deal", () => {
+  it("takes the largest single-platform minimum on a multi-platform deal, not the sum", () => {
+    // Several platforms with nothing written down may be one piece crossposted
+    // everywhere — summing the minimums priced a single crossposted Short as six
+    // productions. Max is right for a crosspost, merely conservative for a true bundle.
     expect(
       deliverableCount({ platforms: ["youtube", "instagram"], rulesByPlatform: rules })
-    ).toBe(5);
+    ).toBe(3);
+    expect(
+      deliverableCount({
+        platforms: ["youtube", "tiktok", "instagram"],
+        rulesByPlatform: rules,
+      })
+    ).toBe(3);
   });
 
   it("prefers an explicit count over the Playbook fallback", () => {

@@ -35,11 +35,16 @@ export function deliverableCount(params: {
   // creator is being offered.
   const rules = params.rulesByPlatform;
   if (rules) {
-    const fromPlaybook = (params.platforms ?? [])
+    const perPlatform = (params.platforms ?? [])
       .map((p) => Number(rules[p]?.minIntegrations ?? 0))
-      .filter((n) => Number.isFinite(n) && n > 0)
-      .reduce((a, b) => a + b, 0);
-    if (fromPlaybook > 0) return fromPlaybook;
+      .filter((n) => Number.isFinite(n) && n > 0);
+    // One platform: its minimum is the bundle. Several platforms with nothing written
+    // down is ambiguous — it may be separate content per platform, or one piece
+    // crossposted everywhere. Summing the minimums priced a single crossposted Short
+    // as six productions, so take the largest single-platform minimum instead: right
+    // for a crosspost, merely conservative for a true multi-platform bundle.
+    if (perPlatform.length === 1) return perPlatform[0];
+    if (perPlatform.length > 1) return Math.max(...perPlatform);
   }
   return 1;
 }

@@ -3,6 +3,7 @@ import type { ContentItem, OnboardingTask, PaymentItem, Shipment } from "./fulfi
 import { BLOCKING_KINDS } from "./fulfillment-types";
 import { isOverdue } from "./fulfillment-rules";
 import { measurementState, type MeasurementWindows } from "./measurement";
+import { dueReminders, reminderHref, type Reminder } from "./reminders";
 
 export type AttentionSeverity = "critical" | "warning" | "info";
 
@@ -21,6 +22,8 @@ export interface AttentionInput {
   shipments: Shipment[];
   payments: PaymentItem[];
   onboarding?: OnboardingTask[];
+  /** The manager's own follow-ups — surfaced when their date arrives. */
+  reminders?: Reminder[];
   today?: string;
   /** Days of silence before we suggest nudging the creator. */
   silentDays?: number;
@@ -50,6 +53,7 @@ export function attentionItems({
   shipments,
   payments,
   onboarding = [],
+  reminders = [],
   today = new Date().toISOString().slice(0, 10),
   silentDays = 3,
   stuckDays = 7,
@@ -58,6 +62,23 @@ export function attentionItems({
   const items: AttentionItem[] = [];
   const dealById = new Map(deals.map((d) => [d.id, d]));
   const nameOf = (dealId: number) => dealById.get(dealId)?.creator ?? "Unknown";
+
+  // The manager's own promises come first in kind: everything else here is derived
+  // from data and will resurface on its own, but a written-down "ask again in three
+  // months" exists nowhere else — if this list drops it, it's gone.
+  for (const r of dueReminders(reminders, today)) {
+    const days = daysBetween(r.due_on, today);
+    const who = r.deal_id != null ? nameOf(r.deal_id) : null;
+    items.push({
+      id: `reminder-${r.id}`,
+      severity: days > 7 ? "critical" : "warning",
+      title: `Reminder: ${r.title}`,
+      detail:
+        (who ? `${who} · ` : "") +
+        (days === 0 ? "due today" : `due ${days} day${days === 1 ? "" : "s"} ago`),
+      href: reminderHref(r),
+    });
+  }
 
   // Content past its deadline — the most expensive thing to miss.
   for (const c of contentItems) {

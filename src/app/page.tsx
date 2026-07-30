@@ -1,7 +1,7 @@
 import Link from "next/link";
 import PageHeader, { NewDealButton } from "@/components/PageHeader";
 import AttentionPanel from "@/components/pipeline/AttentionPanel";
-import { getDeals, getPipelineKpis, getSetting } from "@/lib/db";
+import { getDeals, getOpenReminders, getPipelineKpis, getSetting } from "@/lib/db";
 import type { MeasurementWindows } from "@/lib/measurement";
 import { attentionItems } from "@/lib/attention";
 import {
@@ -25,6 +25,7 @@ export default function DashboardPage() {
     shipments: getAllShipments(),
     payments,
     onboarding: getAllOnboardingTasks(),
+    reminders: getOpenReminders(),
     windows: getSetting<MeasurementWindows>("measurement_windows") ?? {},
   });
 

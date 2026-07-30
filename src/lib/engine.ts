@@ -5,6 +5,7 @@ import {
   getCampaign,
   getDeal,
   getMessages,
+  getPartnerChannels,
   getPartnerDeals,
   getBrandProfile,
   getGlobalRules,
@@ -47,7 +48,11 @@ export function dealHistory(deal: Deal): PriorDeal[] {
  * Builds the rules the engine negotiates by: the global Playbook for each
  * platform, with the deal's campaign overrides layered on top.
  */
-export function playbookContext(platforms: string[], campaignId?: number | null) {
+export function playbookContext(
+  platforms: string[],
+  campaignId?: number | null,
+  partnerId?: number | null
+) {
   let rulesByPlatform: Record<string, Record<string, unknown> | null> = Object.fromEntries(
     platforms.map((p) => [p, getPlaybook(p)])
   );
@@ -61,6 +66,16 @@ export function playbookContext(platforms: string[], campaignId?: number | null)
     }
   }
 
+  // The deal stores one blended avg_views; the per-platform split lives on the partner's
+  // channel records. Without it the model prices every platform's placement — and any
+  // crosspost — on the same number.
+  const channelReach: Record<string, number> = {};
+  if (partnerId != null) {
+    for (const c of getPartnerChannels(partnerId)) {
+      if (c.avg_views != null && c.avg_views > 0) channelReach[c.platform] = c.avg_views;
+    }
+  }
+
   return {
     rulesByPlatform,
     campaignName,
@@ -68,6 +83,7 @@ export function playbookContext(platforms: string[], campaignId?: number | null)
     brandProfile: getBrandProfile(),
     unitEconomics: getUnitEconomics(),
     negotiationStyle: getNegotiationStyle(),
+    channelReach,
   };
 }
 
@@ -96,7 +112,7 @@ export async function performAnalysis(
 
     const result = await analyzeDeal({
       deal,
-      playbook: playbookContext(platformsOf(deal), deal.campaign_id),
+      playbook: playbookContext(platformsOf(deal), deal.campaign_id, deal.partner_id),
       reportPdfBase64: inputs.reportPdfBase64,
       reportImage: inputs.reportImage,
       theirMessage: theirMessage || undefined,
@@ -162,7 +178,7 @@ export async function performRecommendation(dealId: number) {
     const reco = await recommendNextMove({
       deal,
       messages,
-      playbook: playbookContext(platformsOf(deal), deal.campaign_id),
+      playbook: playbookContext(platformsOf(deal), deal.campaign_id, deal.partner_id),
       history: dealHistory(deal),
     });
 

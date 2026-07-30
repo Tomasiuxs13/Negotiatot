@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCampaign, getDeal, getMessages, getPartnerChannels, getSetting, getUsageTotals } from "@/lib/db";
+import { getCampaign, getDeal, getMessages, getPartnerChannels, getRemindersFor, getSetting, getUsageTotals } from "@/lib/db";
+import RemindersBlock from "@/components/RemindersBlock";
 import type { MeasurementWindows } from "@/lib/measurement";
 import { describeOverrides, parseOverrides } from "@/lib/campaigns";
 import { DECLINE_REASON_LABEL, PLATFORM_META, STAGE_LABELS, dealPlatforms, dealScope } from "@/lib/types";
@@ -320,6 +321,16 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
         }
         history={<HistoryTab />}
       />
+
+      {/* Below the tabs so it's visible from every tab — a promise like "ask again in
+          three months" shouldn't hide behind the tab that happened to be open. */}
+      <div className="max-w-4xl mt-4">
+        <RemindersBlock
+          reminders={getRemindersFor({ dealId: deal.id })}
+          dealId={deal.id}
+          partnerId={deal.partner_id ?? undefined}
+        />
+      </div>
     </main>
   );
 }

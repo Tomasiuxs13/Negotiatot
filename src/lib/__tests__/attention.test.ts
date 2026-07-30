@@ -379,3 +379,52 @@ describe("verdict vs your-move overlap", () => {
     expect(items.some((i) => i.title.includes("verdict ready to review"))).toBe(true);
   });
 });
+
+describe("manager reminders", () => {
+  const reminder = (over: Partial<import("../reminders").Reminder>) =>
+    ({
+      id: 9,
+      title: "Reach out again — they asked for 3 months",
+      due_on: TODAY,
+      partner_id: 4,
+      deal_id: null,
+      status: "open",
+      done_at: null,
+      created_at: "2026-04-22 09:00:00",
+      ...over,
+    }) as import("../reminders").Reminder;
+
+  it("surfaces a reminder the day it comes due, linked to its subject", () => {
+    const items = attentionItems({ ...base, reminders: [reminder({})] });
+    const hit = items.find((i) => i.id === "reminder-9");
+    expect(hit?.title).toContain("Reach out again");
+    expect(hit?.detail).toBe("due today");
+    expect(hit?.href).toBe("/partners/4");
+  });
+
+  it("stays quiet before the date and after it's done", () => {
+    expect(
+      attentionItems({ ...base, reminders: [reminder({ due_on: "2026-07-23" })] })
+    ).toEqual([]);
+    expect(
+      attentionItems({ ...base, reminders: [reminder({ status: "done" })] })
+    ).toEqual([]);
+  });
+
+  it("escalates a reminder ignored for over a week", () => {
+    const items = attentionItems({ ...base, reminders: [reminder({ due_on: "2026-07-10" })] });
+    const hit = items.find((i) => i.id === "reminder-9");
+    expect(hit?.severity).toBe("critical");
+    expect(hit?.detail).toBe("due 12 days ago");
+  });
+
+  it("prefers the deal page and names the creator when attached to a deal", () => {
+    const items = attentionItems({
+      ...base,
+      reminders: [reminder({ deal_id: 1, partner_id: null })],
+    });
+    const hit = items.find((i) => i.id === "reminder-9");
+    expect(hit?.href).toBe("/deals/1");
+    expect(hit?.detail).toBe("Marta · due today");
+  });
+});
