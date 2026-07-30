@@ -103,7 +103,13 @@ export async function performAnalysis(
 ) {
   try {
     const deal = getDeal(dealId);
-    if (!deal) return;
+    // Clear the job even on the missing-deal path: setJob already ran in the action,
+    // and returning without it leaves the row spinning "Analyzing…" until the
+    // stale-job sweep fifteen minutes later.
+    if (!deal) {
+      clearJob(dealId);
+      return;
+    }
 
     const theirMessage = getMessages(dealId)
       .filter((m) => m.sender === "them")
@@ -129,16 +135,20 @@ export async function performAnalysis(
       target: result.numbers.target ?? deal.target,
       walkaway: result.numbers.walkaway ?? deal.walkaway,
       breakeven: result.numbers.breakeven ?? deal.breakeven,
-      // The researched estimate outranks whatever intake captured. An intake figure is
-      // often a blended channel average — Shorts and long-form together — while the
-      // analysis prices integrations on long-form alone and says so. Keeping intake's
-      // number left the deal priced on one figure and every downstream forecast on
-      // another: Gary Bembridge was valued at 79k views while his commission tiers were
-      // filtered against 4.9k, hiding rungs he clears comfortably. A number the manager
-      // typed for THIS run still wins — that's an explicit correction, not a stale one.
-      avg_views: inputs.knownAvgViews ?? result.estimatedAvgViews ?? deal.avg_views,
+      // Precedence: a number typed for THIS run, then a hand-corrected stored value,
+      // then the researched estimate, then whatever intake captured. The researched
+      // estimate outranks a stale intake figure (often a Shorts-diluted blend the
+      // analysis itself refuses to price on) — but it must never outrank a human
+      // correction, or "fix 4,900 → 79,000, re-run" silently re-breaks the deal it
+      // just fixed.
+      avg_views:
+        inputs.knownAvgViews ??
+        (deal.audience_locked ? deal.avg_views : (result.estimatedAvgViews ?? deal.avg_views)),
       engagement_rate:
-        inputs.knownEngagement ?? result.estimatedEngagementRate ?? deal.engagement_rate,
+        inputs.knownEngagement ??
+        (deal.audience_locked
+          ? deal.engagement_rate
+          : (result.estimatedEngagementRate ?? deal.engagement_rate)),
       first_ask: deal.first_ask ?? result.theirAsk,
       current_ask: deal.current_ask ?? result.theirAsk,
       status_label:
@@ -171,7 +181,10 @@ export async function performAnalysis(
 export async function performRecommendation(dealId: number) {
   try {
     const deal = getDeal(dealId);
-    if (!deal) return;
+    if (!deal) {
+      clearJob(dealId);
+      return;
+    }
     const messages = getMessages(dealId);
     const isOpening = !messages.some((m) => m.sender !== "copilot");
 
@@ -207,6 +220,9 @@ export async function performRecommendation(dealId: number) {
     clearJob(dealId);
   } catch (err) {
     console.error("performRecommendation failed:", err);
+    // Reset the label too: addTheirReply sets "Copilot drafting…" before the job runs,
+    // and clearing only the job left the pipeline claiming a draft was coming forever.
+    updateDeal(dealId, { status_label: "Recommendation failed", status_tone: "warn" });
     clearJob(
       dealId,
       `Recommendation failed: ${err instanceof Error ? err.message : "unknown error"}`

@@ -2,7 +2,7 @@ import type { Deal } from "@/lib/types";
 import type { ContentItem, PaymentItem } from "@/lib/fulfillment-types";
 import { fulfillmentSummary } from "@/lib/fulfillment-rules";
 import { money } from "@/lib/format";
-import { dealCommission, dealDiscount, trueDealCost } from "@/lib/commission";
+import { NO_COMMISSION, NO_DISCOUNT, trueDealCost, type Commission, type Discount } from "@/lib/commission";
 
 /**
  * What a signed deal is actually about: the fee, how much of the work has landed,
@@ -15,6 +15,8 @@ export default function DealProgress({
   paymentItems,
   aov = 0,
   productCost = 0,
+  commission = NO_COMMISSION,
+  discount = NO_DISCOUNT,
 }: {
   deal: Deal;
   contentItems: ContentItem[];
@@ -23,15 +25,18 @@ export default function DealProgress({
   aov?: number;
   /** What the gifted product costs us — free to them, not to us. */
   productCost?: number;
+  /**
+   * The RESOLVED offer, from the page — deal override or Playbook default, at the tier
+   * rate the real volume earns. Reading the deal row here showed no commission at all
+   * on deals paying the standard Playbook rate.
+   */
+  commission?: Commission;
+  discount?: Discount;
 }) {
   const s = fulfillmentSummary(contentItems, paymentItems);
   const paid = paymentItems.filter((p) => p.status === "paid").reduce((n, p) => n + p.amount, 0);
   const fee = deal.agreed_price ?? paymentItems.reduce((n, p) => n + p.amount, 0);
   const pct = s.totalContent > 0 ? Math.round((s.verified / s.totalContent) * 100) : 0;
-
-  // What the deal really cost: the fee plus commission actually earned on real orders.
-  const commission = dealCommission(deal);
-  const discount = dealDiscount(deal);
   const hasPerOrderCost =
     (commission.type !== "none" || discount.type !== "none") &&
     Boolean(deal.actual_orders) &&

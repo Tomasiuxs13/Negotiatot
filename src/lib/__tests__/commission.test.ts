@@ -184,6 +184,67 @@ describe("marginAtZeroFee", () => {
   });
 });
 
+describe("earningsForecast edge cases", () => {
+  const ladder: CommissionTier[] = [
+    { minOrders: 15, amount: 30 },
+    { minOrders: 30, amount: 40 },
+  ];
+
+  it("pays the base commission below the ladder's first rung", () => {
+    // A 10% commission with a ladder starting at 15 orders: 3 orders is below every
+    // rung, but it is not $0/sale — the base rate applies.
+    const f = earningsForecast({
+      expectedOrders: 3,
+      commission: { type: "percent", value: 10 },
+      aov: 120,
+      tiers: ladder,
+    });
+    expect(f.perOrder).toBe(12);
+    expect(f.total).toBe(36);
+  });
+
+  it("pays the tier rate once the volume reaches a rung", () => {
+    const f = earningsForecast({
+      expectedOrders: 31,
+      commission: { type: "percent", value: 10 },
+      aov: 120,
+      tiers: ladder,
+    });
+    expect(f.perOrder).toBe(40);
+  });
+
+  it("rounds the per-sale rate to cents — it's quoted verbatim in drafts", () => {
+    // 12% of a $101.99 basket after a 15% code: raw float ends ...980000000000001.
+    const f = earningsForecast({
+      expectedOrders: 10,
+      commission: { type: "percent", value: 12 },
+      aov: 119.99,
+      discount: { type: "percent", value: 15 },
+    });
+    expect(f.perOrder).toBe(12.24);
+  });
+});
+
+describe("resolveOffer with zero-valued overrides", () => {
+  it("falls back to the Playbook when the deal's commission is zero", () => {
+    // commission_type set with value 0 is "no override", not "no commission" — treating
+    // it as the latter produced $0/sale forecasts on deals paying the standard rate.
+    const { commission } = resolveOffer(
+      { commission_type: "percent", commission_value: 0 },
+      { commissionPerOrder: 20 }
+    );
+    expect(commission).toEqual({ type: "per_order", value: 20 });
+  });
+
+  it("still lets a real deal override beat the Playbook", () => {
+    const { commission } = resolveOffer(
+      { commission_type: "percent", commission_value: 12 },
+      { commissionPerOrder: 20 }
+    );
+    expect(commission).toEqual({ type: "percent", value: 12 });
+  });
+});
+
 describe("suggestStructure", () => {
   const floor = { minPaidFee: 100, hasProduct: true, hasCommission: true };
 

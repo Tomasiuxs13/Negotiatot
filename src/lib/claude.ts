@@ -92,9 +92,15 @@ function dealForecast(deal: Deal, ctx: PlaybookContext) {
   });
   if (perPiece <= 0) return null;
 
+  // The forecast runs on BUNDLE orders, not per-piece. A retroactive ladder pays the
+  // rate the total volume earns: 23.7 orders per video looks like the $30 rung, but
+  // the 71 orders the three-video deal actually drives pay $40 on every sale. Sizing
+  // the ladder per-piece understated both the creator's payout and our cost by 33%,
+  // inside the block labelled "the ONLY figures you may quote".
   const pieces = dealPieces(deal, ctx);
+  const bundleOrders = perPiece * pieces;
   const forecast = earningsForecast({
-    expectedOrders: perPiece,
+    expectedOrders: bundleOrders,
     commission,
     aov: Number(econ.aov ?? 0),
     discount,
@@ -106,8 +112,8 @@ function dealForecast(deal: Deal, ctx: PlaybookContext) {
     views,
     pieces,
     /** Orders and dollars across the whole bundle — what a draft should actually quote. */
-    ordersTotal: perPiece * pieces,
-    earningsTotal: forecast.total * pieces,
+    ordersTotal: bundleOrders,
+    earningsTotal: forecast.total,
   };
 }
 
@@ -223,7 +229,12 @@ function dealPieces(deal: Deal, ctx: PlaybookContext): number {
  * context does not work — it competes with every instruction to sell the upside, and
  * the persuasive one wins. A rung this creator cannot reach is simply never shown.
  */
-function tierGuidance(tiers: CommissionTier[], anySuppressed: boolean): string {
+function tierGuidance(
+  tiers: CommissionTier[],
+  anySuppressed: boolean,
+  /** False when the channel hasn't been sized — no reachability claim can be made. */
+  sized: boolean
+): string {
   if (tiers.length === 0) {
     return anySuppressed
       ? `This creator's volume does not reach any commission rung above their base rate.` +
@@ -232,8 +243,13 @@ function tierGuidance(tiers: CommissionTier[], anySuppressed: boolean): string {
   }
   return [
     `Commission volume tiers (DOLLARS PER SALE — these are flat amounts, never percentages).`,
-    `These are the ONLY rungs this creator can realistically reach; any others are`,
-    `withheld deliberately. Never invent, extrapolate or mention a rung not listed here:`,
+    // "These are the only reachable rungs" is only true once a forecast exists. On an
+    // unsized channel the full ladder is shown as configuration, not as a promise.
+    sized
+      ? `These are the ONLY rungs this creator can realistically reach; any others are` +
+        ` withheld deliberately. Never invent, extrapolate or mention a rung not listed here:`
+      : `The channel hasn't been sized yet, so which rungs are realistic is unknown —` +
+        ` present the ladder as structure, and do not promise any specific rung's payout:`,
     describeTiers(tiers) + ".",
     `The volume reached sets one rate paid on EVERY sale, so crossing a rung lifts the`,
     `creator's whole payout, not just later sales. Use this when they push on the fixed`,
@@ -259,7 +275,7 @@ function playbookBlock(ctx: PlaybookContext, deal?: Deal): string {
   const all = configuredTiers(ctx.negotiationStyle);
   const forecast = deal ? dealForecast(deal, ctx) : null;
   const tiers = forecast ? forecast.reachableTiers : all;
-  const tierBlock = tierGuidance(tiers, tiers.length < all.length);
+  const tierBlock = tierGuidance(tiers, tiers.length < all.length, forecast != null);
   return [
     `## The manager's Playbook (hard rules — every number you produce must respect these)`,
     ctx.campaignName
@@ -433,9 +449,14 @@ function forecastBlock(deal: Deal, ctx: PlaybookContext): string {
     `all and lead on the product instead. Never round up to something motivating.`,
   ];
   if (f.unreachableTiers.length > 0) {
+    // Count only — never the values. Printing "$30/sale from 15" next to "do not
+    // mention it" is the exact anti-pattern the tier filter exists to prevent: a
+    // number in context competes with every instruction to sell the upside, and wins.
     lines.push(
-      `Rungs withheld as unreachable for this channel: ${describeTiers(f.unreachableTiers)}.`,
-      `They are absent from the tier list above by design. Do not reconstruct or allude to them.`
+      `${f.unreachableTiers.length} higher commission rung${
+        f.unreachableTiers.length === 1 ? " was" : "s were"
+      } withheld as unreachable for this channel. Do not mention, reconstruct or hint that`,
+      `higher rates exist — the tier list you were given is complete for this creator.`
     );
   }
   if (dollars < 30) {

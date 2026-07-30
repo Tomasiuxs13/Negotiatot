@@ -111,6 +111,10 @@ CREATE TABLE IF NOT EXISTS usage_log (
   if (!cols.includes("discount_type")) db.exec("ALTER TABLE deals ADD COLUMN discount_type TEXT");
   if (!cols.includes("discount_value"))
     db.exec("ALTER TABLE deals ADD COLUMN discount_value REAL");
+  // Set when the manager corrects avg_views/engagement by hand: a re-run analysis must
+  // not overwrite a human correction with a fresh model estimate.
+  if (!cols.includes("audience_locked"))
+    db.exec("ALTER TABLE deals ADD COLUMN audience_locked INTEGER NOT NULL DEFAULT 0");
   if (!cols.includes("job_status")) db.exec("ALTER TABLE deals ADD COLUMN job_status TEXT");
   if (!cols.includes("job_error")) db.exec("ALTER TABLE deals ADD COLUMN job_error TEXT");
   if (!cols.includes("job_started_at")) db.exec("ALTER TABLE deals ADD COLUMN job_started_at TEXT");
@@ -1153,7 +1157,7 @@ export function updateDeal(dealId: number, fields: Record<string, unknown>) {
   const allowed = [
     "stage", "round", "your_move", "first_ask", "current_ask", "current_offer",
     "agreed_price", "anchor", "target", "walkaway", "breakeven", "avg_views",
-    "engagement_rate", "status_label", "status_tone", "campaign", "analysis", "channel_url",
+    "engagement_rate", "audience_locked", "status_label", "status_tone", "campaign", "analysis", "channel_url",
     "actual_views", "actual_clicks", "actual_orders", "actual_revenue", "actuals_logged_at",
     "job_status", "job_error", "job_started_at",
     "partner_id", "campaign_id", "deal_type",

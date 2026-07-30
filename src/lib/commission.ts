@@ -377,9 +377,13 @@ export function resolveOffer(
         ? { type: "percent", value: econ.discountPercent }
         : NO_DISCOUNT;
 
+  // A zero-valued override is no override. `dealCommission` yields e.g. percent/0 when
+  // the type column is set but the value is null or 0 — treating that as "the deal says
+  // no commission" blocked the Playbook default and produced "$0/sale" forecasts on
+  // deals that pay the standard rate.
   return {
-    commission: dealCom.type === "none" ? fallbackCommission : dealCom,
-    discount: dealDisc.type === "none" ? fallbackDiscount : dealDisc,
+    commission: dealCom.type === "none" || dealCom.value <= 0 ? fallbackCommission : dealCom,
+    discount: dealDisc.type === "none" || dealDisc.value <= 0 ? fallbackDiscount : dealDisc,
   };
 }
 
@@ -444,11 +448,16 @@ export function earningsForecast(params: {
   const orders = Math.max(0, params.expectedOrders);
   const tiers = params.tiers ?? [];
 
-  // With a ladder configured, the rate follows the volume they're actually likely to do.
-  const perOrder =
-    tiers.length > 0
-      ? rateForVolume(tiers, Math.floor(orders))
-      : commissionPerOrder(params.commission, params.aov, params.discount ?? NO_DISCOUNT);
+  // With a ladder configured, the rate follows the volume they're actually likely to
+  // do — but a ladder whose first rung starts above that volume pays nothing, and the
+  // deal may still carry a base commission. Below the ladder, the base rate applies:
+  // without this, a 10%-commission deal under a "from 15 orders" ladder forecast
+  // "$0/sale" while another prompt block stated the 10% as fact.
+  const baseRate = commissionPerOrder(params.commission, params.aov, params.discount ?? NO_DISCOUNT);
+  const tieredRate = tiers.length > 0 ? rateForVolume(tiers, Math.floor(orders)) : 0;
+  // Round to cents: this figure is quoted verbatim in drafts, and a percent commission
+  // on an uneven basket otherwise produces "$12.238980000000001/sale".
+  const perOrder = Math.round((tieredRate > 0 ? tieredRate : baseRate) * 100) / 100;
 
   // Allow some upside over the forecast before calling a rung out of reach.
   const withUpside = orders * 3;

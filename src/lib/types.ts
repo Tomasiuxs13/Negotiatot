@@ -89,6 +89,8 @@ export interface Deal {
   breakeven: number | null;
   avg_views: number | null;
   engagement_rate: number | null;
+  /** 1 when the manager set the audience figures by hand; re-runs must not overwrite them. */
+  audience_locked?: number;
   status_label: string | null;
   status_tone: StatusTone;
   campaign: string | null;

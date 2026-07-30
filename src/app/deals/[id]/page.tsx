@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCampaign, getDeal, getMessages, getPartnerChannels, getRemindersFor, getSetting, getUsageTotals } from "@/lib/db";
+import { getCampaign, getDeal, getMessages, getNegotiationStyle, getPartnerChannels, getPlaybook, getRemindersFor, getSetting, getUsageTotals } from "@/lib/db";
 import RemindersBlock from "@/components/RemindersBlock";
 import type { MeasurementWindows } from "@/lib/measurement";
 import { describeOverrides, parseOverrides } from "@/lib/campaigns";
@@ -26,7 +26,7 @@ import {
   parseTerms,
 } from "@/lib/fulfillment";
 import { money } from "@/lib/format";
-import { dealCommission, dealDiscount, describeCommission, expectedOrdersFrom } from "@/lib/commission";
+import { dealCommission, describeCommission, earningsForecast, expectedOrdersFrom, parseTiers, resolveOffer } from "@/lib/commission";
 import { deliverableCount } from "@/lib/deliverables";
 import { ladderNotes } from "@/lib/ladder-notes";
 import AnalysisTab from "@/components/deal/AnalysisTab";
@@ -60,22 +60,42 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   /** Price is settled — the header should report delivery, not the negotiation. */
   const closed = deal.stage === "agreed" || deal.stage === "completed";
 
-  // What the ladder's numbers actually cover, and what the deal really costs.
+  // What the ladder's numbers actually cover, and what the deal really costs — computed
+  // on the SAME basis as the engine's prompt: Playbook-fallback pieces, resolved
+  // commission (deal override or Playbook default), and the tier rate the forecast
+  // volume earns. Using the deal row alone here showed $7,342 on screen while the
+  // analysis said $8,764 for the same deal.
   const econ = getSetting<Record<string, number>>("unit_economics") ?? {};
-  const ladderPieces = deliverableCount({ text: dealScope(deal) });
+  const platformRules = Object.fromEntries(platforms.map((p) => [p, getPlaybook(p)]));
+  const ladderPieces = Math.max(
+    1,
+    deliverableCount({ text: dealScope(deal), platforms, rulesByPlatform: platformRules })
+  );
+  const ladderOrders =
+    expectedOrdersFrom({
+      views: deal.avg_views ?? 0,
+      linkCtrPct: Number(econ.linkCtr ?? 0),
+      orderConversionPct: Number(econ.orderConversion ?? 0),
+    }) * ladderPieces;
+  const offer = resolveOffer(deal, econ);
+  const styleTiers = parseTiers(
+    ((getNegotiationStyle()?.commissionTiers as string[] | undefined) ?? []).map(String)
+  );
+  const ladderRate = earningsForecast({
+    expectedOrders: ladderOrders,
+    commission: offer.commission,
+    aov: Number(econ.aov ?? 0),
+    discount: offer.discount,
+    tiers: styleTiers,
+  }).perOrder;
   const ladder = ladderNotes({
     targetFee: deal.target,
     pieces: ladderPieces,
     scopeText: dealScope(deal),
-    expectedOrders:
-      expectedOrdersFrom({
-        views: deal.avg_views ?? 0,
-        linkCtrPct: Number(econ.linkCtr ?? 0),
-        orderConversionPct: Number(econ.orderConversion ?? 0),
-      }) * ladderPieces,
+    expectedOrders: ladderOrders,
     aov: Number(econ.aov ?? 0),
-    commission: dealCommission(deal),
-    discount: dealDiscount(deal),
+    commission: { type: "per_order", value: ladderRate },
+    discount: offer.discount,
     productCost: Number(econ.productCost ?? 0),
   });
   const showFulfillment =
@@ -271,8 +291,20 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
             deal={deal}
             contentItems={contentItems}
             paymentItems={paymentItems}
-            aov={Number(getSetting<Record<string, number>>("unit_economics")?.aov ?? 0)}
-            productCost={Number(getSetting<Record<string, number>>("unit_economics")?.productCost ?? 0)}
+            aov={Number(econ.aov ?? 0)}
+            productCost={Number(econ.productCost ?? 0)}
+            // Resolved at the tier rate the REAL volume earned, not the base rate.
+            commission={{
+              type: "per_order",
+              value: earningsForecast({
+                expectedOrders: deal.actual_orders ?? 0,
+                commission: offer.commission,
+                aov: Number(econ.aov ?? 0),
+                discount: offer.discount,
+                tiers: styleTiers,
+              }).perOrder,
+            }}
+            discount={offer.discount}
           />
         ) : (
           <PriceLadder deal={deal} scopeNote={ladder.scopeNote} costNote={ladder.costNote} />

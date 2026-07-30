@@ -109,7 +109,9 @@ export async function saveAudienceData(
     return { error: "Engagement rate must be a positive number." };
   }
 
-  updateDeal(dealId, { avg_views: avgViews, engagement_rate: engagementRate });
+  // Lock the figures: a hand-set number is a correction, and a re-run analysis must
+  // not overwrite it with a fresh estimate of the same wrong thing.
+  updateDeal(dealId, { avg_views: avgViews, engagement_rate: engagementRate, audience_locked: 1 });
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/");
   revalidatePath("/pipeline");
