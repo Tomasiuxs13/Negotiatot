@@ -49,6 +49,15 @@ export interface ContentItem {
   actual_orders: number | null;
   actual_revenue: number | null;
   notes: string | null;
+  /** The review loop: the creator's current draft and which revision round it is. */
+  draft_url?: string | null;
+  draft_submitted_at?: string | null;
+  revision_round?: number;
+  /** The last change-request email, kept editable and copyable. */
+  change_request?: string | null;
+  /** Frozen at approval — the version "you approved this" refers to. */
+  approved_url?: string | null;
+  approved_at?: string | null;
   created_at: string;
   updated_at: string;
 }

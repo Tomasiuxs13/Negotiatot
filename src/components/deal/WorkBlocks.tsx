@@ -5,6 +5,11 @@ import type { ContentItem, PaymentItem, Shipment, ContentStatus, PaymentTrigger 
 import { CONTENT_STATUS_FLOW, CONTENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL, pendingReason } from "@/lib/fulfillment-types";
 import { isOverdue } from "@/lib/fulfillment-rules";
 import { DEFAULT_DRAFT_LEAD_DAYS, draftDueDate } from "@/lib/timeline";
+import { changeRequestEmail } from "@/lib/review-email";
+import {
+  approveDraftAction,
+  requestChangesAction,
+} from "@/app/deals/[id]/fulfillment-actions";
 import { money } from "@/lib/format";
 import {
   addContentItemAction,
@@ -38,16 +43,25 @@ export function ContentItemsBlock({
   dealId,
   items,
   draftLeadDays = DEFAULT_DRAFT_LEAD_DAYS,
+  creator = "",
+  senderName = "",
 }: {
   dealId: number;
   items: ContentItem[];
   /** Days before the publish date the draft is due — drives the date chip. */
   draftLeadDays?: number;
+  /** For the generated change-request email. */
+  creator?: string;
+  senderName?: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ title: "", dueDate: "" });
   const [urlEdit, setUrlEdit] = useState<Record<number, string>>({});
+  // The change-request composer: generated instantly, edited freely, copied manually.
+  const [composing, setComposing] = useState<number | null>(null);
+  const [emailText, setEmailText] = useState("");
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   const add = () => {
     if (!draft.title.trim()) return;
@@ -134,6 +148,90 @@ export function ContentItemsBlock({
                   <span className="material-symbols-outlined" style={{ fontSize: 15 }}>close</span>
                 </button>
               </div>
+              {item.status === "submitted" && item.draft_url && (
+                <div className="mt-1.5 pl-1 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <a href={item.draft_url} target="_blank" rel="noreferrer" className="text-xs text-brand-dark hover:underline">
+                      Open draft{(item.revision_round ?? 0) > 1 ? ` (revision ${item.revision_round})` : ""}
+                    </a>
+                    <button
+                      onClick={() =>
+                        startTransition(async () => {
+                          const r = await approveDraftAction(item.id, dealId);
+                          if (r?.error) setReviewError(r.error);
+                        })
+                      }
+                      disabled={isPending}
+                      className="text-xs font-medium text-emerald-700 hover:underline disabled:opacity-50"
+                    >
+                      Approve draft
+                    </button>
+                    <button
+                      onClick={() => {
+                        setComposing(item.id);
+                        setEmailText(
+                          changeRequestEmail({
+                            creator,
+                            itemTitle: item.title,
+                            publishDate: item.due_date,
+                            revisionRound: item.revision_round ?? 1,
+                            senderName,
+                          })
+                        );
+                      }}
+                      className="text-xs font-medium text-amber-700 hover:underline"
+                    >
+                      Request changes
+                    </button>
+                  </div>
+                  {composing === item.id && (
+                    <div className="space-y-2">
+                      <textarea
+                        value={emailText}
+                        onChange={(e) => setEmailText(e.target.value)}
+                        rows={10}
+                        className="w-full border border-slate-200 rounded-md px-3 py-2 text-xs text-slate-800 font-mono resize-y"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => navigator.clipboard.writeText(emailText).catch(() => {})}
+                          className="text-xs font-medium border border-slate-200 hover:border-slate-400 text-slate-700 rounded-md px-2.5 py-1"
+                        >
+                          Copy email
+                        </button>
+                        <button
+                          onClick={() =>
+                            startTransition(async () => {
+                              const r = await requestChangesAction(item.id, dealId, emailText);
+                              if (r?.error) setReviewError(r.error);
+                              else setComposing(null);
+                            })
+                          }
+                          disabled={isPending}
+                          className="text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-md px-2.5 py-1 disabled:opacity-60"
+                        >
+                          Save & send back to production
+                        </button>
+                        <button onClick={() => setComposing(null)} className="text-xs text-slate-500 px-1">Cancel</button>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        Copy the email into your mail client — nothing is sent from here. The text
+                        is kept on the item and the creator sees "changes requested" in their portal.
+                      </p>
+                    </div>
+                  )}
+                  {reviewError && <p className="text-xs text-red-600">{reviewError}</p>}
+                </div>
+              )}
+              {item.status !== "submitted" && item.approved_url && (
+                <p className="text-[11px] text-slate-400 mt-1 pl-1">
+                  Approved version:{" "}
+                  <a href={item.approved_url} target="_blank" rel="noreferrer" className="underline">
+                    {item.approved_url.slice(0, 60)}
+                  </a>
+                  {item.approved_at ? ` · ${item.approved_at.slice(0, 10)}` : ""}
+                </p>
+              )}
               {(item.status === "posted" || item.status === "verified" || item.posted_url) && (
                 <div className="flex items-center gap-2 mt-1.5 pl-1">
                   <input

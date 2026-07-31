@@ -342,6 +342,8 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                 draftLeadDays={Number(
                   getSetting<Record<string, number>>("workflow")?.draftLeadDays ?? 10
                 )}
+                creator={deal.creator}
+                senderName={(getSetting<Record<string, string>>("brand_profile")?.senderName ?? "")}
               />
               <ShipmentsBlock dealId={deal.id} shipments={shipments} />
               <PaymentItemsBlock dealId={deal.id} payments={paymentItems} />

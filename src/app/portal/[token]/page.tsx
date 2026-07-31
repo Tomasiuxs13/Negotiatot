@@ -4,6 +4,7 @@ import { CONTENT_STATUS_LABEL, PAYMENT_STATUS_LABEL } from "@/lib/fulfillment-ty
 import { draftDueDate } from "@/lib/timeline";
 import { money } from "@/lib/format";
 import LiveUrlForm from "@/components/portal/LiveUrlForm";
+import DraftForm from "@/components/portal/DraftForm";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +81,23 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
                             </span>
                           )}
                         </div>
+                        {(c.status === "planned" || c.status === "in_production" || c.status === "submitted") && (
+                          <>
+                            {c.change_request && c.status === "in_production" && (
+                              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mt-1.5 whitespace-pre-wrap">
+                                Changes requested — check your email for details, then resubmit the
+                                revised draft below.
+                              </p>
+                            )}
+                            <DraftForm
+                              token={token}
+                              contentItemId={c.id}
+                              initialUrl={c.draft_url ?? ""}
+                              submitted={c.status === "submitted"}
+                              round={c.revision_round ?? 0}
+                            />
+                          </>
+                        )}
                         {(c.status === "approved" || c.status === "posted") && (
                           <LiveUrlForm token={token} contentItemId={c.id} initialUrl={c.posted_url ?? ""} />
                         )}

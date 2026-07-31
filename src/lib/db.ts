@@ -275,6 +275,22 @@ CREATE TABLE IF NOT EXISTS usage_log (
     delivered_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
+  // The draft review loop: what the creator submitted, which revision round it is,
+  // and the approved version frozen at approval — "you approved this" needs a record.
+  {
+    const ccols = (db.prepare("PRAGMA table_info(content_items)").all() as { name: string }[])
+      .map((c) => c.name);
+    const add = (col: string, ddl: string) => {
+      if (ccols.length > 0 && !ccols.includes(col))
+        db.exec(`ALTER TABLE content_items ADD COLUMN ${ddl}`);
+    };
+    add("draft_url", "draft_url TEXT");
+    add("draft_submitted_at", "draft_submitted_at TEXT");
+    add("revision_round", "revision_round INTEGER NOT NULL DEFAULT 0");
+    add("change_request", "change_request TEXT");
+    add("approved_url", "approved_url TEXT");
+    add("approved_at", "approved_at TEXT");
+  }
   // The partner portal is addressed by an unguessable per-partner token, never an id.
   {
     const pcols = (db.prepare("PRAGMA table_info(partners)").all() as { name: string }[])

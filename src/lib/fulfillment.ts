@@ -210,6 +210,44 @@ export function updateContentItem(
   ).run(...params, id);
 }
 
+/** The creator's draft, via the portal. Resubmitting after changes bumps the round. */
+export function submitDraft(contentItemId: number, url: string): boolean {
+  const r = db
+    .prepare(
+      `UPDATE content_items SET draft_url = ?, draft_submitted_at = datetime('now'),
+         status = 'submitted',
+         revision_round = revision_round + 1,
+         updated_at = datetime('now')
+       WHERE id = ? AND status IN ('planned','in_production','submitted')`
+    )
+    .run(url, contentItemId);
+  return r.changes > 0;
+}
+
+/** Approval freezes the version — the record "you approved this" points at. */
+export function approveDraft(contentItemId: number): boolean {
+  const r = db
+    .prepare(
+      `UPDATE content_items SET status = 'approved', approved_url = draft_url,
+         approved_at = datetime('now'), change_request = NULL, updated_at = datetime('now')
+       WHERE id = ? AND status = 'submitted' AND draft_url IS NOT NULL`
+    )
+    .run(contentItemId);
+  return r.changes > 0;
+}
+
+/** Changes requested: back to production, keeping the editable email on record. */
+export function requestChanges(contentItemId: number, emailText: string): boolean {
+  const r = db
+    .prepare(
+      `UPDATE content_items SET status = 'in_production', change_request = ?,
+         updated_at = datetime('now')
+       WHERE id = ? AND status = 'submitted'`
+    )
+    .run(emailText, contentItemId);
+  return r.changes > 0;
+}
+
 export function deleteContentItem(id: number) {
   db.prepare("DELETE FROM content_items WHERE id = ?").run(id);
 }

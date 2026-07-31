@@ -26,8 +26,10 @@ import {
   parseTerms,
   refreshPaymentStatuses,
   resolveDueDatesAfterDelivery,
+  approveDraft,
   createOnboardingTask,
   ensureShipmentShareToken,
+  requestChanges,
   deleteOnboardingTask,
   seedOnboarding,
   setContentActuals,
@@ -382,6 +384,32 @@ export async function deletePaymentItemAction(itemId: number, dealId: number) {
     return { error: "This payment is already paid — a settled payment can't be deleted." };
   }
   deletePaymentItem(itemId);
+  refresh(dealId);
+  return {};
+}
+
+/** Approve the submitted draft — freezes the version the approval refers to. */
+export async function approveDraftAction(contentItemId: number, dealId: number) {
+  if (!getDeal(dealId)) return { error: "Deal not found" };
+  if (!approveDraft(contentItemId)) {
+    return { error: "No submitted draft to approve on this item." };
+  }
+  refresh(dealId);
+  return {};
+}
+
+/** Request changes: stores the (edited) email and puts the item back in production. */
+export async function requestChangesAction(
+  contentItemId: number,
+  dealId: number,
+  emailText: string
+) {
+  if (!getDeal(dealId)) return { error: "Deal not found" };
+  if (!emailText.trim()) return { error: "Write (or keep) the change-request email first." };
+  if (emailText.length > 10000) return { error: "That email is too long." };
+  if (!requestChanges(contentItemId, emailText.trim())) {
+    return { error: "Only a submitted draft can have changes requested." };
+  }
   refresh(dealId);
   return {};
 }
