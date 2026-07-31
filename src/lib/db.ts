@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { randomBytes } from "crypto";
 import path from "path";
 import fs from "fs";
 import type { Deal, Message } from "./types";
@@ -274,6 +275,13 @@ CREATE TABLE IF NOT EXISTS usage_log (
     delivered_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
+  // The partner portal is addressed by an unguessable per-partner token, never an id.
+  {
+    const pcols = (db.prepare("PRAGMA table_info(partners)").all() as { name: string }[])
+      .map((c) => c.name);
+    if (pcols.length > 0 && !pcols.includes("share_token"))
+      db.exec("ALTER TABLE partners ADD COLUMN share_token TEXT");
+  }
   // "50% after half the videos": how many linked content items must be verified before
   // an on_verification payment unlocks. NULL means all of them.
   {
@@ -788,6 +796,25 @@ export function getPartnerChannels(partnerId: number): PartnerChannel[] {
   return db
     .prepare("SELECT * FROM partner_channels WHERE partner_id = ? ORDER BY platform")
     .all(partnerId) as PartnerChannel[];
+}
+
+/** Mints (or returns) the partner's portal token — the link IS the credential. */
+export function ensurePartnerPortalToken(partnerId: number): string | null {
+  const row = db.prepare("SELECT share_token FROM partners WHERE id = ?").get(partnerId) as
+    | { share_token: string | null }
+    | undefined;
+  if (!row) return null;
+  if (row.share_token) return row.share_token;
+  const token = randomBytes(24).toString("base64url");
+  db.prepare("UPDATE partners SET share_token = ? WHERE id = ?").run(token, partnerId);
+  return token;
+}
+
+export function getPartnerByToken(token: string): Partner | undefined {
+  if (!token) return undefined;
+  return db.prepare("SELECT * FROM partners WHERE share_token = ?").get(token) as
+    | Partner
+    | undefined;
 }
 
 /* ------------------------------------------------------------- reminders */

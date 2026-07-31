@@ -18,7 +18,8 @@ export default function AppShell({
   sidebar: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const isPublic = usePathname().startsWith("/ship");
+  const pathname = usePathname();
+  const isPublic = pathname.startsWith("/ship") || pathname.startsWith("/portal");
 
   if (isPublic) {
     return <div className="flex-1 h-screen overflow-y-auto bg-slate-50">{children}</div>;
