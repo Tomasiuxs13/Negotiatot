@@ -295,9 +295,27 @@ CREATE TABLE IF NOT EXISTS usage_log (
   {
     const pcols = (db.prepare("PRAGMA table_info(partners)").all() as { name: string }[])
       .map((c) => c.name);
-    if (pcols.length > 0 && !pcols.includes("share_token"))
-      db.exec("ALTER TABLE partners ADD COLUMN share_token TEXT");
+    const padd = (col: string) => {
+      if (pcols.length > 0 && !pcols.includes(col))
+        db.exec(`ALTER TABLE partners ADD COLUMN ${col} TEXT`);
+    };
+    padd("share_token");
+    // Contract party details, filled by the creator through their portal.
+    padd("legal_name");
+    padd("company_name");
+    padd("tax_id");
+    padd("legal_address");
   }
+  // Generated contracts stay editable text until marked signed; the signed original
+  // then arrives through the existing upload-and-parse flow.
+  db.exec(`CREATE TABLE IF NOT EXISTS contract_drafts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    deal_id INTEGER NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+    body TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','signed')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
   // "50% after half the videos": how many linked content items must be verified before
   // an on_verification payment unlocks. NULL means all of them.
   {
@@ -831,6 +849,43 @@ export function getPartnerByToken(token: string): Partner | undefined {
   return db.prepare("SELECT * FROM partners WHERE share_token = ?").get(token) as
     | Partner
     | undefined;
+}
+
+export function getContractDraft(dealId: number) {
+  return db
+    .prepare("SELECT * FROM contract_drafts WHERE deal_id = ? ORDER BY id DESC LIMIT 1")
+    .get(dealId) as
+    | { id: number; deal_id: number; body: string; status: "draft" | "signed"; updated_at: string }
+    | undefined;
+}
+
+export function saveContractDraft(dealId: number, body: string): void {
+  const existing = getContractDraft(dealId);
+  // A signed draft is a record, not a document under edit.
+  if (existing && existing.status === "signed") return;
+  if (existing) {
+    db.prepare("UPDATE contract_drafts SET body = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(body, existing.id);
+  } else {
+    db.prepare("INSERT INTO contract_drafts (deal_id, body) VALUES (?, ?)").run(dealId, body);
+  }
+}
+
+export function markContractDraftSigned(dealId: number): boolean {
+  const r = db
+    .prepare("UPDATE contract_drafts SET status = 'signed', updated_at = datetime('now') WHERE deal_id = ? AND status = 'draft'")
+    .run(dealId);
+  return r.changes > 0;
+}
+
+export function savePartnerLegalDetails(
+  partnerId: number,
+  f: { legalName: string; companyName: string; taxId: string; legalAddress: string }
+) {
+  db.prepare(
+    `UPDATE partners SET legal_name = ?, company_name = ?, tax_id = ?, legal_address = ?,
+       updated_at = datetime('now') WHERE id = ?`
+  ).run(f.legalName || null, f.companyName || null, f.taxId || null, f.legalAddress || null, partnerId);
 }
 
 /* ------------------------------------------------------------- reminders */

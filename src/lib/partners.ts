@@ -2,6 +2,10 @@ import type { Deal, Platform } from "./types";
 import { dealPlatforms } from "./types";
 
 export interface Partner {
+  legal_name?: string | null;
+  company_name?: string | null;
+  tax_id?: string | null;
+  legal_address?: string | null;
   id: number;
   name: string;
   email: string | null;

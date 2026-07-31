@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCampaign, getDeal, getMessages, getNegotiationStyle, getPartnerChannels, getPlaybook, getRemindersFor, getSetting, getUsageTotals } from "@/lib/db";
+import { getCampaign, getContractDraft, getDeal, getMessages, getNegotiationStyle, getPartnerChannels, getPlaybook, getRemindersFor, getSetting, getUsageTotals } from "@/lib/db";
 import RemindersBlock from "@/components/RemindersBlock";
 import type { MeasurementWindows } from "@/lib/measurement";
 import { describeOverrides, parseOverrides } from "@/lib/campaigns";
@@ -32,6 +32,7 @@ import { ladderNotes } from "@/lib/ladder-notes";
 import AnalysisTab from "@/components/deal/AnalysisTab";
 import NegotiationTab from "@/components/deal/NegotiationTab";
 import DealNotes from "@/components/deal/DealNotes";
+import ContractDraftBlock from "@/components/deal/ContractDraftBlock";
 
 export const dynamic = "force-dynamic";
 
@@ -325,6 +326,13 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
         fulfillment={
           showFulfillment ? (
             <div className="space-y-4 max-w-4xl">
+              <ContractDraftBlock
+                dealId={deal.id}
+                initial={(() => {
+                  const d = getContractDraft(deal.id);
+                  return d ? { body: d.body, status: d.status } : null;
+                })()}
+              />
               <ContractBlock
                 dealId={deal.id}
                 contract={contract}

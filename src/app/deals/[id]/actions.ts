@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { addMessage, getDeal, setJob, updateDeal } from "@/lib/db";
+import { addMessage, getContractDraft, getDeal, getPartner, markContractDraftSigned, saveContractDraft, setJob, updateDeal } from "@/lib/db";
+import { getContentItems, getPaymentItems } from "@/lib/fulfillment";
+import { generateContractText } from "@/lib/contract-template";
+import { getSetting } from "@/lib/db";
 import { hasApiKey } from "@/lib/claude";
 import { performAnalysis, performRecommendation } from "@/lib/engine";
 
@@ -158,6 +161,41 @@ export async function saveDealNotesAction(dealId: number, notes: string) {
   if (!deal) return { error: "Deal not found" };
   if (notes.length > 5000) return { error: "Notes are too long — keep them under 5,000 characters." };
   updateDeal(dealId, { notes: notes.trim() || null });
+  revalidatePath(`/deals/${dealId}`);
+  return {};
+}
+
+export async function generateContractDraftAction(dealId: number) {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  const existing = getContractDraft(dealId);
+  if (existing?.status === "signed") return { error: "The contract is marked signed — it can't be regenerated." };
+  const body = generateContractText({
+    deal,
+    partner: deal.partner_id != null ? (getPartner(deal.partner_id) ?? null) : null,
+    items: getContentItems(dealId),
+    payments: getPaymentItems(dealId),
+    brand: getSetting<Record<string, string>>("brand_profile") ?? {},
+  });
+  saveContractDraft(dealId, body);
+  revalidatePath(`/deals/${dealId}`);
+  return { body };
+}
+
+export async function saveContractDraftAction(dealId: number, body: string) {
+  if (!getDeal(dealId)) return { error: "Deal not found" };
+  if (!body.trim()) return { error: "The contract can't be empty." };
+  if (body.length > 50000) return { error: "That's too long." };
+  const existing = getContractDraft(dealId);
+  if (existing?.status === "signed") return { error: "Signed — no longer editable." };
+  saveContractDraft(dealId, body);
+  revalidatePath(`/deals/${dealId}`);
+  return {};
+}
+
+export async function markContractSignedAction(dealId: number) {
+  if (!getDeal(dealId)) return { error: "Deal not found" };
+  if (!markContractDraftSigned(dealId)) return { error: "No draft contract to mark signed." };
   revalidatePath(`/deals/${dealId}`);
   return {};
 }

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getPartnerByToken, getPartnerDeals } from "@/lib/db";
+import { getPartnerByToken, getPartnerDeals, savePartnerLegalDetails } from "@/lib/db";
 import { getContentItems, submitDraft, updateContentItem } from "@/lib/fulfillment";
 
 /**
@@ -46,5 +46,23 @@ export async function submitDraftAction(token: string, contentItemId: number, ur
     return { error: "This item is past the draft stage — contact us to change it." };
   }
   revalidatePath(`/deals/${item.deal_id}`);
+  return {};
+}
+
+/** The creator's contract party details — name, company, tax id, address. */
+export async function saveLegalDetailsAction(
+  token: string,
+  f: { legalName: string; companyName: string; taxId: string; legalAddress: string }
+) {
+  const partner = getPartnerByToken(token);
+  if (!partner) return { error: "This link is no longer valid." };
+  for (const v of Object.values(f)) if (v.length > 500) return { error: "A field is too long." };
+  if (!f.legalName.trim()) return { error: "Your legal name is required." };
+  savePartnerLegalDetails(partner.id, {
+    legalName: f.legalName.trim(),
+    companyName: f.companyName.trim(),
+    taxId: f.taxId.trim(),
+    legalAddress: f.legalAddress.trim(),
+  });
   return {};
 }

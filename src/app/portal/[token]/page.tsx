@@ -5,6 +5,7 @@ import { draftDueDate } from "@/lib/timeline";
 import { money } from "@/lib/format";
 import LiveUrlForm from "@/components/portal/LiveUrlForm";
 import DraftForm from "@/components/portal/DraftForm";
+import LegalDetailsForm from "@/components/portal/LegalDetailsForm";
 
 export const dynamic = "force-dynamic";
 
@@ -135,6 +136,16 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
             </div>
           );
         })}
+
+        <LegalDetailsForm
+          token={token}
+          initial={{
+            legalName: partner.legal_name ?? "",
+            companyName: partner.company_name ?? "",
+            taxId: partner.tax_id ?? "",
+            legalAddress: partner.legal_address ?? "",
+          }}
+        />
 
         <p className="text-[11px] text-slate-400 text-center">
           Questions? Reply to your contact at {brand} directly.
