@@ -336,7 +336,13 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                 tasks={onboarding}
                 hasPartner={deal.partner_id != null}
               />
-              <ContentItemsBlock dealId={deal.id} items={contentItems} />
+              <ContentItemsBlock
+                dealId={deal.id}
+                items={contentItems}
+                draftLeadDays={Number(
+                  getSetting<Record<string, number>>("workflow")?.draftLeadDays ?? 10
+                )}
+              />
               <ShipmentsBlock dealId={deal.id} shipments={shipments} />
               <PaymentItemsBlock dealId={deal.id} payments={paymentItems} />
             </div>

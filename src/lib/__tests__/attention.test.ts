@@ -428,3 +428,51 @@ describe("manager reminders", () => {
     expect(hit?.detail).toBe("Marta · due today");
   });
 });
+
+describe("draft request trigger", () => {
+  const agreedDeal = deal({ stage: "agreed", creator: "Marta" });
+
+  it("asks for the draft when the review window opens on an agreed deal", () => {
+    // TODAY is 2026-07-22; publish Aug 1 → draft due Jul 22 → window just opened.
+    const items = attentionItems({
+      ...base,
+      deals: [agreedDeal],
+      contentItems: [content({ status: "planned", due_date: "2026-08-01" })],
+    });
+    const hit = items.find((i) => i.id === "draft-request-1");
+    expect(hit?.title).toBe("Request the draft from Marta");
+    expect(hit?.detail).toContain("publishes in 10 days");
+    expect(hit?.severity).toBe("warning");
+  });
+
+  it("escalates when the slot is under a week away", () => {
+    const items = attentionItems({
+      ...base,
+      deals: [agreedDeal],
+      contentItems: [content({ status: "planned", due_date: "2026-07-25" })],
+    });
+    expect(items.find((i) => i.id === "draft-request-1")?.severity).toBe("critical");
+  });
+
+  it("stays quiet before the window, after submission, and off agreed deals", () => {
+    const before = attentionItems({
+      ...base,
+      deals: [agreedDeal],
+      contentItems: [content({ status: "planned", due_date: "2026-08-02" })],
+    });
+    expect(before.find((i) => i.id === "draft-request-1")).toBeUndefined();
+
+    const submitted = attentionItems({
+      ...base,
+      deals: [agreedDeal],
+      contentItems: [content({ status: "submitted", due_date: "2026-08-01" })],
+    });
+    expect(submitted.find((i) => i.id === "draft-request-1")).toBeUndefined();
+
+    const negotiating = attentionItems({
+      ...base,
+      contentItems: [content({ status: "planned", due_date: "2026-08-01" })],
+    });
+    expect(negotiating.find((i) => i.id === "draft-request-1")).toBeUndefined();
+  });
+});

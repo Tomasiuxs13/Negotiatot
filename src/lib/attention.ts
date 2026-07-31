@@ -4,6 +4,7 @@ import { BLOCKING_KINDS } from "./fulfillment-types";
 import { isOverdue } from "./fulfillment-rules";
 import { measurementState, type MeasurementWindows } from "./measurement";
 import { dueReminders, reminderHref, type Reminder } from "./reminders";
+import { DEFAULT_DRAFT_LEAD_DAYS, daysToPublish, shouldRequestDraft } from "./timeline";
 
 export type AttentionSeverity = "critical" | "warning" | "info";
 
@@ -24,6 +25,8 @@ export interface AttentionInput {
   onboarding?: OnboardingTask[];
   /** The manager's own follow-ups — surfaced when their date arrives. */
   reminders?: Reminder[];
+  /** Days before an item's publish date its draft is due. */
+  draftLeadDays?: number;
   today?: string;
   /** Days of silence before we suggest nudging the creator. */
   silentDays?: number;
@@ -54,6 +57,7 @@ export function attentionItems({
   payments,
   onboarding = [],
   reminders = [],
+  draftLeadDays = DEFAULT_DRAFT_LEAD_DAYS,
   today = new Date().toISOString().slice(0, 10),
   silentDays = 3,
   stuckDays = 7,
@@ -77,6 +81,24 @@ export function attentionItems({
         (who ? `${who} · ` : "") +
         (days === 0 ? "due today" : `due ${days} day${days === 1 ? "" : "s"} ago`),
       href: reminderHref(r),
+    });
+  }
+
+  // The T-minus draft trigger: the publish slot only holds if the draft arrives with
+  // review time to spare. Fires while there is still a buffer — the overdue loop below
+  // only speaks up once the slot is already lost.
+  for (const c of contentItems) {
+    if (!shouldRequestDraft(c, today, draftLeadDays)) continue;
+    const deal = dealById.get(c.deal_id);
+    if (!deal || deal.stage !== "agreed") continue;
+    const days = daysToPublish(c.due_date!, today);
+    if (days < 0) continue; // past publish — the overdue loop owns it from here
+    items.push({
+      id: `draft-request-${c.id}`,
+      severity: days <= 5 ? "critical" : "warning",
+      title: `Request the draft from ${deal.creator}`,
+      detail: `${c.title} publishes ${days === 0 ? "today" : `in ${days} day${days === 1 ? "" : "s"}`} — the draft review window is open`,
+      href: `/deals/${c.deal_id}`,
     });
   }
 

@@ -26,6 +26,7 @@ export default function DashboardPage() {
     payments,
     onboarding: getAllOnboardingTasks(),
     reminders: getOpenReminders(),
+    draftLeadDays: Number(getSetting<Record<string, number>>("workflow")?.draftLeadDays ?? 10),
     windows: getSetting<MeasurementWindows>("measurement_windows") ?? {},
   });
 

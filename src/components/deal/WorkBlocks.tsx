@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import type { ContentItem, PaymentItem, Shipment, ContentStatus, PaymentTrigger } from "@/lib/fulfillment-types";
 import { CONTENT_STATUS_FLOW, CONTENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL, pendingReason } from "@/lib/fulfillment-types";
 import { isOverdue } from "@/lib/fulfillment-rules";
+import { DEFAULT_DRAFT_LEAD_DAYS, draftDueDate } from "@/lib/timeline";
 import { money } from "@/lib/format";
 import {
   addContentItemAction,
@@ -36,9 +37,12 @@ const STATUS_TONE: Record<ContentStatus, string> = {
 export function ContentItemsBlock({
   dealId,
   items,
+  draftLeadDays = DEFAULT_DRAFT_LEAD_DAYS,
 }: {
   dealId: number;
   items: ContentItem[];
+  /** Days before the publish date the draft is due — drives the date chip. */
+  draftLeadDays?: number;
 }) {
   const [isPending, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
@@ -94,7 +98,16 @@ export function ContentItemsBlock({
                 <span
                   className={`text-xs font-tabular ${overdue ? "text-red-600 font-semibold" : "text-slate-400"}`}
                 >
-                  {item.due_date ?? (item.due_days_after_delivery != null ? `+${item.due_days_after_delivery}d after delivery` : "no date")}
+                  {/* Until a draft lands, the date that matters is the draft deadline,
+                      computed back from the publish slot. */}
+                  {item.due_date &&
+                    (item.status === "planned" || item.status === "in_production") &&
+                    `draft due ${draftDueDate(item.due_date, draftLeadDays)} · `}
+                  {item.due_date
+                    ? `publishes ${item.due_date}`
+                    : item.due_days_after_delivery != null
+                      ? `+${item.due_days_after_delivery}d after delivery`
+                      : "no date"}
                   {overdue && " · overdue"}
                 </span>
                 {next && (
