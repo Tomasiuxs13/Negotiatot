@@ -177,6 +177,13 @@ export default function NewDealForm({
         </div>
       </div>
 
+      <details className="group border border-slate-200 rounded-lg bg-slate-50/60 px-4 py-3">
+        <summary className="cursor-pointer list-none text-xs font-semibold text-slate-700 select-none flex items-center gap-2">
+          <span className="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
+          Contact &amp; offer overrides
+          <span className="font-normal text-slate-500">— your Playbook defaults apply unless set here</span>
+        </summary>
+        <div className="mt-3 space-y-5">
       <div>
         <label className="block text-xs font-semibold text-slate-700 mb-1.5">
           Email{" "}
@@ -249,6 +256,8 @@ export default function NewDealForm({
           />
         </div>
       </div>
+        </div>
+      </details>
 
       <div>
         <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -306,6 +315,13 @@ export default function NewDealForm({
         </label>
       </div>
 
+      <details className="group border border-slate-200 rounded-lg bg-slate-50/60 px-4 py-3">
+        <summary className="cursor-pointer list-none text-xs font-semibold text-slate-700 select-none flex items-center gap-2">
+          <span className="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
+          Their message or rate card
+          <span className="font-normal text-slate-500">— paste it if they wrote first</span>
+        </summary>
+        <div className="mt-3">
       <div>
         <label className="block text-xs font-semibold text-slate-700 mb-1.5">
           Their message or rate card{" "}
@@ -320,6 +336,8 @@ export default function NewDealForm({
           className={`${inputClass} resize-y`}
         />
       </div>
+        </div>
+      </details>
 
       <div className="grid grid-cols-3 gap-4">
         <div>

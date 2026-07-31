@@ -80,14 +80,32 @@ export default function AnalysisTab({
         engagementRate={deal.engagement_rate}
         suspect={suspectAudienceData({ avgViews: deal.avg_views, followers })}
       />
-      {/* Verdict banner */}
-      <div className={`flex gap-4 items-start p-4 rounded-lg border ${v.wrap}`}>
-        <span
-          className={`font-headline font-bold text-xs tracking-widest border-[1.5px] rounded-md px-2.5 py-1.5 whitespace-nowrap mt-0.5 ${v.badge}`}
-        >
-          {v.label}
-        </span>
-        <p className="text-sm text-slate-700 max-w-[70ch]">{analysis.verdictSummary}</p>
+      {/* Verdict banner. The decision-critical numbers surface as chips — a ten-line
+          paragraph buries "cost blows past the cap" in the middle of a sentence. */}
+      <div className={`p-4 rounded-lg border ${v.wrap}`}>
+        <div className="flex gap-3 items-center flex-wrap mb-2">
+          <span
+            className={`font-headline font-bold text-xs tracking-widest border-[1.5px] rounded-md px-2.5 py-1.5 whitespace-nowrap ${v.badge}`}
+          >
+            {v.label}
+          </span>
+          {analysis.metrics
+            .filter((m) => m.tone === "crit" || m.tone === "warn")
+            .slice(0, 4)
+            .map((m) => (
+              <span
+                key={m.label}
+                className={`text-xs font-medium rounded-full px-2.5 py-1 border ${
+                  m.tone === "crit"
+                    ? "bg-red-50 border-red-200 text-red-700"
+                    : "bg-amber-100/60 border-amber-300 text-amber-800"
+                }`}
+              >
+                {m.label}: <span className="font-tabular font-semibold">{m.value}</span>
+              </span>
+            ))}
+        </div>
+        <p className="text-sm text-slate-700 max-w-[80ch]">{analysis.verdictSummary}</p>
       </div>
 
       {/* Metrics */}

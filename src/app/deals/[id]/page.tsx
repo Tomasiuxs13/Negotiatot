@@ -320,76 +320,127 @@ export default async function DealPage({
         )}
       </div>
 
-      <DealTabs
-        defaultTab={
-          // An attention item deep-links to the tab where its action lives; the
-          // stage-based default only applies when nothing was asked for.
-          ({ analysis: "Analysis", negotiation: "Negotiation", fulfillment: "Fulfillment", actuals: "Actuals", history: "History" } as Record<string, string>)[tab ?? ""] ??
-          (deal.stage === "agreed"
-            ? "Fulfillment"
-            : deal.stage === "negotiating" || deal.stage === "offer_sent"
-              ? "Negotiation"
-              : "Analysis")
-        }
-        analysis={<AnalysisTab deal={deal} followers={followers} />}
-        negotiation={<NegotiationTab deal={deal} messages={messages} />}
-        fulfillment={
-          showFulfillment ? (
-            <div className="space-y-4 max-w-4xl">
-              <ContractDraftBlock
-                dealId={deal.id}
-                initial={(() => {
-                  const d = getContractDraft(deal.id);
-                  return d ? { body: d.body, status: d.status } : null;
-                })()}
-              />
-              <ContractBlock
-                dealId={deal.id}
-                contract={contract}
-                terms={parseTerms(contract?.parsed_terms)}
-              />
-              <OnboardingBlock
-                dealId={deal.id}
-                creator={deal.creator}
-                tasks={onboarding}
-                hasPartner={deal.partner_id != null}
-              />
-              <ContentItemsBlock
-                dealId={deal.id}
-                items={contentItems}
-                draftLeadDays={Number(
-                  getSetting<Record<string, number>>("workflow")?.draftLeadDays ?? 10
-                )}
-                creator={deal.creator}
-                senderName={(getSetting<Record<string, string>>("brand_profile")?.senderName ?? "")}
-              />
-              <ShipmentsBlock dealId={deal.id} shipments={shipments} />
-              <PaymentItemsBlock dealId={deal.id} payments={paymentItems} />
-            </div>
-          ) : undefined
-        }
-        actuals={
-          closed || deal.agreed_price != null ? (
-            <ActualsPanel
-              deal={deal}
-              contentItems={contentItems}
-              expectedReach={expectedReach}
-              windows={getSetting<MeasurementWindows>("measurement_windows") ?? {}}
-            />
-          ) : undefined
-        }
-        history={<HistoryTab />}
-      />
+      <div className="flex flex-wrap gap-4 items-start">
+        <div className="flex-1 min-w-[560px]">
+          <DealTabs
+            defaultTab={
+              // An attention item deep-links to the tab where its action lives; the
+              // stage-based default only applies when nothing was asked for.
+              ({ analysis: "Analysis", negotiation: "Negotiation", fulfillment: "Fulfillment", actuals: "Actuals", history: "History" } as Record<string, string>)[tab ?? ""] ??
+              (deal.stage === "agreed"
+                ? "Fulfillment"
+                : deal.stage === "negotiating" || deal.stage === "offer_sent"
+                  ? "Negotiation"
+                  : "Analysis")
+            }
+            analysis={<AnalysisTab deal={deal} followers={followers} />}
+            negotiation={<NegotiationTab deal={deal} messages={messages} />}
+            fulfillment={
+              showFulfillment ? (
+                <div className="space-y-4 max-w-4xl">
+                  {/* Fulfillment is a sequence, not a pile: finished phases fold to a
+                      checkmark line so the current one is what the eye lands on. */}
+                  <details open={contract?.status !== "confirmed"} className="group">
+                    <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-semibold text-slate-700 py-1 select-none">
+                      <span className="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
+                      1 · Paperwork
+                      {contract?.status === "confirmed" && (
+                        <span className="text-xs font-normal text-emerald-700">✓ contract confirmed</span>
+                      )}
+                    </summary>
+                    <div className="space-y-4 mt-2">
+                      <ContractDraftBlock
+                        dealId={deal.id}
+                        initial={(() => {
+                          const d = getContractDraft(deal.id);
+                          return d ? { body: d.body, status: d.status } : null;
+                        })()}
+                      />
+                      <ContractBlock
+                        dealId={deal.id}
+                        contract={contract}
+                        terms={parseTerms(contract?.parsed_terms)}
+                      />
+                    </div>
+                  </details>
 
-      {/* Below the tabs so they're visible from every tab — a note or a promise like
-          "ask again in three months" shouldn't hide behind the tab that was open. */}
-      <div className="max-w-4xl mt-4 grid grid-cols-2 gap-4 items-start">
-        <DealNotes dealId={deal.id} initialNotes={deal.notes ?? ""} />
-        <RemindersBlock
-          reminders={getRemindersFor({ dealId: deal.id })}
-          dealId={deal.id}
-          partnerId={deal.partner_id ?? undefined}
-        />
+                  {(() => {
+                    const contentDone =
+                      contentItems.length > 0 && contentItems.every((c) => c.status === "verified");
+                    const shipDone = shipments.every((x) => x.status === "delivered");
+                    const onboardingDone = onboarding.every((t) => t.status === "done");
+                    const phaseDone = contentDone && shipDone && onboardingDone;
+                    return (
+                      <details open={!phaseDone} className="group">
+                        <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-semibold text-slate-700 py-1 select-none">
+                          <span className="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
+                          2 · Setup &amp; content
+                          {phaseDone && (
+                            <span className="text-xs font-normal text-emerald-700">✓ all delivered and verified</span>
+                          )}
+                        </summary>
+                        <div className="space-y-4 mt-2">
+                          <OnboardingBlock
+                            dealId={deal.id}
+                            creator={deal.creator}
+                            tasks={onboarding}
+                            hasPartner={deal.partner_id != null}
+                          />
+                          <ContentItemsBlock
+                            dealId={deal.id}
+                            items={contentItems}
+                            draftLeadDays={Number(
+                              getSetting<Record<string, number>>("workflow")?.draftLeadDays ?? 10
+                            )}
+                            creator={deal.creator}
+                            senderName={(getSetting<Record<string, string>>("brand_profile")?.senderName ?? "")}
+                          />
+                          <ShipmentsBlock dealId={deal.id} shipments={shipments} />
+                        </div>
+                      </details>
+                    );
+                  })()}
+
+                  <details open={paymentItems.some((x) => x.status !== "paid") || paymentItems.length === 0} className="group">
+                    <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-semibold text-slate-700 py-1 select-none">
+                      <span className="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
+                      3 · Money
+                      {paymentItems.length > 0 && paymentItems.every((x) => x.status === "paid") && (
+                        <span className="text-xs font-normal text-emerald-700">✓ everything paid</span>
+                      )}
+                    </summary>
+                    <div className="mt-2">
+                      <PaymentItemsBlock dealId={deal.id} payments={paymentItems} />
+                    </div>
+                  </details>
+                </div>
+              ) : undefined
+            }
+            actuals={
+              closed || deal.agreed_price != null ? (
+                <ActualsPanel
+                  deal={deal}
+                  contentItems={contentItems}
+                  expectedReach={expectedReach}
+                  windows={getSetting<MeasurementWindows>("measurement_windows") ?? {}}
+                />
+              ) : undefined
+            }
+            history={<HistoryTab />}
+          />
+        </div>
+
+        {/* Beside the tabs, visible from every one — a note or a promise like
+            "ask again in three months" shouldn't hide behind whichever tab was open.
+            Wraps to full width below the tabs on narrow windows. */}
+        <aside className="w-80 grow space-y-4">
+          <DealNotes dealId={deal.id} initialNotes={deal.notes ?? ""} />
+          <RemindersBlock
+            reminders={getRemindersFor({ dealId: deal.id })}
+            dealId={deal.id}
+            partnerId={deal.partner_id ?? undefined}
+          />
+        </aside>
       </div>
     </main>
   );

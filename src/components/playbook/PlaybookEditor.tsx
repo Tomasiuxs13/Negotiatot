@@ -127,9 +127,21 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
     });
   };
 
+  const NAV = [
+    ["pb-brand", "Sender & product"],
+    ["pb-market", "Market & budget"],
+    ["pb-platform", "Platform targets"],
+    ["pb-offer", "Standard offer"],
+    ["pb-finance", "Finance"],
+    ["pb-style", "Negotiation style"],
+    ["pb-campaigns", "Campaigns"],
+  ] as const;
+
   return (
     <div className="max-w-5xl">
-      <div className="flex items-center gap-2 mb-4">
+      {/* Sticky: with 30+ inputs over six screens of scroll, the save button and the
+          dirty state must be visible from every one of them. */}
+      <div className="flex items-center gap-2 mb-2 sticky top-0 z-20 bg-slate-50/95 backdrop-blur py-3">
         {PLATFORMS.map((p) => (
           <button
             key={p}
@@ -144,6 +156,9 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
           </button>
         ))}
         <div className="ml-auto flex items-center gap-3">
+          {status === "idle" && (
+            <span className="text-xs font-medium text-amber-600">Unsaved changes</span>
+          )}
           {status === "saved" && <span className="text-xs font-medium text-emerald-600">Saved ✓</span>}
           {status === "error" && <span className="text-xs font-medium text-red-600">Save failed</span>}
           <button
@@ -156,9 +171,21 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
         </div>
       </div>
 
+      <nav className="flex items-center gap-1 mb-4 flex-wrap text-xs">
+        {NAV.map(([id, label]) => (
+          <a
+            key={id}
+            href={`#${id}`}
+            className="px-2.5 py-1 rounded-full text-slate-500 hover:text-slate-900 hover:bg-white border border-transparent hover:border-slate-200"
+          >
+            {label}
+          </a>
+        ))}
+      </nav>
+
       {/* Drafts are signed and describe a product, so the model needs both. Without
           them it writes "our product" and signs off as a department. */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5 mb-4">
+      <div id="pb-brand" className="scroll-mt-20 bg-white rounded-lg border border-slate-200 shadow-sm p-5 mb-4">
         <h3 className="font-headline text-sm font-semibold text-slate-900 mb-1">
           Who the message is from
         </h3>
@@ -215,7 +242,7 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
 
       {/* Applies everywhere — previously duplicated on each platform tab, where the
           copies could disagree and only YouTube's budget was ever read. */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5 mb-4">
+      <div id="pb-market" className="scroll-mt-20 bg-white rounded-lg border border-slate-200 shadow-sm p-5 mb-4">
         <h3 className="font-headline text-sm font-semibold text-slate-900 mb-1">
           Your market &amp; budget
         </h3>
@@ -246,7 +273,7 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
 
       <div className="grid grid-cols-2 gap-4 items-start">
         {/* Economics targets */}
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
+        <div id="pb-platform" className="scroll-mt-20 bg-white rounded-lg border border-slate-200 shadow-sm p-5">
           <h3 className="font-headline text-sm font-semibold text-slate-900 mb-3">
             Economics targets — {PLATFORM_LABEL[activePlatform]}
           </h3>
@@ -296,7 +323,7 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
         </div>
 
         {/* Unit economics */}
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
+        <div id="pb-offer" className="scroll-mt-20 bg-white rounded-lg border border-slate-200 shadow-sm p-5">
           <h3 className="font-headline text-sm font-semibold text-slate-900 mb-1">
             Your standard offer
           </h3>
@@ -323,7 +350,7 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
             ))}
           </div>
 
-          <h3 className="font-headline text-sm font-semibold text-slate-900 mt-5 mb-1">
+          <h3 id="pb-finance" className="scroll-mt-20 font-headline text-sm font-semibold text-slate-900 mt-5 mb-1">
             From your finance team
           </h3>
           <p className="text-xs text-slate-500 mb-3 max-w-[48ch]">
@@ -356,7 +383,7 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
         </div>
 
         {/* Negotiation style */}
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
+        <div id="pb-style" className="scroll-mt-20 bg-white rounded-lg border border-slate-200 shadow-sm p-5">
           <h3 className="font-headline text-sm font-semibold text-slate-900 mb-3">Negotiation style</h3>
           <div className="flex gap-2 mb-4">
             {["relationship-first", "balanced", "aggressive"].map((s) => (

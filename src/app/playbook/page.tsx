@@ -40,7 +40,7 @@ export default function PlaybookPage() {
       />
       <main className="flex-1 overflow-y-auto p-8 space-y-4">
         <PlaybookEditor initial={initial} />
-        <div className="max-w-5xl">
+        <div id="pb-campaigns" className="scroll-mt-20 max-w-5xl">
           <CampaignsEditor campaigns={campaigns} spendById={spendById} />
         </div>
       </main>
