@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Inter } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
+import AppShell from "@/components/AppShell";
 import { getPipelineKpis } from "@/lib/db";
 
 const geist = Geist({
@@ -36,10 +37,11 @@ export default function RootLayout({
         />
       </head>
       <body className="flex h-screen overflow-hidden">
-        <Sidebar committed={kpis.committed} cap={kpis.monthlyCap} month={month} />
-        <div className="ml-64 flex-1 flex flex-col h-screen overflow-hidden bg-slate-50">
+        <AppShell
+          sidebar={<Sidebar committed={kpis.committed} cap={kpis.monthlyCap} month={month} />}
+        >
           {children}
-        </div>
+        </AppShell>
       </body>
     </html>
   );

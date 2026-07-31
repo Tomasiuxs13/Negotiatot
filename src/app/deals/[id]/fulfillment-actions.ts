@@ -27,6 +27,7 @@ import {
   refreshPaymentStatuses,
   resolveDueDatesAfterDelivery,
   createOnboardingTask,
+  ensureShipmentShareToken,
   deleteOnboardingTask,
   seedOnboarding,
   setContentActuals,
@@ -364,6 +365,20 @@ export async function deletePaymentItemAction(itemId: number, dealId: number) {
 }
 
 /* --------------------------------------------------------------- shipments */
+
+/**
+ * Mints (or returns) the shareable address-form link for a shipment. The creator
+ * fills their own delivery details through it — addresses dictated over chat arrive
+ * wrong, and the manager retypes them anyway.
+ */
+export async function shareShipmentFormAction(shipmentId: number, dealId: number) {
+  const shipment = getShipments(dealId).find((s) => s.id === shipmentId);
+  if (!shipment) return { error: "Shipment not found — it may have been deleted." };
+  const token = ensureShipmentShareToken(shipmentId);
+  if (!token) return { error: "Could not create a link for this shipment." };
+  refresh(dealId);
+  return { url: `/ship/${token}` };
+}
 
 export async function addShipmentAction(
   dealId: number,

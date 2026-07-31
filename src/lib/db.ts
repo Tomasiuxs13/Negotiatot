@@ -274,6 +274,18 @@ CREATE TABLE IF NOT EXISTS usage_log (
     delivered_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
+  // The creator fills their own delivery details through a tokenised public form —
+  // addresses dictated over chat arrive wrong, and the manager retypes them anyway.
+  {
+    const shipCols = (db.prepare("PRAGMA table_info(shipments)").all() as { name: string }[])
+      .map((c) => c.name);
+    if (!shipCols.includes("share_token"))
+      db.exec("ALTER TABLE shipments ADD COLUMN share_token TEXT");
+    if (!shipCols.includes("recipient")) db.exec("ALTER TABLE shipments ADD COLUMN recipient TEXT");
+    if (!shipCols.includes("phone")) db.exec("ALTER TABLE shipments ADD COLUMN phone TEXT");
+    if (!shipCols.includes("address_submitted_at"))
+      db.exec("ALTER TABLE shipments ADD COLUMN address_submitted_at TEXT");
+  }
   db.exec(`CREATE TABLE IF NOT EXISTS campaigns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,

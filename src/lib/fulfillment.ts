@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import db from "./db";
 import { addDays, nextPaymentStatus } from "./fulfillment-rules";
 import type {
@@ -303,6 +304,48 @@ export function deletePaymentItem(id: number) {
 
 export function getShipments(dealId: number): Shipment[] {
   return db.prepare("SELECT * FROM shipments WHERE deal_id = ? ORDER BY id").all(dealId) as Shipment[];
+}
+
+/**
+ * The creator-facing address form is addressed by an unguessable token, never an id —
+ * the id would let anyone walk the integer space and read strangers' addresses.
+ */
+export function ensureShipmentShareToken(shipmentId: number): string | null {
+  const row = db.prepare("SELECT share_token FROM shipments WHERE id = ?").get(shipmentId) as
+    | { share_token: string | null }
+    | undefined;
+  if (!row) return null;
+  if (row.share_token) return row.share_token;
+  const token = randomBytes(24).toString("base64url");
+  db.prepare("UPDATE shipments SET share_token = ? WHERE id = ?").run(token, shipmentId);
+  return token;
+}
+
+export function getShipmentByToken(
+  token: string
+): (Shipment & { creator: string; deal_id: number }) | undefined {
+  if (!token) return undefined;
+  return db
+    .prepare(
+      `SELECT s.*, d.creator FROM shipments s JOIN deals d ON d.id = s.deal_id
+       WHERE s.share_token = ?`
+    )
+    .get(token) as (Shipment & { creator: string }) | undefined;
+}
+
+/** The creator's own submission, via the public form. */
+export function submitShipmentAddress(
+  token: string,
+  fields: { recipient: string; address: string; phone: string | null }
+): boolean {
+  const result = db
+    .prepare(
+      `UPDATE shipments SET recipient = ?, address = ?, phone = ?,
+         address_submitted_at = datetime('now')
+       WHERE share_token = ?`
+    )
+    .run(fields.recipient, fields.address, fields.phone, token);
+  return result.changes > 0;
 }
 
 export function createShipment(fields: {

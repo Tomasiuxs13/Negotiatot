@@ -12,6 +12,7 @@ import {
   deleteContentItemAction,
   deletePaymentItemAction,
   deleteShipmentAction,
+  shareShipmentFormAction,
   setContentStatusAction,
   setPaymentStatusAction,
   updateContentItemAction,
@@ -179,6 +180,7 @@ export function ShipmentsBlock({ dealId, shipments }: { dealId: number; shipment
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ product: "", value: "", address: "" });
   const [note, setNote] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<Record<number, string>>({});
 
   const add = () => {
     if (!draft.product.trim()) return;
@@ -291,6 +293,44 @@ export function ShipmentsBlock({ dealId, shipments }: { dealId: number; shipment
                   })
                 }
               />
+            </div>
+            {/* The creator fills their own delivery details through this link — an
+                address dictated over chat arrives wrong and gets retyped anyway. */}
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <button
+                onClick={() =>
+                  startTransition(async () => {
+                    const res = await shareShipmentFormAction(s.id, dealId);
+                    if (res.url) {
+                      const absolute = `${window.location.origin}${res.url}`;
+                      setShareUrl((prev) => ({ ...prev, [s.id]: absolute }));
+                      try {
+                        await navigator.clipboard.writeText(absolute);
+                        setNote("Address form link copied — share it with the creator.");
+                      } catch {
+                        setNote("Address form link ready — copy it below.");
+                      }
+                    } else if (res.error) {
+                      setNote(res.error);
+                    }
+                  })
+                }
+                disabled={isPending}
+                className="text-xs font-medium text-brand-dark hover:underline disabled:opacity-50"
+              >
+                {s.share_token ? "Copy address form link" : "Create address form link"}
+              </button>
+              {(shareUrl[s.id] ?? (s.share_token ? `/ship/${s.share_token}` : null)) && (
+                <code className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 break-all">
+                  {shareUrl[s.id] ?? `/ship/${s.share_token}`}
+                </code>
+              )}
+              {s.address_submitted_at && (
+                <span className="text-[11px] text-emerald-700">
+                  ✓ filled by {s.recipient || "the creator"} on {s.address_submitted_at.slice(0, 10)}
+                  {s.phone ? ` · ${s.phone}` : ""}
+                </span>
+              )}
             </div>
             {s.delivered_at && (
               <p className="text-xs text-slate-400 mt-1.5">Delivered {s.delivered_at.slice(0, 10)}</p>

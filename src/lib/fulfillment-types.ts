@@ -175,6 +175,12 @@ export interface Shipment {
   shipped_at: string | null;
   delivered_at: string | null;
   created_at: string;
+  /** Unguessable token for the creator-facing address form; null until shared. */
+  share_token?: string | null;
+  /** Filled by the creator through the public form. */
+  recipient?: string | null;
+  phone?: string | null;
+  address_submitted_at?: string | null;
 }
 
 /** What Claude extracts from a signed contract. */
