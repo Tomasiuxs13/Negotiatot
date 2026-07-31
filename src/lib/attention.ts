@@ -98,7 +98,25 @@ export function attentionItems({
       severity: days <= 5 ? "critical" : "warning",
       title: `Request the draft from ${deal.creator}`,
       detail: `${c.title} publishes ${days === 0 ? "today" : `in ${days} day${days === 1 ? "" : "s"}`} — the draft review window is open`,
-      href: `/deals/${c.deal_id}`,
+      href: `/deals/${c.deal_id}?tab=fulfillment`,
+    });
+  }
+
+  // A submitted draft waiting on you: the review clock (48h by convention, and the
+  // publish slot in fact) starts at submission, not when you happen to open the deal.
+  for (const c of contentItems) {
+    if (c.status !== "submitted") continue;
+    const deal = dealById.get(c.deal_id);
+    if (!deal || (deal.stage !== "agreed" && deal.stage !== "completed")) continue;
+    const days = c.due_date ? daysToPublish(c.due_date, today) : null;
+    items.push({
+      id: `draft-review-${c.id}`,
+      severity: days != null && days <= 5 ? "critical" : "warning",
+      title: `Review the draft from ${deal.creator}`,
+      detail:
+        `${c.title}${(c.revision_round ?? 0) > 1 ? ` · revision ${c.revision_round}` : ""}` +
+        (days != null ? ` — publishes ${days === 0 ? "today" : days < 0 ? "overdue" : `in ${days} day${days === 1 ? "" : "s"}`}` : ""),
+      href: `/deals/${c.deal_id}?tab=fulfillment`,
     });
   }
 
@@ -112,7 +130,7 @@ export function attentionItems({
       severity: "critical",
       title: `${who} — content overdue`,
       detail: `${c.title} was due ${late} day${late === 1 ? "" : "s"} ago — check in with ${who}`,
-      href: `/deals/${c.deal_id}`,
+      href: `/deals/${c.deal_id}?tab=fulfillment`,
     });
   }
 
@@ -124,7 +142,7 @@ export function attentionItems({
       severity: "warning",
       title: `${nameOf(p.deal_id)} — payment ready to approve`,
       detail: p.description,
-      href: `/deals/${p.deal_id}`,
+      href: `/deals/${p.deal_id}?tab=fulfillment`,
       amount: p.amount,
     });
   }
@@ -137,7 +155,7 @@ export function attentionItems({
         severity: "warning",
         title: `${nameOf(s.deal_id)} — product not sent`,
         detail: `${s.product} still needs shipping`,
-        href: `/deals/${s.deal_id}`,
+        href: `/deals/${s.deal_id}?tab=fulfillment`,
       });
     } else if (s.status === "shipped" && s.shipped_at) {
       const inTransit = daysBetween(s.shipped_at, today);
@@ -147,7 +165,7 @@ export function attentionItems({
           severity: "warning",
           title: `${nameOf(s.deal_id)} — shipment not confirmed`,
           detail: `${s.product} shipped ${inTransit} days ago and isn't marked delivered`,
-          href: `/deals/${s.deal_id}`,
+          href: `/deals/${s.deal_id}?tab=fulfillment`,
         });
       }
     }
@@ -164,7 +182,7 @@ export function attentionItems({
         severity: "info",
         title: `${d.creator} — no reply in ${quiet} days`,
         detail: "Consider a follow-up nudge",
-        href: `/deals/${d.id}`,
+        href: `/deals/${d.id}?tab=negotiation`,
       });
     }
   }
@@ -184,7 +202,7 @@ export function attentionItems({
         waiting >= 1
           ? `Waiting ${waiting} day${waiting === 1 ? "" : "s"} — send an offer or decline`
           : "Send an offer or decline",
-      href: `/deals/${d.id}`,
+      href: `/deals/${d.id}?tab=analysis`,
     });
   }
 
@@ -196,7 +214,7 @@ export function attentionItems({
       severity: "warning",
       title: `${d.creator} — your move`,
       detail: `Round ${d.round}: the Copilot's recommendation is waiting`,
-      href: `/deals/${d.id}`,
+      href: `/deals/${d.id}?tab=negotiation`,
     });
   }
 

@@ -48,14 +48,17 @@ export default function DashboardPage() {
     },
     {
       label: "Committed / cap",
-      value: money(kpis.committed),
-      note: `of ${money(kpis.monthlyCap)} this month`,
+      value: kpis.committed > 0 ? money(kpis.committed) : "—",
+      note:
+        kpis.committed > 0
+          ? `of ${money(kpis.monthlyCap)} this month`
+          : `nothing committed yet · cap ${money(kpis.monthlyCap)}`,
       noteTone: "text-slate-500",
       href: "/pipeline",
     },
     {
       label: "Owed to creators",
-      value: money(outstanding),
+      value: outstanding > 0 ? money(outstanding) : "—",
       note:
         toApprove.length > 0
           ? `${toApprove.length} ready to approve`

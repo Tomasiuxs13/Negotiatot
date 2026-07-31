@@ -46,8 +46,15 @@ const STAGE_PILL: Record<string, string> = {
   declined: "bg-red-50 text-red-700 border border-red-200",
 };
 
-export default async function DealPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function DealPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const { id } = await params;
+  const { tab } = await searchParams;
   const found = getDeal(Number(id));
   if (!found) notFound();
   const deal = found;
@@ -315,11 +322,14 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
 
       <DealTabs
         defaultTab={
-          deal.stage === "agreed"
+          // An attention item deep-links to the tab where its action lives; the
+          // stage-based default only applies when nothing was asked for.
+          ({ analysis: "Analysis", negotiation: "Negotiation", fulfillment: "Fulfillment", actuals: "Actuals", history: "History" } as Record<string, string>)[tab ?? ""] ??
+          (deal.stage === "agreed"
             ? "Fulfillment"
             : deal.stage === "negotiating" || deal.stage === "offer_sent"
               ? "Negotiation"
-              : "Analysis"
+              : "Analysis")
         }
         analysis={<AnalysisTab deal={deal} followers={followers} />}
         negotiation={<NegotiationTab deal={deal} messages={messages} />}

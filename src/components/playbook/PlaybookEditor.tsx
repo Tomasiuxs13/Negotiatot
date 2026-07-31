@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { savePlaybookAction, type PlaybookPayload } from "@/app/playbook/actions";
 
 const PLATFORMS = ["youtube", "instagram", "tiktok", "facebook"] as const;
@@ -86,9 +86,22 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
   const [style, setStyle] = useState(initial.negotiationStyle as unknown as NegotiationStyle);
   const [activePlatform, setActivePlatform] = useState<string>("youtube");
   const [isPending, startTransition] = useTransition();
-  const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
+  const [status, setStatus] = useState<"pristine" | "idle" | "saved" | "error">("pristine");
 
   const rules = platforms[activePlatform] ?? {};
+
+  // Closing or refreshing with unsaved edits silently discarded the whole form.
+  // (In-app navigation is still unguarded — the sticky save bar makes the dirty
+  // state visible, which is the part that prevents most losses.)
+  const dirty = status === "idle";
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   const setRule = (key: string, value: string) => {
     setPlatforms((prev) => ({

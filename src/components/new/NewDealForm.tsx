@@ -196,7 +196,7 @@ export default function NewDealForm({
         <label className="block text-xs font-semibold text-slate-700 mb-1.5">
           Commission{" "}
           <span className="font-normal text-slate-500">
-            — CPA paid on top of the fee; the Copilot prices the fee net of it
+            — CPA paid on top of the fee; the fee itself stays at market rate, and the Copilot checks total cost against your budget caps
           </span>
         </label>
         <div className="flex gap-2">
@@ -225,7 +225,7 @@ export default function NewDealForm({
         <label className="block text-xs font-semibold text-slate-700 mb-1.5">
           Audience discount{" "}
           <span className="font-normal text-slate-500">
-            — their coupon code; the discount is our cost, so it prices into the fee
+            — their coupon code; counted in blended AOV, not against this deal
           </span>
         </label>
         <div className="flex gap-2">
