@@ -670,8 +670,13 @@ const CONTRACT_SCHEMA = {
             enum: ["on_signing", "on_delivery", "on_verification", "date"],
           },
           dueDate: { type: ["string", "null"] },
+          afterContentCount: {
+            type: ["number", "null"],
+            description:
+              "For on_verification payments only: how many content items must be live/verified before this payment is due, when the contract gates it on a SUBSET ('50% after the first two videos'). Null when it waits for all content.",
+          },
         },
-        required: ["description", "amount", "trigger", "dueDate"],
+        required: ["description", "amount", "trigger", "dueDate", "afterContentCount"],
       },
     },
     product: {

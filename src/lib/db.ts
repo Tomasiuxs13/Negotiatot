@@ -274,6 +274,14 @@ CREATE TABLE IF NOT EXISTS usage_log (
     delivered_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
+  // "50% after half the videos": how many linked content items must be verified before
+  // an on_verification payment unlocks. NULL means all of them.
+  {
+    const payCols = (db.prepare("PRAGMA table_info(payment_items)").all() as { name: string }[])
+      .map((c) => c.name);
+    if (payCols.length > 0 && !payCols.includes("required_verified"))
+      db.exec("ALTER TABLE payment_items ADD COLUMN required_verified INTEGER");
+  }
   // The creator fills their own delivery details through a tokenised public form —
   // addresses dictated over chat arrive wrong, and the manager retypes them anyway.
   {

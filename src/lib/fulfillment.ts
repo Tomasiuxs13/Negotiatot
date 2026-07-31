@@ -246,13 +246,15 @@ export function createPaymentItem(fields: {
   trigger: PaymentTrigger;
   dueDate?: string | null;
   linkedContentIds?: number[];
+  /** Milestone gate: linked items that must be verified; null = all of them. */
+  requiredVerified?: number | null;
 }): number {
   // Signing fees have nothing to wait for — they're immediately approvable.
   const status: PaymentStatus = fields.trigger === "on_signing" ? "approvable" : "pending";
   const info = db
     .prepare(
-      `INSERT INTO payment_items (deal_id, description, amount, trigger, due_date, linked_content_ids, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO payment_items (deal_id, description, amount, trigger, due_date, linked_content_ids, required_verified, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       fields.dealId,
@@ -261,6 +263,7 @@ export function createPaymentItem(fields: {
       fields.trigger,
       fields.dueDate ?? null,
       JSON.stringify(fields.linkedContentIds ?? []),
+      fields.requiredVerified ?? null,
       status
     );
   return Number(info.lastInsertRowid);

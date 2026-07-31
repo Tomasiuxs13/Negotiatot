@@ -27,7 +27,10 @@ export function parseLinkedIds(raw: string | null | undefined): number[] {
  * Already-approved/paid items are never downgraded.
  */
 export function paymentApprovable(
-  payment: Pick<PaymentItem, "trigger" | "status" | "due_date" | "linked_content_ids">,
+  payment: Pick<
+    PaymentItem,
+    "trigger" | "status" | "due_date" | "linked_content_ids" | "required_verified"
+  >,
   contentItems: Pick<ContentItem, "id" | "status">[],
   productDelivered: boolean,
   today = new Date().toISOString().slice(0, 10)
@@ -45,7 +48,14 @@ export function paymentApprovable(
       const linked = parseLinkedIds(payment.linked_content_ids);
       const relevant =
         linked.length > 0 ? contentItems.filter((c) => linked.includes(c.id)) : contentItems;
-      return relevant.length > 0 && relevant.every((c) => c.status === "verified");
+      if (relevant.length === 0) return false;
+      // Milestone gates: "50% after half the videos" needs only N of the linked items
+      // verified, not all of them. Null keeps the strict all-verified default, and the
+      // requirement is capped at what's actually linked so an over-large N can't make
+      // a payment permanently unreachable.
+      const required = Math.min(payment.required_verified ?? relevant.length, relevant.length);
+      const verified = relevant.filter((c) => c.status === "verified").length;
+      return verified >= Math.max(1, required);
     }
     default:
       return false;
@@ -54,7 +64,10 @@ export function paymentApprovable(
 
 /** The status a payment item should have right now, given the deal's state. */
 export function nextPaymentStatus(
-  payment: Pick<PaymentItem, "trigger" | "status" | "due_date" | "linked_content_ids">,
+  payment: Pick<
+    PaymentItem,
+    "trigger" | "status" | "due_date" | "linked_content_ids" | "required_verified"
+  >,
   contentItems: Pick<ContentItem, "id" | "status">[],
   productDelivered: boolean,
   today?: string

@@ -380,10 +380,16 @@ export function PaymentItemsBlock({ dealId, payments }: { dealId: number; paymen
   const [isPending, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ description: string; amount: string; trigger: PaymentTrigger }>({
+  const [draft, setDraft] = useState<{
+    description: string;
+    amount: string;
+    trigger: PaymentTrigger;
+    requiredVerified: string;
+  }>({
     description: "",
     amount: "",
     trigger: "on_verification",
+    requiredVerified: "",
   });
 
   /** Every payment action goes through here so a server-side refusal is shown, not eaten. */
@@ -397,13 +403,21 @@ export function PaymentItemsBlock({ dealId, payments }: { dealId: number; paymen
 
   const add = () => {
     if (!draft.description.trim() || !draft.amount) return;
+    setActionError(null);
     startTransition(async () => {
-      await addPaymentItemAction(dealId, {
+      const result = await addPaymentItemAction(dealId, {
         description: draft.description,
         amount: Number(draft.amount),
         trigger: draft.trigger,
+        requiredVerified: draft.requiredVerified.trim()
+          ? Number(draft.requiredVerified)
+          : null,
       });
-      setDraft({ description: "", amount: "", trigger: "on_verification" });
+      if (result?.error) {
+        setActionError(result.error);
+        return;
+      }
+      setDraft({ description: "", amount: "", trigger: "on_verification", requiredVerified: "" });
       setAdding(false);
     });
   };
@@ -443,7 +457,12 @@ export function PaymentItemsBlock({ dealId, payments }: { dealId: number; paymen
             </span>
             <span className="text-sm text-slate-800 flex-1">
               {p.description}
-              <span className="text-xs text-slate-400"> · {PAYMENT_TRIGGER_LABEL[p.trigger]}</span>
+              <span className="text-xs text-slate-400">
+                {" "}· {PAYMENT_TRIGGER_LABEL[p.trigger]}
+                {p.trigger === "on_verification" && p.required_verified != null
+                  ? ` (after ${p.required_verified} verified)`
+                  : ""}
+              </span>
             </span>
             <span className="font-tabular text-sm font-semibold text-slate-900">{money(p.amount)}</span>
             {p.status === "approvable" && (
@@ -524,6 +543,19 @@ export function PaymentItemsBlock({ dealId, payments }: { dealId: number; paymen
               </option>
             ))}
           </select>
+          {/* Milestone gate — "50% after half the videos". Blank keeps the strict
+              all-verified default. */}
+          {draft.trigger === "on_verification" && (
+            <input
+              className={`${inputClass} w-28 text-right font-tabular`}
+              type="number"
+              min="1"
+              placeholder="after N (all)"
+              title="How many content items must be verified before this unlocks — blank means all of them"
+              value={draft.requiredVerified}
+              onChange={(e) => setDraft({ ...draft, requiredVerified: e.target.value })}
+            />
+          )}
           <button onClick={add} disabled={isPending} className="bg-brand hover:bg-brand-dark text-white rounded-md py-1.5 px-3 text-sm font-medium disabled:opacity-60">
             Add
           </button>

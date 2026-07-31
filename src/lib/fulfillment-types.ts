@@ -61,6 +61,8 @@ export interface PaymentItem {
   trigger: PaymentTrigger;
   due_date: string | null;
   linked_content_ids: string; // JSON array of content item ids
+  /** Linked items that must be verified before this unlocks; null = all of them. */
+  required_verified: number | null;
   status: PaymentStatus;
   approved_at: string | null;
   paid_at: string | null;
@@ -198,6 +200,8 @@ export interface ParsedTerms {
     amount: number;
     trigger: PaymentTrigger;
     dueDate: string | null;
+    /** Content items that must be verified before this unlocks; null = all linked. */
+    afterContentCount?: number | null;
   }[];
   product: { description: string; value: number | null } | null;
   usageRights: string | null;
@@ -243,10 +247,14 @@ export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
  * Why a payment is still waiting, in the partner's terms. A single hardcoded reason
  * misleads: a balance held for content verification is not a shipping problem.
  */
-export function pendingReason(p: Pick<PaymentItem, "trigger" | "due_date">): string {
+export function pendingReason(
+  p: Pick<PaymentItem, "trigger" | "due_date"> & { required_verified?: number | null }
+): string {
   switch (p.trigger) {
     case "on_verification":
-      return "waiting on content verification";
+      return p.required_verified != null
+        ? `waiting on ${p.required_verified} content item${p.required_verified === 1 ? "" : "s"} verified`
+        : "waiting on content verification";
     case "on_delivery":
       return "waiting on product delivery";
     case "date":

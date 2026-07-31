@@ -118,3 +118,37 @@ describe("pendingReason", () => {
     expect(pendingReason({ trigger: "on_signing", due_date: null })).toBe("waiting on signature");
   });
 });
+
+describe("milestone payment gates", () => {
+  const fourItems = (verified: number) =>
+    [1, 2, 3, 4].map((id) => content(id, id <= verified ? "verified" : "posted"));
+
+  it("unlocks '50% after half the videos' at two of four verified", () => {
+    const half = payment({ linked_content_ids: "[1,2,3,4]", required_verified: 2 });
+    expect(paymentApprovable(half, fourItems(1), false)).toBe(false);
+    expect(paymentApprovable(half, fourItems(2), false)).toBe(true);
+  });
+
+  it("keeps the strict all-verified default when no gate is set", () => {
+    const full = payment({ linked_content_ids: "[1,2,3,4]", required_verified: null });
+    expect(paymentApprovable(full, fourItems(3), false)).toBe(false);
+    expect(paymentApprovable(full, fourItems(4), false)).toBe(true);
+  });
+
+  it("caps an over-large gate at what is actually linked", () => {
+    // A gate of 9 on four items must not make the payment permanently unreachable.
+    const overshoot = payment({ linked_content_ids: "[1,2,3,4]", required_verified: 9 });
+    expect(paymentApprovable(overshoot, fourItems(4), false)).toBe(true);
+  });
+
+  it("still refuses when nothing is linked and no content exists", () => {
+    expect(paymentApprovable(payment({ required_verified: 1 }), [], false)).toBe(false);
+  });
+
+  it("names the milestone in the waiting reason", () => {
+    expect(pendingReason(payment({ required_verified: 2 }))).toBe(
+      "waiting on 2 content items verified"
+    );
+    expect(pendingReason(payment({}))).toBe("waiting on content verification");
+  });
+});

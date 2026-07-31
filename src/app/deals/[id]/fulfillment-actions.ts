@@ -213,8 +213,13 @@ export async function confirmContractAction(
       amount: payment.amount,
       trigger: payment.trigger,
       dueDate: payment.dueDate,
-      // Verification-triggered money waits on all of this deal's content.
+      // Verification-triggered money waits on this deal's content — all of it, or the
+      // milestone count the contract names ("50% after the first two videos").
       linkedContentIds: payment.trigger === "on_verification" ? contentIds : [],
+      requiredVerified:
+        payment.trigger === "on_verification" && payment.afterContentCount != null
+          ? Math.max(1, Math.min(Math.round(payment.afterContentCount), contentIds.length))
+          : null,
     });
     paymentCount += 1;
   }
@@ -331,19 +336,36 @@ export async function setPaymentStatusAction(
 
 export async function addPaymentItemAction(
   dealId: number,
-  fields: { description: string; amount: number; trigger: ParsedTerms["payments"][number]["trigger"] }
+  fields: {
+    description: string;
+    amount: number;
+    trigger: ParsedTerms["payments"][number]["trigger"];
+    /** Milestone gate: linked items that must be verified; null/undefined = all. */
+    requiredVerified?: number | null;
+  }
 ) {
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
   if (!fields.description.trim()) return { error: "Describe the payment." };
   if (!fields.amount || fields.amount <= 0) return { error: "Enter an amount." };
+  const linked =
+    fields.trigger === "on_verification" ? getContentItems(dealId).map((c) => c.id) : [];
+  let requiredVerified: number | null = null;
+  if (fields.trigger === "on_verification" && fields.requiredVerified != null) {
+    const n = Math.round(fields.requiredVerified);
+    if (!Number.isFinite(n) || n < 1) return { error: "The milestone count must be at least 1." };
+    if (linked.length > 0 && n > linked.length) {
+      return { error: `Only ${linked.length} content item${linked.length === 1 ? " is" : "s are"} on this deal — the milestone can't need more.` };
+    }
+    requiredVerified = n;
+  }
   createPaymentItem({
     dealId,
     description: fields.description.trim(),
     amount: fields.amount,
     trigger: fields.trigger,
-    linkedContentIds:
-      fields.trigger === "on_verification" ? getContentItems(dealId).map((c) => c.id) : [],
+    linkedContentIds: linked,
+    requiredVerified,
   });
   refreshPaymentStatuses(dealId);
   refresh(dealId);
