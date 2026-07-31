@@ -22,7 +22,7 @@ export default function LegalDetailsForm({
     <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
       <h2 className="font-headline text-sm font-semibold text-slate-900 mb-1">Your details for contracts</h2>
       <p className="text-xs text-slate-500 mb-3">Used to prepare your collaboration agreements — fill once, we reuse them.</p>
-      <div className="grid grid-cols-2 gap-2 mb-2">
+      <div className="grid sm:grid-cols-2 gap-2 mb-2">
         <input className={input} placeholder="Legal name *" value={f.legalName} onChange={set("legalName")} />
         <input className={input} placeholder="Company (if invoicing via one)" value={f.companyName} onChange={set("companyName")} />
         <input className={input} placeholder="VAT / tax ID" value={f.taxId} onChange={set("taxId")} />

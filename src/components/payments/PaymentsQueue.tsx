@@ -5,16 +5,11 @@ import { useState, useTransition } from "react";
 import type { PaymentItem } from "@/lib/fulfillment-types";
 import { PAYMENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL, pendingReason } from "@/lib/fulfillment-types";
 import { money } from "@/lib/format";
+import { PAYMENT_TONE, TONE_CLASS } from "@/lib/status-tones";
 import { SortHeader } from "@/components/FilterBar";
 import { nextDir, type SortDir } from "@/lib/table-sort";
 import { setPaymentStatusAction } from "@/app/deals/[id]/fulfillment-actions";
 
-const TONE: Record<string, string> = {
-  pending: "bg-slate-100 text-slate-600",
-  approvable: "bg-amber-50 text-amber-700",
-  approved: "bg-sky-50 text-sky-700",
-  paid: "bg-emerald-50 text-emerald-700",
-};
 
 export default function PaymentsQueue({
   payments,
@@ -93,7 +88,7 @@ export default function PaymentsQueue({
           {payments.map((p) => (
             <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
               <td className="px-4 py-3">
-                <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${TONE[p.status]}`}>
+                <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${TONE_CLASS[PAYMENT_TONE[p.status]]}`}>
                   {PAYMENT_STATUS_LABEL[p.status]}
                 </span>
               </td>

@@ -112,16 +112,18 @@ export default async function PaymentsPage({
                   </option>
                 ))}
               </select>
-              <label className="text-xs text-slate-500">from</label>
+              <label htmlFor="pay-from" className="text-xs text-slate-500">from</label>
               <input
                 type="date"
+                id="pay-from"
                 name="from"
                 defaultValue={from}
                 className="border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700"
               />
-              <label className="text-xs text-slate-500">to</label>
+              <label htmlFor="pay-to" className="text-xs text-slate-500">to</label>
               <input
                 type="date"
+                id="pay-to"
                 name="to"
                 defaultValue={to}
                 className="border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700"

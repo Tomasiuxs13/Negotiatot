@@ -11,6 +11,7 @@ import {
   requestChangesAction,
 } from "@/app/deals/[id]/fulfillment-actions";
 import { money } from "@/lib/format";
+import { CONTENT_TONE, PAYMENT_TONE, TONE_CLASS } from "@/lib/status-tones";
 import {
   addContentItemAction,
   addPaymentItemAction,
@@ -28,14 +29,6 @@ import {
 const inputClass =
   "border border-slate-200 rounded-md bg-white px-2.5 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand";
 
-const STATUS_TONE: Record<ContentStatus, string> = {
-  planned: "bg-slate-100 text-slate-600",
-  in_production: "bg-sky-50 text-sky-700",
-  submitted: "bg-violet-50 text-violet-700",
-  approved: "bg-indigo-50 text-indigo-700",
-  posted: "bg-amber-50 text-amber-700",
-  verified: "bg-emerald-50 text-emerald-700",
-};
 
 /* ----------------------------------------------------------- content items */
 
@@ -105,7 +98,7 @@ export function ContentItemsBlock({
           return (
             <div key={item.id} className="py-2.5">
               <div className="flex items-center gap-3">
-                <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${STATUS_TONE[item.status]}`}>
+                <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${TONE_CLASS[CONTENT_TONE[item.status]]}`}>
                   {CONTENT_STATUS_LABEL[item.status]}
                 </span>
                 <span className="text-sm text-slate-800 flex-1">{item.title}</span>
@@ -143,6 +136,7 @@ export function ContentItemsBlock({
                       await deleteContentItemAction(item.id, dealId);
                     })
                   }
+                  aria-label={`Delete content item ${item.title}`}
                   className="text-slate-300 hover:text-red-600"
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 15 }}>close</span>
@@ -243,7 +237,8 @@ export function ContentItemsBlock({
                       const value = urlEdit[item.id];
                       if (value === undefined || value === (item.posted_url ?? "")) return;
                       startTransition(async () => {
-                        await updateContentItemAction(item.id, dealId, { postedUrl: value || null });
+                        const r = await updateContentItemAction(item.id, dealId, { postedUrl: value || null });
+                        if (r?.error) setReviewError(r.error);
                       });
                     }}
                   />
@@ -368,6 +363,7 @@ export function ShipmentsBlock({ dealId, shipments }: { dealId: number; shipment
                     await deleteShipmentAction(s.id, dealId);
                   })
                 }
+                aria-label={`Delete shipment ${s.product}`}
                 className="text-slate-300 hover:text-red-600"
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 15 }}>close</span>
@@ -390,7 +386,8 @@ export function ShipmentsBlock({ dealId, shipments }: { dealId: number; shipment
                 defaultValue={s.tracking ?? ""}
                 onBlur={(e) =>
                   startTransition(async () => {
-                    await updateShipmentAction(s.id, dealId, { tracking: e.target.value || null });
+                    const r = await updateShipmentAction(s.id, dealId, { tracking: e.target.value || null });
+                    if (r?.error) setNote(r.error);
                   })
                 }
               />
@@ -400,7 +397,8 @@ export function ShipmentsBlock({ dealId, shipments }: { dealId: number; shipment
                 defaultValue={s.address ?? ""}
                 onBlur={(e) =>
                   startTransition(async () => {
-                    await updateShipmentAction(s.id, dealId, { address: e.target.value || null });
+                    const r = await updateShipmentAction(s.id, dealId, { address: e.target.value || null });
+                    if (r?.error) setNote(r.error);
                   })
                 }
               />
@@ -480,12 +478,6 @@ export function ShipmentsBlock({ dealId, shipments }: { dealId: number; shipment
 
 /* ----------------------------------------------------------- payment items */
 
-const PAYMENT_TONE: Record<string, string> = {
-  pending: "bg-slate-100 text-slate-600",
-  approvable: "bg-amber-50 text-amber-700",
-  approved: "bg-sky-50 text-sky-700",
-  paid: "bg-emerald-50 text-emerald-700",
-};
 
 export function PaymentItemsBlock({ dealId, payments }: { dealId: number; payments: PaymentItem[] }) {
   const [isPending, startTransition] = useTransition();
@@ -563,7 +555,7 @@ export function PaymentItemsBlock({ dealId, payments }: { dealId: number; paymen
       <div className="divide-y divide-slate-100">
         {payments.map((p) => (
           <div key={p.id} className="flex items-center gap-3 py-2.5">
-            <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${PAYMENT_TONE[p.status]}`}>
+            <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${TONE_CLASS[PAYMENT_TONE[p.status]]}`}>
               {p.status === "approvable" ? "Ready to approve" : p.status[0].toUpperCase() + p.status.slice(1)}
             </span>
             <span className="text-sm text-slate-800 flex-1">

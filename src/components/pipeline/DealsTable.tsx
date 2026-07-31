@@ -2,21 +2,12 @@ import Link from "next/link";
 import type { Deal } from "@/lib/types";
 import { PLATFORM_META, STAGE_LABELS, dealPlatforms } from "@/lib/types";
 import { money } from "@/lib/format";
+import { DEAL_STAGE_TONE, TONE_CLASS } from "@/lib/status-tones";
 import type { DealPhase } from "@/lib/deal-phase";
 import { SortHeader } from "@/components/FilterBar";
 import { nextDir, type SortDir } from "@/lib/table-sort";
 
 
-const STAGE_PILL: Record<string, string> = {
-  lead: "bg-slate-100 text-slate-600",
-  contacted: "bg-slate-100 text-slate-600",
-  analyzing: "bg-slate-100 text-slate-600",
-  offer_sent: "bg-sky-50 text-sky-700",
-  negotiating: "bg-amber-50 text-amber-700",
-  agreed: "bg-emerald-50 text-emerald-700",
-  completed: "bg-slate-100 text-slate-500",
-  declined: "bg-red-50 text-red-700",
-};
 
 /** "3 days ago" — relative time reads faster than a date when scanning for staleness. */
 function ago(timestamp: string): string {
@@ -113,7 +104,7 @@ export default function DealsTable({
               </td>
               <td className="px-4 py-3">
                 <span
-                  className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${STAGE_PILL[d.stage] ?? "bg-slate-100 text-slate-600"}`}
+                  className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${TONE_CLASS[DEAL_STAGE_TONE[d.stage] ?? "neutral"]}`}
                 >
                   {STAGE_LABELS[d.stage]}
                 </span>

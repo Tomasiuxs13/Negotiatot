@@ -287,7 +287,12 @@ export async function updateContentItemAction(
   itemId: number,
   dealId: number,
   fields: { dueDate?: string | null; postedUrl?: string | null; notes?: string | null }
-) {
+): Promise<{ error?: string }> {
+  // A blur-save from a stale tab can reference a deleted row; affecting 0 rows must
+  // not read as success.
+  if (!getContentItems(dealId).some((c) => c.id === itemId)) {
+    return { error: "Content item not found — it may have been deleted." };
+  }
   updateContentItem(itemId, fields);
   refresh(dealId);
   return {};
@@ -453,7 +458,10 @@ export async function updateShipmentAction(
     tracking?: string | null;
     status?: ShipmentStatus;
   }
-) {
+): Promise<{ error?: string; resolvedDueDates?: number }> {
+  if (!getShipments(dealId).some((x) => x.id === shipmentId)) {
+    return { error: "Shipment not found — it may have been deleted." };
+  }
   updateShipment(shipmentId, fields);
 
   // Delivery starts the content clock and can unlock delivery-triggered money.

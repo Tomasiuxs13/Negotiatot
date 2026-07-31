@@ -32,19 +32,12 @@ import { ladderNotes } from "@/lib/ladder-notes";
 import AnalysisTab from "@/components/deal/AnalysisTab";
 import NegotiationTab from "@/components/deal/NegotiationTab";
 import DealNotes from "@/components/deal/DealNotes";
+import { DEAL_STAGE_TONE, TONE_CLASS_BORDERED } from "@/lib/status-tones";
 import ContractDraftBlock from "@/components/deal/ContractDraftBlock";
 
 export const dynamic = "force-dynamic";
 
 
-const STAGE_PILL: Record<string, string> = {
-  analyzing: "bg-slate-100 text-slate-600 border border-slate-200",
-  offer_sent: "bg-sky-50 text-sky-700 border border-sky-200",
-  negotiating: "bg-amber-50 text-amber-700 border border-amber-200",
-  agreed: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  completed: "bg-slate-100 text-slate-600 border border-slate-200",
-  declined: "bg-red-50 text-red-700 border border-red-200",
-};
 
 export default async function DealPage({
   params,
@@ -228,7 +221,7 @@ export default async function DealPage({
               + {describeCommission(dealCommission(deal))}
             </span>
           )}
-          <span className={`text-xs font-semibold rounded-full px-2.5 py-1 ${STAGE_PILL[deal.stage]}`}>
+          <span className={`text-xs font-semibold rounded-full px-2.5 py-1 ${TONE_CLASS_BORDERED[DEAL_STAGE_TONE[deal.stage]]}`}>
             {STAGE_LABELS[deal.stage]}
             {deal.round > 0 && !closed ? ` · Round ${deal.round}` : ""}
           </span>

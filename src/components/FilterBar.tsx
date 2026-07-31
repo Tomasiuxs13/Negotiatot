@@ -62,7 +62,7 @@ export function SortHeader({
   align?: "left" | "right";
 }) {
   return (
-    <th className={`px-4 py-3 font-medium ${align === "right" ? "text-right" : "text-left"}`}>
+    <th scope="col" className={`px-4 py-3 font-medium ${align === "right" ? "text-right" : "text-left"}`}>
       <Link
         href={href}
         className={`inline-flex items-center gap-0.5 hover:text-slate-800 transition-colors ${
