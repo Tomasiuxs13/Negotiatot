@@ -9,6 +9,7 @@ import {
   type CampaignOverrides,
 } from "@/lib/campaigns";
 import { money } from "@/lib/format";
+import { uploadCampaignBriefAction } from "@/app/playbook/campaign-actions";
 import { archiveCampaignAction, saveCampaignAction } from "@/app/playbook/campaign-actions";
 
 const inputClass =
@@ -108,6 +109,23 @@ export default function CampaignsEditor({
             <div key={c.id} className="border border-slate-200 rounded-lg px-4 py-3">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-semibold text-slate-900">{c.name}</span>
+                {/* The brand's existing creator brief — attach once, and every creator
+                    on this campaign gets it in their portal. */}
+                <label className="text-xs font-medium text-brand-dark hover:underline cursor-pointer">
+                  {c.brief_filename ? `Brief: ${c.brief_filename}` : "+ Attach creator brief"}
+                  <input
+                    type="file"
+                    accept=".html,.pdf,text/html,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const fd = new FormData();
+                      fd.set("brief", file);
+                      void uploadCampaignBriefAction(c.id, fd);
+                    }}
+                  />
+                </label>
                 {c.budget != null && (
                   <span className="text-xs font-tabular text-slate-500">
                     {money(spend)} / {money(c.budget)}

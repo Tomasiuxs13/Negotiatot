@@ -344,6 +344,23 @@ CREATE TABLE IF NOT EXISTS usage_log (
     archived INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
+  // The brand's own creator brief — an asset the company already has, attached once
+  // per campaign and delivered to creators through their portal.
+  {
+    const ccols2 = (db.prepare("PRAGMA table_info(campaigns)").all() as { name: string }[])
+      .map((c) => c.name);
+    // Two build workers can race this block; a duplicate-column error just means the
+    // other worker won, so each ALTER stands alone and swallows that specific failure.
+    for (const col of ["brief_path", "brief_filename", "brief_mime"]) {
+      if (ccols2.length > 0 && !ccols2.includes(col)) {
+        try {
+          db.exec(`ALTER TABLE campaigns ADD COLUMN ${col} TEXT`);
+        } catch {
+          /* added concurrently */
+        }
+      }
+    }
+  }
   db.exec(`CREATE TABLE IF NOT EXISTS usage_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     deal_id INTEGER,
@@ -886,6 +903,14 @@ export function savePartnerLegalDetails(
     `UPDATE partners SET legal_name = ?, company_name = ?, tax_id = ?, legal_address = ?,
        updated_at = datetime('now') WHERE id = ?`
   ).run(f.legalName || null, f.companyName || null, f.taxId || null, f.legalAddress || null, partnerId);
+}
+
+export function setCampaignBrief(
+  campaignId: number,
+  f: { path: string; filename: string; mime: string }
+) {
+  db.prepare("UPDATE campaigns SET brief_path = ?, brief_filename = ?, brief_mime = ? WHERE id = ?")
+    .run(f.path, f.filename, f.mime, campaignId);
 }
 
 /* ------------------------------------------------------------- reminders */

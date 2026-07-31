@@ -10,6 +10,9 @@ export interface CampaignOverrides {
 }
 
 export interface Campaign {
+  brief_path?: string | null;
+  brief_filename?: string | null;
+  brief_mime?: string | null;
   id: number;
   name: string;
   overrides: string; // JSON CampaignOverrides

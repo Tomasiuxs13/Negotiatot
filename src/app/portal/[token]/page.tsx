@@ -1,4 +1,4 @@
-import { getBrandProfile, getPartnerByToken, getPartnerDeals } from "@/lib/db";
+import { getBrandProfile, getCampaign, getPartnerByToken, getPartnerDeals } from "@/lib/db";
 import { getContentItems, getPaymentItems, getShipments } from "@/lib/fulfillment";
 import { CONTENT_STATUS_LABEL, PAYMENT_STATUS_LABEL } from "@/lib/fulfillment-types";
 import { draftDueDate } from "@/lib/timeline";
@@ -64,6 +64,18 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
                 {deal.deliverables ?? deal.format ?? "Collaboration"}
                 <span className="font-normal text-slate-400"> · {deal.stage === "completed" ? "completed" : "active"}</span>
               </h2>
+              {(() => {
+                const c = deal.campaign_id != null ? getCampaign(deal.campaign_id) : undefined;
+                return c?.brief_path ? (
+                  <a
+                    href={`/portal/${token}/brief/${deal.campaign_id}`}
+                    target="_blank"
+                    className="inline-block text-xs font-medium text-brand-dark underline underline-offset-2"
+                  >
+                    📄 Read the creator brief before you film
+                  </a>
+                ) : null;
+              })()}
 
               {items.length > 0 && (
                 <div>
