@@ -33,6 +33,7 @@ import AnalysisTab from "@/components/deal/AnalysisTab";
 import NegotiationTab from "@/components/deal/NegotiationTab";
 import DealNotes from "@/components/deal/DealNotes";
 import { DEAL_STAGE_TONE, TONE_CLASS_BORDERED } from "@/lib/status-tones";
+import { PAGE_WIDTH } from "@/lib/layout";
 import ContractDraftBlock from "@/components/deal/ContractDraftBlock";
 
 export const dynamic = "force-dynamic";
@@ -172,96 +173,119 @@ export default async function DealPage({
   }
 
   return (
-    <main className="flex-1 overflow-y-auto p-8">
+    <main className="flex-1 overflow-y-auto">
       <JobPoller active={deal.job_status != null || contract?.status === "parsing"} />
-      {deal.job_error && !deal.job_status && (
-        <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 max-w-2xl">
-          {deal.job_error}
-        </div>
-      )}
-      <div className="text-xs text-slate-500 mb-3">
-        <Link href="/pipeline" className="underline underline-offset-2 hover:text-slate-700">
-          Pipeline
-        </Link>{" "}
-        / {deal.creator}
-      </div>
 
-      {/* Deal header */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm px-6 pt-5 pb-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="w-9 h-9 rounded-full bg-brand/10 text-brand-dark flex items-center justify-center font-bold text-sm">
+      {/* One sticky app bar rather than a loose breadcrumb floating above a rounded
+          card. The deal's identity and its irreversible actions stay pinned while the
+          analysis scrolls, and the page gains a real top edge instead of starting in
+          mid-air on the grey background. */}
+      <header className="bg-white border-b border-slate-200 px-8 py-4 sticky top-0 z-30 shadow-sm flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <nav className="text-[13px] font-medium text-slate-500">
+            <Link href="/pipeline" className="hover:text-brand transition-colors">
+              Pipeline
+            </Link>
+            <span className="mx-1.5 text-slate-300">/</span>
+            <span className="text-slate-900">{deal.creator}</span>
+          </nav>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <span
+              className="text-xs text-slate-500"
+              title={
+                campaignOverrides.length > 0
+                  ? `Campaign overrides — ${campaignOverrides.join(" · ")}`
+                  : undefined
+              }
+            >
+              Campaign: {campaign?.name ?? deal.campaign ?? "—"}
+              {campaignOverrides.length > 0 && (
+                <span className="ml-1.5 text-brand-dark font-medium">
+                  · {campaignOverrides.length} override{campaignOverrides.length > 1 ? "s" : ""}
+                </span>
+              )}
+            </span>
+            {deal.stage === "agreed" && (
+              <CompleteDealButton
+                dealId={deal.id}
+                ready={workDone.ready}
+                openWork={workDone.openWork}
+              />
+            )}
+            {deal.stage === "declined" ? (
+              <ReopenDealButton dealId={deal.id} />
+            ) : (
+              !closed && <DeclineDealButton dealId={deal.id} />
+            )}
+            <DeleteDealButton dealId={deal.id} creator={deal.creator} />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="w-14 h-14 rounded-full bg-brand/10 text-brand-dark flex items-center justify-center font-bold text-xl shrink-0">
             {deal.creator.charAt(0)}
           </div>
-          {deal.partner_id != null ? (
-            <Link
-              href={`/partners/${deal.partner_id}`}
-              className="font-headline text-lg font-semibold text-slate-900 hover:text-brand"
-            >
-              {deal.creator}
-            </Link>
-          ) : (
-            <h1 className="font-headline text-lg font-semibold text-slate-900">{deal.creator}</h1>
-          )}
-          <span className="text-xs font-medium bg-slate-100 text-slate-600 rounded-full px-2.5 py-1 flex items-center gap-1">
-            {platforms.map((p) => (
-              <span key={p} className="flex items-center gap-0.5">
-                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
-                  {PLATFORM_META[p].icon}
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              {deal.partner_id != null ? (
+                <Link
+                  href={`/partners/${deal.partner_id}`}
+                  className="font-headline text-2xl font-semibold text-slate-900 tracking-tight hover:text-brand"
+                >
+                  {deal.creator}
+                </Link>
+              ) : (
+                <h1 className="font-headline text-2xl font-semibold text-slate-900 tracking-tight">
+                  {deal.creator}
+                </h1>
+              )}
+              <span
+                className={`text-[11px] font-semibold uppercase tracking-wide rounded-full px-2.5 py-1 ${TONE_CLASS_BORDERED[DEAL_STAGE_TONE[deal.stage]]}`}
+              >
+                {STAGE_LABELS[deal.stage]}
+                {deal.round > 0 && !closed ? ` · Round ${deal.round}` : ""}
+              </span>
+              {deal.job_status && (
+                <JobChip
+                  label={deal.job_status === "analyzing" ? "Analyzing…" : "Copilot drafting…"}
+                />
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium bg-slate-100 text-slate-600 rounded px-2 py-1 border border-slate-200 flex items-center gap-1">
+                {platforms.map((p) => (
+                  <span key={p} className="flex items-center gap-0.5">
+                    <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                      {PLATFORM_META[p].icon}
+                    </span>
+                    {PLATFORM_META[p].label}
+                  </span>
+                ))}
+                {scope ? ` · ${scope}` : ""}
+              </span>
+              {dealCommission(deal).type !== "none" && (
+                <span
+                  className="text-xs font-medium bg-sky-50 text-sky-700 rounded px-2 py-1 border border-sky-200"
+                  title="Paid on top of the fixed fee — the fee is priced net of this"
+                >
+                  + {describeCommission(dealCommission(deal))}
                 </span>
-                {PLATFORM_META[p].label}
-              </span>
-            ))}
-            {scope ? ` · ${scope}` : ""}
-          </span>
-          {dealCommission(deal).type !== "none" && (
-            <span
-              className="text-xs font-medium bg-sky-50 text-sky-700 rounded-full px-2.5 py-1"
-              title="Paid on top of the fixed fee — the fee is priced net of this"
-            >
-              + {describeCommission(dealCommission(deal))}
-            </span>
-          )}
-          <span className={`text-xs font-semibold rounded-full px-2.5 py-1 ${TONE_CLASS_BORDERED[DEAL_STAGE_TONE[deal.stage]]}`}>
-            {STAGE_LABELS[deal.stage]}
-            {deal.round > 0 && !closed ? ` · Round ${deal.round}` : ""}
-          </span>
-          {deal.job_status && (
-            <JobChip
-              label={deal.job_status === "analyzing" ? "Analyzing…" : "Copilot drafting…"}
-            />
-          )}
-          <span
-            className="text-xs text-slate-500 ml-auto"
-            title={
-              campaignOverrides.length > 0
-                ? `Campaign overrides — ${campaignOverrides.join(" · ")}`
-                : undefined
-            }
-          >
-            Campaign: {campaign?.name ?? deal.campaign ?? "—"}
-            {campaignOverrides.length > 0 && (
-              <span className="ml-1.5 text-brand-dark font-medium">
-                · {campaignOverrides.length} override{campaignOverrides.length > 1 ? "s" : ""}
-              </span>
-            )}
-          </span>
-          {deal.stage === "agreed" && (
-            <CompleteDealButton
-              dealId={deal.id}
-              ready={workDone.ready}
-              openWork={workDone.openWork}
-            />
-          )}
-          {deal.stage === "declined" ? (
-            <ReopenDealButton dealId={deal.id} />
-          ) : (
-            !closed && <DeclineDealButton dealId={deal.id} />
-          )}
-          <DeleteDealButton dealId={deal.id} creator={deal.creator} />
+              )}
+            </div>
+          </div>
         </div>
+      </header>
+
+      <div className={`p-8 flex flex-col gap-6 ${PAGE_WIDTH}`}>
+        {deal.job_error && !deal.job_status && (
+          <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {deal.job_error}
+          </div>
+        )}
 
         {deal.stage === "declined" ? (
-          <div className="mt-4 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
+          <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
             <div className="flex items-baseline gap-2 flex-wrap">
               <span className="text-sm font-semibold text-slate-900">
                 Declined
@@ -278,46 +302,52 @@ export default async function DealPage({
                 </span>
               )}
             </div>
-            {deal.decline_note && (
-              <p className="text-sm text-slate-600 mt-1">{deal.decline_note}</p>
-            )}
+            {deal.decline_note && <p className="text-sm text-slate-600 mt-1">{deal.decline_note}</p>}
             {deal.current_ask != null && deal.walkaway != null && (
               <p className="text-xs text-slate-400 mt-1.5 font-tabular">
                 Their last position {money(deal.current_ask)} · your walk-away{" "}
                 {money(deal.walkaway)}
               </p>
             )}
-          </div>
+          </section>
         ) : closed ? (
-          <DealProgress
-            deal={deal}
-            contentItems={contentItems}
-            paymentItems={paymentItems}
-            aov={Number(econ.aov ?? 0)}
-            productCost={Number(econ.productCost ?? 0)}
-            // Resolved at the tier rate the REAL volume earned, not the base rate.
-            commission={{
-              type: "per_order",
-              value: earningsForecast({
-                expectedOrders: deal.actual_orders ?? 0,
-                commission: offer.commission,
-                aov: Number(econ.aov ?? 0),
-                discount: offer.discount,
-                tiers: styleTiers,
-              }).perOrder,
-            }}
-            discount={offer.discount}
-          />
+          <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
+            <DealProgress
+              deal={deal}
+              contentItems={contentItems}
+              paymentItems={paymentItems}
+              aov={Number(econ.aov ?? 0)}
+              productCost={Number(econ.productCost ?? 0)}
+              // Resolved at the tier rate the REAL volume earned, not the base rate.
+              commission={{
+                type: "per_order",
+                value: earningsForecast({
+                  expectedOrders: deal.actual_orders ?? 0,
+                  commission: offer.commission,
+                  aov: Number(econ.aov ?? 0),
+                  discount: offer.discount,
+                  tiers: styleTiers,
+                }).perOrder,
+              }}
+              discount={offer.discount}
+            />
+          </section>
         ) : (
-          <PriceLadder deal={deal} scopeNote={ladder.scopeNote} costNote={ladder.costNote} />
+          /* The ladder is the deal's headline number set — it earns its own titled
+             section rather than being tacked onto the bottom of the identity card. */
+          <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
+            <h2 className="text-[11px] font-headline font-semibold uppercase tracking-wider text-slate-500 mb-5">
+              Negotiation framework
+            </h2>
+            <PriceLadder deal={deal} scopeNote={ladder.scopeNote} costNote={ladder.costNote} />
+          </section>
         )}
-      </div>
 
       {/* Work column and rail in fixed proportion. The old flex pair pinned the rail at
           a constant 320px and let the work column absorb everything else, so on a wide
           screen the rail looked stranded and on a narrow one the analysis was squeezed
           to its 560px minimum. */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)] gap-4 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)] gap-6 items-start">
         <div className="min-w-0">
           <DealTabs
             defaultTab={
@@ -444,6 +474,7 @@ export default async function DealPage({
             partnerId={deal.partner_id ?? undefined}
           />
         </aside>
+        </div>
       </div>
     </main>
   );
