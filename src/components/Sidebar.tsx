@@ -4,15 +4,59 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { money } from "@/lib/format";
 
-const NAV = [
+/**
+ * Two groups, because these are two kinds of thing wearing the same clothes.
+ *
+ * The first four are where the work happens — opened many times a day, in roughly the
+ * order a deal moves through them. The last three change how the first four behave and
+ * are visited occasionally: the Playbook sets the rules the engine negotiates by,
+ * Benchmarks calibrates those rules against what actually closed, and Settings is the
+ * system itself. Presented as one undifferentiated list, "Playbook" reads like another
+ * place to work rather than the thing that governs the others.
+ *
+ * There is deliberately no "Deals" entry: Pipeline is the deals home — board plus a
+ * filterable list view — and /deals already redirects into it.
+ */
+const WORK_NAV = [
   { href: "/", label: "Dashboard", icon: "space_dashboard" },
   { href: "/pipeline", label: "Pipeline", icon: "account_tree" },
   { href: "/partners", label: "Partners", icon: "group" },
   { href: "/payments", label: "Payments", icon: "payments" },
+];
+
+const SETUP_NAV = [
   { href: "/playbook", label: "Playbook", icon: "menu_book" },
   { href: "/benchmarks", label: "Benchmarks", icon: "bar_chart" },
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
+
+function NavItem({
+  item,
+  active,
+}: {
+  item: { href: string; label: string; icon: string };
+  active: boolean;
+}) {
+  return (
+    <Link
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      className={`flex items-center gap-3 px-4 py-3 text-[13px] font-medium transition-colors cursor-pointer border-l-4 ${
+        active
+          ? "text-brand bg-brand/10 border-brand"
+          : "text-slate-400 border-transparent hover:bg-white/5 hover:text-white"
+      }`}
+    >
+      <span
+        className="material-symbols-outlined"
+        style={active ? { fontSize: 20, fontVariationSettings: "'FILL' 1" } : { fontSize: 20 }}
+      >
+        {item.icon}
+      </span>
+      {item.label}
+    </Link>
+  );
+}
 
 export default function Sidebar({
   committed,
@@ -53,31 +97,19 @@ export default function Sidebar({
         New Deal
       </Link>
 
-      {/* Navigation */}
-      <nav className="flex-1">
-        {NAV.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`flex items-center gap-3 px-4 py-3 text-[13px] font-medium transition-colors cursor-pointer border-l-4 ${
-              isActive(item.href)
-                ? "text-brand bg-brand/10 border-brand"
-                : "text-slate-400 border-transparent hover:bg-white/5 hover:text-white"
-            }`}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={
-                isActive(item.href)
-                  ? { fontSize: 20, fontVariationSettings: "'FILL' 1" }
-                  : { fontSize: 20 }
-              }
-            >
-              {item.icon}
-            </span>
-            {item.label}
-          </Link>
+      {/* Navigation. The setup group is pushed to the foot of the nav rather than
+          sitting flush under the work group — the gap is what says "different kind of
+          thing", without needing a heading that would have to call Benchmarks
+          configuration when it is really calibration. */}
+      <nav className="flex-1 flex flex-col">
+        {WORK_NAV.map((item) => (
+          <NavItem key={item.href} item={item} active={isActive(item.href)} />
         ))}
+        <div className="mt-auto pt-3 border-t border-white/10">
+          {SETUP_NAV.map((item) => (
+            <NavItem key={item.href} item={item} active={isActive(item.href)} />
+          ))}
+        </div>
       </nav>
 
       {/* Budget module */}
