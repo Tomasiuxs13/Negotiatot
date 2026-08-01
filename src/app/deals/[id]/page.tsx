@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCampaign, getContractDraft, getDeal, getMessages, getNegotiationStyle, getPartnerChannels, getPlaybook, getRemindersFor, getSetting, getUsageTotals } from "@/lib/db";
+import { getCampaign, getContractDraft, getDeal, getMessages, getNegotiationStyle, getPartnerChannels, getPlaybook, getLastRunAt, getRemindersFor, getSetting, getUsageTotals } from "@/lib/db";
 import RemindersBlock from "@/components/RemindersBlock";
 import type { MeasurementWindows } from "@/lib/measurement";
 import { describeOverrides, parseOverrides } from "@/lib/campaigns";
@@ -330,7 +330,13 @@ export default async function DealPage({
                   ? "Negotiation"
                   : "Analysis")
             }
-            analysis={<AnalysisTab deal={deal} followers={followers} />}
+            analysis={
+              <AnalysisTab
+                deal={deal}
+                followers={followers}
+                analyzedAt={getLastRunAt(deal.id, "analysis")}
+              />
+            }
             negotiation={<NegotiationTab deal={deal} messages={messages} />}
             fulfillment={
               showFulfillment ? (

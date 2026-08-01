@@ -42,9 +42,12 @@ const FLAG_DOT: Record<string, string> = {
 export default function AnalysisTab({
   deal,
   followers,
+  analyzedAt,
 }: {
   deal: Deal;
   followers?: number | null;
+  /** When this stored analysis was produced — null if it predates usage logging. */
+  analyzedAt?: string | null;
 }) {
   if (!deal.analysis && deal.job_status === "analyzing") {
     return <AnalyzingProgress startedAt={deal.job_started_at} />;
@@ -72,7 +75,15 @@ export default function AnalysisTab({
     // got this wrong in both directions — four cards at 130px on a 1280 screen, then two
     // stretched to 380px at 1440 with the value floating in white space.
     <div className="space-y-4 @container">
-      <div className="flex justify-end -mb-2">
+      {/* What is on screen is a stored snapshot, not a live read. Without the date it
+          looks equally current whether it ran a minute ago or before the numbers it
+          priced on were corrected. */}
+      <div className="flex items-center justify-end gap-3 -mb-2">
+        {analyzedAt && (
+          <span className="text-xs text-slate-400">
+            Analyzed <span className="font-tabular">{analyzedAt.slice(0, 16)}</span>
+          </span>
+        )}
         <RunAnalysisButton dealId={deal.id} compact />
       </div>
 

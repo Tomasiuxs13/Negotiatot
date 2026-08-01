@@ -1214,6 +1214,23 @@ export function getUsageTotals(dealId?: number): UsageTotals {
   return row;
 }
 
+/**
+ * When a given kind of Copilot run last completed for this deal.
+ *
+ * The analysis on screen is a stored snapshot: it can be days old and computed from
+ * inputs that have since been corrected (a fixed avg-views figure, an edited Playbook),
+ * with nothing on the page saying so. Surfacing the run time is what lets someone tell
+ * "the model thinks this" from "the model thought this, before I fixed the numbers".
+ */
+export function getLastRunAt(dealId: number, kind: string): string | null {
+  const row = db
+    .prepare(
+      "SELECT created_at FROM usage_log WHERE deal_id = ? AND kind = ? ORDER BY created_at DESC LIMIT 1"
+    )
+    .get(dealId, kind) as { created_at: string } | undefined;
+  return row?.created_at ?? null;
+}
+
 export function getMessages(dealId: number): Message[] {
   return db.prepare("SELECT * FROM messages WHERE deal_id = ? ORDER BY created_at, id").all(dealId) as Message[];
 }
