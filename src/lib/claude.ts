@@ -15,7 +15,11 @@ import {
   type CommissionTier,
 } from "./commission";
 
-export const MODEL = "claude-opus-4-8";
+// Chosen over claude-opus-4-8 in a head-to-head on a live deal (2026-08-01): same
+// $5/$25 pricing, correct tier-rate attribution in drafts, caught a partner-record /
+// deal-sheet views conflict 4.8 missed, and ran the web-search analysis ~4x faster.
+// COUNTERPART_MODEL overrides for future A/B runs without a code change.
+export const MODEL = process.env.COUNTERPART_MODEL || "claude-opus-5";
 
 export interface TokenUsage {
   inputTokens: number;
@@ -56,6 +60,14 @@ interface PlaybookContext {
  * succeeded. The answer is always the last text block.
  */
 function finalText(response: Anthropic.Message): string | undefined {
+  // Opus 5's safety classifiers can decline a request with a successful HTTP 200 and
+  // empty/partial content. Without this check that surfaces as "empty analysis" with
+  // no error anywhere — turn it into a readable failure instead.
+  if (response.stop_reason === "refusal") {
+    throw new Error(
+      "The model declined this request (safety classifier). Rephrase the deal notes or message text and re-run."
+    );
+  }
   const texts = response.content.filter((b) => b.type === "text").map((b) => b.text);
   return texts.at(-1);
 }

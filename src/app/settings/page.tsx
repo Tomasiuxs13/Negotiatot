@@ -1,10 +1,10 @@
 import PageHeader from "@/components/PageHeader";
 import { getDeals, getUsageTotals } from "@/lib/db";
-import { hasApiKey } from "@/lib/claude";
+import { hasApiKey, MODEL } from "@/lib/claude";
 
 export const dynamic = "force-dynamic";
 
-// claude-opus-4-8 pricing (USD per million tokens)
+// Opus-tier pricing (USD per million tokens) — identical for claude-opus-5 and claude-opus-4-8
 const INPUT_PER_M = 5;
 const OUTPUT_PER_M = 25;
 
@@ -24,7 +24,7 @@ export default function SettingsPage() {
     },
     {
       label: "Model",
-      value: "claude-opus-4-8",
+      value: MODEL,
       tone: "text-slate-900",
       note: "Used for analysis, recommendations, and report/screenshot parsing, with adaptive thinking and web research.",
     },
