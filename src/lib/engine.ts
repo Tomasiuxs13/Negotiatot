@@ -19,8 +19,11 @@ import {
 import { applyCampaignOverrides, parseOverrides } from "./campaigns";
 import {
   analyzeDeal,
+  extractReportData,
+  isExtractionUsable,
   recommendNextMove,
   MODEL,
+  type ExtractedReport,
   type ImageMediaType,
 } from "./claude";
 import type { Deal } from "./types";
@@ -116,11 +119,37 @@ export async function performAnalysis(
       .map((m) => m.body)
       .join("\n\n");
 
+    // Two passes: a cheap model transcribes the report, the expensive one judges it.
+    // Only OCR-grade work moves down a tier — no negotiation decision is made in the
+    // extraction — and if it comes back unusable we send the raw document as before
+    // rather than analyse on numbers nobody can vouch for.
+    let extracted: ExtractedReport | undefined;
+    if (inputs.reportPdfBase64 || inputs.reportImage) {
+      try {
+        const pass = await extractReportData({
+          pdfBase64: inputs.reportPdfBase64,
+          image: inputs.reportImage,
+        });
+        logUsage(dealId, "extraction", pass.model, pass.usage.inputTokens, pass.usage.outputTokens);
+        if (isExtractionUsable(pass.extracted)) {
+          extracted = pass.extracted;
+        } else {
+          console.warn(`extraction unusable for deal ${dealId}; analysing from the raw document`);
+        }
+      } catch (err) {
+        // A failed extraction must never fail the analysis — it is an optimisation.
+        console.error("extraction pass failed, falling back to the raw document:", err);
+      }
+    }
+
     const result = await analyzeDeal({
       deal,
       playbook: playbookContext(platformsOf(deal), deal.campaign_id, deal.partner_id),
+      // Both are still passed: analyzeDeal attaches the document only when there is no
+      // usable extraction, so the fallback needs no separate call path.
       reportPdfBase64: inputs.reportPdfBase64,
       reportImage: inputs.reportImage,
+      extracted,
       theirMessage: theirMessage || undefined,
       channelUrl: inputs.channelUrl || deal.channel_url || undefined,
       history: dealHistory(deal),

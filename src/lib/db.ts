@@ -1210,7 +1210,7 @@ export function clearJob(dealId: number, error?: string) {
 
 export function logUsage(
   dealId: number | null,
-  kind: "analysis" | "recommendation" | "brief" | "integration_check",
+  kind: "analysis" | "recommendation" | "brief" | "integration_check" | "extraction",
   model: string,
   inputTokens: number,
   outputTokens: number

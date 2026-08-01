@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Deal, DealAnalysis, Message } from "./types";
 import type { PriorDeal } from "./partners";
 import { deliverableCount } from "./deliverables";
+import { describeExtraction, type ExtractedReport } from "./extraction";
 import {
   describeCommission,
   describeDiscount,
@@ -793,6 +794,151 @@ export async function parseContract(params: {
   };
 }
 
+/**
+ * The cheap model that reads documents. Extraction is transcription, not judgement —
+ * no negotiation decision is made here, which is what makes moving it down a tier safe.
+ *
+ * Note this model predates adaptive thinking and rejects `output_config.effort`, so the
+ * extraction call sets neither. It doesn't need to think; it needs to copy numbers.
+ */
+export type { ExtractedReport } from "./extraction";
+export { isExtractionUsable, describeExtraction } from "./extraction";
+
+export const EXTRACT_MODEL = process.env.COUNTERPART_EXTRACT_MODEL || "claude-haiku-4-5";
+
+const EXTRACTION_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    avgViews: { type: ["number", "null"], description: "Average views per video/post" },
+    avgViewsBasis: {
+      type: ["string", "null"],
+      description: "What that average covers, quoted from the report — e.g. 'last 30 videos, long-form only'",
+    },
+    engagementRatePct: { type: ["number", "null"] },
+    followers: { type: ["number", "null"] },
+    audienceGeoTopShares: {
+      type: "array",
+      description: "Top audience countries with their share, largest first",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: { country: { type: "string" }, sharePct: { type: "number" } },
+        required: ["country", "sharePct"],
+      },
+    },
+    fakeFollowerPct: { type: ["number", "null"] },
+    viewsTrendPct: {
+      type: ["number", "null"],
+      description:
+        "Change in VIEWS or LIKES per post over time, negative for decline. This is not follower or subscriber growth — if the report only gives an audience growth rate, leave this null and put that figure in notableSignals instead.",
+    },
+    viewsTrendBasis: {
+      type: ["string", "null"],
+      description:
+        "Exactly what that trend measures, quoted from the report — e.g. 'likes per post, last 30 days'. Required whenever viewsTrendPct is set.",
+    },
+    rateCardFigures: {
+      type: "array",
+      description: "Any prices the creator or report states, verbatim",
+      items: { type: "string" },
+    },
+    channelUrl: { type: ["string", "null"] },
+    /**
+     * The escape hatch that keeps this safe. A stats report carries more than the fields
+     * above — audience quality notes, brand-safety flags, comment authenticity, sponsor
+     * history — and a fixed schema would silently discard all of it.
+     */
+    notableSignals: {
+      type: "array",
+      description:
+        "Anything else in the document a negotiator would want: audience quality warnings, brand safety notes, sponsor history, caveats about how a figure was measured.",
+      items: { type: "string" },
+    },
+    /** Absent must never arrive downstream as zero. */
+    missingFields: {
+      type: "array",
+      description: "Named figures the document does NOT contain. Never guess a value for these.",
+      items: { type: "string" },
+    },
+  },
+  required: [
+    "avgViews",
+    "avgViewsBasis",
+    "engagementRatePct",
+    "followers",
+    "audienceGeoTopShares",
+    "fakeFollowerPct",
+    "viewsTrendPct",
+    "viewsTrendBasis",
+    "rateCardFigures",
+    "channelUrl",
+    "notableSignals",
+    "missingFields",
+  ],
+} as const;
+
+/** Reads a stats report (Modash, HypeAuditor, a screenshot) into structured figures. */
+export async function extractReportData(params: {
+  pdfBase64?: string;
+  image?: { base64: string; mediaType: ImageMediaType };
+  text?: string;
+}): Promise<{ extracted: ExtractedReport; usage: TokenUsage; model: string }> {
+  const client = getClient();
+  const content: Anthropic.ContentBlockParam[] = [];
+
+  if (params.pdfBase64) {
+    content.push({
+      type: "document",
+      source: { type: "base64", media_type: "application/pdf", data: params.pdfBase64 },
+    });
+  }
+  if (params.image) {
+    content.push({
+      type: "image",
+      source: { type: "base64", media_type: params.image.mediaType, data: params.image.base64 },
+    });
+  }
+  content.push({
+    type: "text",
+    text: [
+      "Extract the creator's statistics from this report exactly as stated.",
+      "Rules:",
+      "- Copy figures; do not compute, estimate or infer any number that is not printed.",
+      "- If a figure is absent, use null AND name it in missingFields. Never substitute zero.",
+      "- Percentages as plain numbers (9.11 not '9.11%'). Views and followers as integers (13500 not '13.5K').",
+      "- avgViewsBasis matters: an average over Shorts and long-form together means something different from long-form only. Quote how the report defines it.",
+      "- notableSignals is for anything a negotiator would want that the fields above don't hold — audience quality warnings, brand safety notes, sponsor history, caveats about measurement.",
+      params.text ? `\nReport text:\n"""${params.text}"""` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  });
+
+  const response = await client.messages.create({
+    model: EXTRACT_MODEL,
+    max_tokens: 4000,
+    system:
+      "You transcribe influencer statistics reports into structured data. You copy what is printed and never invent, estimate or compute a figure. Absent means null, never zero.",
+    messages: [{ role: "user", content }],
+    output_config: {
+      format: { type: "json_schema", schema: EXTRACTION_SCHEMA as unknown as Record<string, unknown> },
+    },
+  });
+
+  const text = finalText(response);
+  if (!text) throw new Error("Empty extraction response.");
+
+  return {
+    extracted: JSON.parse(text) as ExtractedReport,
+    usage: {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+    },
+    model: EXTRACT_MODEL,
+  };
+}
+
 const BRIEF_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -1060,6 +1206,12 @@ export async function analyzeDeal(params: {
   reportText?: string;
   theirMessage?: string;
   channelUrl?: string;
+  /**
+   * Figures already read out of the report by the cheap extraction pass. When present
+   * the document is NOT attached: this model reasons over ~200 tokens of structured
+   * facts instead of ~48k of PDF, which is most of the cost and most of the wait.
+   */
+  extracted?: ExtractedReport;
 }): Promise<AnalysisResult> {
   const { deal, playbook } = params;
   const client = getClient();
@@ -1124,9 +1276,14 @@ export async function analyzeDeal(params: {
       `Grade each metric against the playbook thresholds. Flag data-quality and audience risks. Be honest about uncertainty when inputs are thin.`,
       params.channelUrl
         ? `A channel URL was provided — use web search to research this creator's current stats (avg views per format, followers, engagement, audience geo, recent sponsors) before computing the numbers. Prefer searched data over assumptions and cite what you found in the metrics/flags.`
-        : params.reportPdfBase64 || params.reportImage
+        : params.reportPdfBase64 || params.reportImage || params.extracted
           ? `If the report contains the creator's channel/profile URL, report it in extractedChannelUrl. If key stats are missing or look stale, you may use web search to verify or fill them in — cite what you found.`
           : ``,
+      ``,
+      params.extracted ? describeExtraction(params.extracted) : ``,
+      params.extracted
+        ? `These figures were transcribed from the creator's report by an extraction pass. Treat them as the report's contents. Anything listed as not in the report is genuinely unknown — say so rather than assuming a value.`
+        : ``,
       ``,
       `## Deal facts`,
       ...facts,
@@ -1138,7 +1295,7 @@ export async function analyzeDeal(params: {
   });
 
   const tools =
-    params.channelUrl || params.reportPdfBase64 || params.reportImage
+    params.channelUrl || params.reportPdfBase64 || params.reportImage || params.extracted
       ? [{ type: "web_search_20260209" as const, name: "web_search" as const, max_uses: 6 }]
       : undefined;
 
@@ -1150,6 +1307,9 @@ export async function analyzeDeal(params: {
       "You are Counterpart, a negotiation copilot for influencer marketing managers. You do rigorous, playbook-driven deal analysis. All prices in USD, integers. You value channels on real average views, never follower counts. You never invent statistics — when an input is missing and can't be researched, say so in the relevant metric/flag and widen your uncertainty.",
     ...(tools ? { tools } : {}),
     output_config: {
+      // Effort stated rather than inherited. This is the judgement the product is built
+      // on, and the one call where a cheaper setting would show up as worse deals.
+      effort: "high" as const,
       format: { type: "json_schema" as const, schema: ANALYSIS_SCHEMA as unknown as Record<string, unknown> },
     },
   };
