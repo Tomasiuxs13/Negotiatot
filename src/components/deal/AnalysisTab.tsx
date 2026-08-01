@@ -67,7 +67,11 @@ export default function AnalysisTab({
   const v = VERDICT_STYLE[analysis.verdict];
 
   return (
-    <div className="space-y-4">
+    // Container, not viewport, drives the grids below: this tab renders inside the deal
+    // page's work column, whose width depends on the rail beside it. Viewport breakpoints
+    // got this wrong in both directions — four cards at 130px on a 1280 screen, then two
+    // stretched to 380px at 1440 with the value floating in white space.
+    <div className="space-y-4 @container">
       <div className="flex justify-end -mb-2">
         <RunAnalysisButton dealId={deal.id} compact />
       </div>
@@ -108,10 +112,10 @@ export default function AnalysisTab({
         <p className="text-sm text-slate-700 max-w-[80ch]">{analysis.verdictSummary}</p>
       </div>
 
-      {/* Metrics. Four hard columns inside the tab's ~560px min width gave each card
-          about 130px, so labels like "Avg views / integration" wrapped to three lines
-          and the value clipped. Two up until there is genuinely room for four. */}
-      <div className="grid grid-cols-2 2xl:grid-cols-4 gap-4">
+      {/* Metrics: cards stay in a ~230-330px band at every width, so a label like
+          "Avg views (youtube video)" never wraps to three lines and a short value like
+          "~13,500" never sits alone in a 380px card. */}
+      <div className="grid grid-cols-1 @md:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4 gap-4">
         {analysis.metrics.map((m) => (
           <div key={m.label} className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
             <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
@@ -123,8 +127,9 @@ export default function AnalysisTab({
         ))}
       </div>
 
-      {/* Panels */}
-      <div className="grid grid-cols-2 gap-4 items-start">
+      {/* Panels. Side by side only once the column is wide enough for two readable
+          lists; below that they stack rather than squeezing to ~280px each. */}
+      <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-4 items-start">
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
           <h3 className="font-headline text-sm font-semibold text-slate-900 mb-3">
             Red flags &amp; checks

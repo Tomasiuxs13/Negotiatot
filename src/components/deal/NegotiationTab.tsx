@@ -53,7 +53,13 @@ export default function NegotiationTab({ deal, messages }: { deal: Deal; message
   const gap = currentGap(rounds);
 
   return (
-    <div className="grid grid-cols-[1.5fr_0.8fr] gap-4 items-start">
+    // Sized against this column, not the window. The hard 1.5fr/0.8fr split left the
+    // concession ladder at ~226px on a 1280 screen, where a rung like "add a smaller
+    // deliverable instead of raising price" wrapped to four lines; below the threshold
+    // the ladder now sits under the recommendation at full width instead. The container
+    // must be an ancestor of the grid — an element cannot query its own size.
+    <div className="@container">
+    <div className="grid grid-cols-1 @3xl:grid-cols-[1.5fr_0.8fr] gap-4 items-start">
       {/* Thread */}
       <div className="flex flex-col gap-3.5">
         {thread.map((m) => (
@@ -155,6 +161,7 @@ export default function NegotiationTab({ deal, messages }: { deal: Deal; message
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }

@@ -47,13 +47,19 @@ export default function DealNotes({
         )}
         {!dirty && saved && <span className="text-xs text-slate-400">Saved</span>}
       </div>
+      {/* The placeholder carries examples only. The fact that the Copilot reads these
+          used to live in it too, which both overflowed the box in the narrow rail and
+          hid the information the moment you started typing — so it is a standing hint. */}
       <textarea
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
-        rows={3}
-        placeholder="Anything worth remembering — “prefers email”, “agency handles pricing”, “budget resets in Q4”. The Copilot reads these as context on the next run."
+        rows={4}
+        placeholder="“prefers email”, “agency handles pricing”, “budget resets in Q4”…"
         className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand resize-y"
       />
+      <p className="text-xs text-slate-400 mt-1.5">
+        The Copilot reads these as context on the next run.
+      </p>
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </div>
   );
