@@ -5,7 +5,9 @@ import RemindersBlock from "@/components/RemindersBlock";
 import type { MeasurementWindows } from "@/lib/measurement";
 import { describeOverrides, parseOverrides } from "@/lib/campaigns";
 import { DECLINE_REASON_LABEL, PLATFORM_META, STAGE_LABELS, dealPlatforms, dealScope } from "@/lib/types";
-import PriceLadder from "@/components/deal/PriceLadder";
+import CockpitNumbers from "@/components/deal/CockpitNumbers";
+import AffordabilityPanel from "@/components/deal/AffordabilityPanel";
+import MetricBand from "@/components/deal/MetricBand";
 import DealProgress from "@/components/deal/DealProgress";
 import DealTabs from "@/components/deal/DealTabs";
 import DeleteDealButton from "@/components/deal/DeleteDealButton";
@@ -26,7 +28,7 @@ import {
   parseTerms,
 } from "@/lib/fulfillment";
 import { money } from "@/lib/format";
-import { dealCommission, describeCommission, earningsForecast, expectedOrdersFrom, parseTiers, resolveOffer } from "@/lib/commission";
+import { dealCommission, describeCommission, earningsForecast, expectedOrdersFrom, parseTiers, resolveOffer, trueDealCost } from "@/lib/commission";
 import { deliverableCount } from "@/lib/deliverables";
 import { ladderNotes } from "@/lib/ladder-notes";
 import AnalysisTab from "@/components/deal/AnalysisTab";
@@ -101,6 +103,35 @@ export default async function DealPage({
     discount: offer.discount,
     productCost: Number(econ.productCost ?? 0),
   });
+  // Affordability, computed here rather than read off the analysis so the panel is
+  // right even before an analysis has ever run, and stays right after the Playbook
+  // changes. Same inputs the ladder's cost note uses, so the two cannot disagree.
+  const dealCost = trueDealCost({
+    fee: deal.target ?? 0,
+    expectedOrders: ladderOrders,
+    aov: Number(econ.aov ?? 0),
+    commission: { type: "per_order", value: ladderRate },
+    discount: offer.discount,
+    productCost: Number(econ.productCost ?? 0),
+  });
+  /** Widest cap among this deal's platforms — a crosspost isn't capped at the strictest. */
+  const maxPerDeal = (() => {
+    const caps = platforms
+      .map((pf) => Number((platformRules[pf] as Record<string, unknown> | null)?.maxPerDeal ?? 0))
+      .filter((n) => n > 0);
+    return caps.length > 0 ? Math.max(...caps) : null;
+  })();
+
+  /** Parsed once here so the metric band can sit above the tabs. */
+  const parsedAnalysis = (() => {
+    if (!deal.analysis) return null;
+    try {
+      return JSON.parse(deal.analysis) as import("@/lib/types").DealAnalysis;
+    } catch {
+      return null;
+    }
+  })();
+
   const showFulfillment =
     deal.stage === "agreed" ||
     contract != null ||
@@ -180,7 +211,7 @@ export default async function DealPage({
           card. The deal's identity and its irreversible actions stay pinned while the
           analysis scrolls, and the page gains a real top edge instead of starting in
           mid-air on the grey background. */}
-      <header className="bg-white border-b border-slate-200 px-8 py-4 sticky top-0 z-30 shadow-sm flex flex-col gap-4">
+      <header className="bg-white border-b border-slate-200 px-8 py-3.5 sticky top-0 z-30 shadow-sm">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <nav className="text-[13px] font-medium text-slate-500">
             <Link href="/pipeline" className="hover:text-brand transition-colors">
@@ -219,60 +250,6 @@ export default async function DealPage({
               !closed && <DeclineDealButton dealId={deal.id} />
             )}
             <DeleteDealButton dealId={deal.id} creator={deal.creator} />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="w-14 h-14 rounded-full bg-brand/10 text-brand-dark flex items-center justify-center font-bold text-xl shrink-0">
-            {deal.creator.charAt(0)}
-          </div>
-          <div className="flex flex-col gap-1.5 min-w-0">
-            <div className="flex items-center gap-3 flex-wrap">
-              {deal.partner_id != null ? (
-                <Link
-                  href={`/partners/${deal.partner_id}`}
-                  className="font-headline text-2xl font-semibold text-slate-900 tracking-tight hover:text-brand"
-                >
-                  {deal.creator}
-                </Link>
-              ) : (
-                <h1 className="font-headline text-2xl font-semibold text-slate-900 tracking-tight">
-                  {deal.creator}
-                </h1>
-              )}
-              <span
-                className={`text-[11px] font-semibold uppercase tracking-wide rounded-full px-2.5 py-1 ${TONE_CLASS_BORDERED[DEAL_STAGE_TONE[deal.stage]]}`}
-              >
-                {STAGE_LABELS[deal.stage]}
-                {deal.round > 0 && !closed ? ` · Round ${deal.round}` : ""}
-              </span>
-              {deal.job_status && (
-                <JobChip
-                  label={deal.job_status === "analyzing" ? "Analyzing…" : "Copilot drafting…"}
-                />
-              )}
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-medium bg-slate-100 text-slate-600 rounded px-2 py-1 border border-slate-200 flex items-center gap-1">
-                {platforms.map((p) => (
-                  <span key={p} className="flex items-center gap-0.5">
-                    <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-                      {PLATFORM_META[p].icon}
-                    </span>
-                    {PLATFORM_META[p].label}
-                  </span>
-                ))}
-                {scope ? ` · ${scope}` : ""}
-              </span>
-              {dealCommission(deal).type !== "none" && (
-                <span
-                  className="text-xs font-medium bg-sky-50 text-sky-700 rounded px-2 py-1 border border-sky-200"
-                  title="Paid on top of the fixed fee — the fee is priced net of this"
-                >
-                  + {describeCommission(dealCommission(deal))}
-                </span>
-              )}
-            </div>
           </div>
         </div>
       </header>
@@ -333,15 +310,85 @@ export default async function DealPage({
             />
           </section>
         ) : (
-          /* The ladder is the deal's headline number set — it earns its own titled
-             section rather than being tacked onto the bottom of the identity card. */
-          <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
-            <h2 className="text-[11px] font-headline font-semibold uppercase tracking-wider text-slate-500 mb-5">
-              Negotiation framework
-            </h2>
-            <PriceLadder deal={deal} scopeNote={ladder.scopeNote} costNote={ladder.costNote} />
+          /* The cockpit: who this is, what the numbers are, and whether we can afford
+             it — the three things needed to decide an offer, side by side rather than
+             stacked down the page with the money furthest from the identity. */
+          <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
+            <div className="lg:col-span-4 flex items-start gap-4 min-w-0">
+              <div className="w-16 h-16 rounded-lg bg-brand/10 text-brand-dark flex items-center justify-center font-bold text-2xl shrink-0">
+                {deal.creator.charAt(0)}
+              </div>
+              <div className="flex flex-col gap-2 min-w-0">
+                {deal.partner_id != null ? (
+                  <Link
+                    href={`/partners/${deal.partner_id}`}
+                    className="font-headline text-2xl font-semibold text-slate-900 tracking-tight hover:text-brand"
+                  >
+                    {deal.creator}
+                  </Link>
+                ) : (
+                  <h1 className="font-headline text-2xl font-semibold text-slate-900 tracking-tight">
+                    {deal.creator}
+                  </h1>
+                )}
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  <span className="text-[11px] font-semibold bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 flex items-center gap-1">
+                    {platforms.map((pf) => (
+                      <span key={pf} className="flex items-center gap-0.5">
+                        <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
+                          {PLATFORM_META[pf].icon}
+                        </span>
+                        {PLATFORM_META[pf].label}
+                      </span>
+                    ))}
+                    {scope ? ` · ${scope}` : ""}
+                  </span>
+                  {dealCommission(deal).type !== "none" && (
+                    <span
+                      className="text-[11px] font-semibold bg-sky-50 text-sky-700 rounded-full px-2 py-0.5"
+                      title="Paid on top of the fixed fee — the fee is priced net of this"
+                    >
+                      + {describeCommission(dealCommission(deal))}
+                    </span>
+                  )}
+                  <span
+                    className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${TONE_CLASS_BORDERED[DEAL_STAGE_TONE[deal.stage]]}`}
+                  >
+                    {STAGE_LABELS[deal.stage]}
+                    {deal.round > 0 && !closed ? ` · Round ${deal.round}` : ""}
+                  </span>
+                  {deal.job_status && (
+                    <JobChip
+                      label={deal.job_status === "analyzing" ? "Analyzing…" : "Copilot drafting…"}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-4 min-w-0">
+              <CockpitNumbers deal={deal} />
+              {ladder.scopeNote && (
+                <p className="text-[11px] text-slate-500 mt-3">{ladder.scopeNote}</p>
+              )}
+            </div>
+
+            <div className="lg:col-span-4 min-w-0">
+              <AffordabilityPanel
+                totalCost={dealCost.total}
+                fee={deal.target}
+                maxPerDeal={maxPerDeal}
+                breakeven={deal.breakeven}
+              />
+            </div>
           </section>
         )}
+
+      {/* Deal fundamentals, full width above the tabs — see MetricBand for why they
+          no longer live inside the Analysis tab. */}
+      {parsedAnalysis && parsedAnalysis.metrics.length > 0 && (
+        <MetricBand metrics={parsedAnalysis.metrics} />
+      )}
 
       {/* Work column and rail in fixed proportion. The old flex pair pinned the rail at
           a constant 320px and let the work column absorb everything else, so on a wide

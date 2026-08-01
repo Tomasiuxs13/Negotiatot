@@ -26,13 +26,6 @@ const VERDICT_STYLE: Record<
   },
 };
 
-const METRIC_TONE: Record<string, string> = {
-  good: "text-emerald-600",
-  warn: "text-amber-600",
-  crit: "text-red-600",
-  neutral: "text-slate-500",
-};
-
 const FLAG_DOT: Record<string, string> = {
   good: "bg-emerald-500",
   warn: "bg-amber-400",
@@ -121,21 +114,6 @@ export default function AnalysisTab({
             ))}
         </div>
         <p className="text-sm text-slate-700 max-w-[80ch]">{analysis.verdictSummary}</p>
-      </div>
-
-      {/* Metrics: cards stay in a ~230-330px band at every width, so a label like
-          "Avg views (youtube video)" never wraps to three lines and a short value like
-          "~13,500" never sits alone in a 380px card. */}
-      <div className="grid grid-cols-1 @md:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4 gap-4">
-        {analysis.metrics.map((m) => (
-          <div key={m.label} className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
-            <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
-              {m.label}
-            </div>
-            <div className="text-xl font-semibold text-slate-900 font-tabular mt-1">{m.value}</div>
-            <div className={`text-xs font-medium mt-0.5 ${METRIC_TONE[m.tone]}`}>{m.note}</div>
-          </div>
-        ))}
       </div>
 
       {/* Panels. Side by side only once the column is wide enough for two readable
