@@ -43,7 +43,7 @@ export default function AffordabilityPanel({
   }
 
   return (
-    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
       <span className="text-[11px] uppercase font-semibold tracking-wider text-slate-500 block mb-1">
         Total deal cost
       </span>

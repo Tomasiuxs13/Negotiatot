@@ -27,7 +27,8 @@ export default function AppShell({
   return (
     <>
       {sidebar}
-      <div className="ml-64 flex-1 flex flex-col h-screen overflow-hidden bg-slate-50">
+      {/* Offset matches the sidebar's 220px rail exactly — they are changed together. */}
+      <div className="ml-[220px] flex-1 flex flex-col h-screen overflow-hidden bg-slate-50">
         {children}
       </div>
     </>

@@ -30,9 +30,9 @@ export default function Sidebar({
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   return (
-    <aside className="bg-sidebar h-screen w-64 fixed left-0 top-0 border-r border-white/10 flex flex-col p-4 z-20">
+    <aside className="bg-sidebar h-screen w-[220px] fixed left-0 top-0 border-r border-white/10 flex flex-col z-20">
       {/* Brand */}
-      <div className="flex items-center gap-3 mb-8 px-2">
+      <div className="flex items-center gap-3 mb-6 p-6 pb-0">
         <div className="w-8 h-8 rounded bg-brand flex items-center justify-center">
           <span className="material-symbols-outlined text-white" style={{ fontSize: 18 }}>
             handshake
@@ -47,27 +47,31 @@ export default function Sidebar({
       {/* CTA */}
       <Link
         href="/new"
-        className="bg-brand hover:bg-brand-dark text-white rounded-lg py-2.5 px-4 font-medium mb-6 transition-colors shadow-sm active:scale-95 flex items-center justify-center gap-2"
+        className="bg-brand hover:bg-brand-dark text-white rounded-lg py-2.5 px-4 font-medium mb-6 mx-4 transition-colors shadow-sm active:scale-95 flex items-center justify-center gap-2"
       >
         <span className="material-symbols-outlined" style={{ fontSize: 16 }}>add</span>
         New Deal
       </Link>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1">
+      <nav className="flex-1">
         {NAV.map((item) => (
           <Link
             key={item.href}
             href={item.href}
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] font-medium transition-colors cursor-pointer active:scale-95 ${
+            className={`flex items-center gap-3 px-4 py-3 text-[13px] font-medium transition-colors cursor-pointer border-l-4 ${
               isActive(item.href)
-                ? "text-white bg-white/10"
-                : "text-slate-400 hover:bg-white/5 hover:text-white"
+                ? "text-brand bg-brand/10 border-brand"
+                : "text-slate-400 border-transparent hover:bg-white/5 hover:text-white"
             }`}
           >
             <span
               className="material-symbols-outlined"
-              style={isActive(item.href) ? { fontVariationSettings: "'FILL' 1" } : undefined}
+              style={
+                isActive(item.href)
+                  ? { fontSize: 20, fontVariationSettings: "'FILL' 1" }
+                  : { fontSize: 20 }
+              }
             >
               {item.icon}
             </span>
@@ -77,7 +81,7 @@ export default function Sidebar({
       </nav>
 
       {/* Budget module */}
-      <div className="mt-auto pt-4 border-t border-white/10">
+      <div className="mt-auto p-4 border-t border-white/10">
         <div className="flex items-center justify-between mb-2 px-2">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 14 }}>

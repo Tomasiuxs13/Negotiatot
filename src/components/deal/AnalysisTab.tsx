@@ -2,43 +2,27 @@ import type { Deal, DealAnalysis } from "@/lib/types";
 import { money } from "@/lib/format";
 import RunAnalysisButton from "./RunAnalysisButton";
 import AnalyzingProgress from "./AnalyzingProgress";
-import AudienceDataEditor from "./AudienceDataEditor";
-import { suspectAudienceData } from "@/lib/audience-sanity";
 
-const VERDICT_STYLE: Record<
-  DealAnalysis["verdict"],
-  { label: string; wrap: string; badge: string }
-> = {
-  accept: {
-    label: "GOOD DEAL",
-    wrap: "bg-emerald-50 border-emerald-300/60",
-    badge: "text-emerald-700 border-emerald-600",
-  },
-  negotiate: {
-    label: "NEGOTIABLE",
-    wrap: "bg-amber-50 border-amber-300/60",
-    badge: "text-amber-700 border-amber-600",
-  },
-  decline: {
-    label: "WALK AWAY",
-    wrap: "bg-red-50 border-red-300/60",
-    badge: "text-red-700 border-red-600",
-  },
+/** The verdict as a single pill in the card header, not a tinted wrapper around
+ *  everything. Tinting the whole panel made the amber "negotiable" state — by far the
+ *  most common one — shout as loudly as a genuine problem. */
+const VERDICT_PILL: Record<DealAnalysis["verdict"], { label: string; className: string }> = {
+  accept: { label: "GOOD DEAL", className: "bg-emerald-100 text-emerald-800" },
+  negotiate: { label: "NEGOTIABLE", className: "bg-amber-100 text-amber-800" },
+  decline: { label: "WALK AWAY", className: "bg-red-100 text-red-800" },
 };
 
-const FLAG_DOT: Record<string, string> = {
-  good: "bg-emerald-500",
-  warn: "bg-amber-400",
-  crit: "bg-red-500",
+const FLAG_ICON: Record<string, { icon: string; className: string }> = {
+  good: { icon: "verified", className: "text-emerald-500" },
+  warn: { icon: "priority_high", className: "text-amber-500" },
+  crit: { icon: "error", className: "text-red-500" },
 };
 
 export default function AnalysisTab({
   deal,
-  followers,
   analyzedAt,
 }: {
   deal: Deal;
-  followers?: number | null;
   /** When this stored analysis was produced — null if it predates usage logging. */
   analyzedAt?: string | null;
 }) {
@@ -48,7 +32,7 @@ export default function AnalysisTab({
 
   if (!deal.analysis) {
     return (
-      <div className="bg-white rounded-lg border border-dashed border-slate-300 p-10 text-center">
+      <div className="bg-white rounded-xl border border-dashed border-slate-300 p-10 text-center">
         <p className="text-sm font-medium text-slate-700 mb-1">No analysis yet</p>
         <p className="text-sm text-slate-500 mb-4">
           Upload a report or add channel data, then run the analysis to get fair price, red flags,
@@ -60,99 +44,101 @@ export default function AnalysisTab({
   }
 
   const analysis = JSON.parse(deal.analysis) as DealAnalysis;
-  const v = VERDICT_STYLE[analysis.verdict];
+  const v = VERDICT_PILL[analysis.verdict];
+  const flagged = analysis.metrics.filter((m) => m.tone === "crit" || m.tone === "warn").slice(0, 4);
 
   return (
-    // Container, not viewport, drives the grids below: this tab renders inside the deal
-    // page's work column, whose width depends on the rail beside it. Viewport breakpoints
-    // got this wrong in both directions — four cards at 130px on a 1280 screen, then two
-    // stretched to 380px at 1440 with the value floating in white space.
-    <div className="space-y-4 @container">
-      {/* What is on screen is a stored snapshot, not a live read. Without the date it
-          looks equally current whether it ran a minute ago or before the numbers it
-          priced on were corrected. */}
-      <div className="flex items-center justify-end gap-3 -mb-2">
-        {analyzedAt && (
-          <span className="text-xs text-slate-400">
-            Analyzed <span className="font-tabular">{analyzedAt.slice(0, 16)}</span>
-          </span>
-        )}
-        <RunAnalysisButton dealId={deal.id} compact />
-      </div>
-
-      {/* Shown always, not just on suspicion: views drive every number here, and until
-          this existed a figure captured wrongly at intake could never be corrected. */}
-      <AudienceDataEditor
-        dealId={deal.id}
-        avgViews={deal.avg_views}
-        engagementRate={deal.engagement_rate}
-        suspect={suspectAudienceData({ avgViews: deal.avg_views, followers })}
-      />
-      {/* Verdict banner. The decision-critical numbers surface as chips — a ten-line
-          paragraph buries "cost blows past the cap" in the middle of a sentence. */}
-      <div className={`p-4 rounded-lg border ${v.wrap}`}>
-        <div className="flex gap-3 items-center flex-wrap mb-2">
-          <span
-            className={`font-headline font-bold text-xs tracking-widest border-[1.5px] rounded-md px-2.5 py-1.5 whitespace-nowrap ${v.badge}`}
-          >
-            {v.label}
-          </span>
-          {analysis.metrics
-            .filter((m) => m.tone === "crit" || m.tone === "warn")
-            .slice(0, 4)
-            .map((m) => (
-              <span
-                key={m.label}
-                className={`text-xs font-medium rounded-full px-2.5 py-1 border ${
-                  m.tone === "crit"
-                    ? "bg-red-50 border-red-200 text-red-700"
-                    : "bg-amber-100/60 border-amber-300 text-amber-800"
-                }`}
-              >
-                {m.label}: <span className="font-tabular font-semibold">{m.value}</span>
+    <div className="@container flex flex-col gap-6">
+      <div className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+          <h3 className="font-headline font-semibold text-lg text-slate-900">Why this verdict</h3>
+          <div className="flex items-center gap-3">
+            {analyzedAt && (
+              <span className="text-xs text-slate-400">
+                Analyzed <span className="font-tabular">{analyzedAt.slice(0, 16)}</span>
               </span>
-            ))}
+            )}
+            <RunAnalysisButton dealId={deal.id} compact />
+            <span
+              className={`text-[11px] font-semibold rounded-full px-2.5 py-1 tracking-wide ${v.className}`}
+            >
+              {v.label}
+            </span>
+          </div>
         </div>
-        <p className="text-sm text-slate-700 max-w-[80ch]">{analysis.verdictSummary}</p>
+
+        <div className="p-6">
+          {/* The decision-critical figures stay chips: a ten-line paragraph buries
+              "cost blows past the cap" in the middle of a sentence. */}
+          {flagged.length > 0 && (
+            <div className="flex gap-2 flex-wrap mb-4">
+              {flagged.map((m) => (
+                <span
+                  key={m.label}
+                  className={`text-xs font-medium rounded-full px-2.5 py-1 border ${
+                    m.tone === "crit"
+                      ? "bg-red-50 border-red-200 text-red-700"
+                      : "bg-amber-50 border-amber-200 text-amber-800"
+                  }`}
+                >
+                  {m.label}: <span className="font-tabular font-semibold">{m.value}</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <p className="text-sm text-slate-600 leading-relaxed max-w-[80ch] mb-8">
+            {analysis.verdictSummary}
+          </p>
+
+          <h4 className="text-[11px] uppercase font-semibold tracking-wider text-slate-500 mb-4 flex items-center gap-2">
+            <span className="material-symbols-outlined" style={{ fontSize: 15 }} aria-hidden>
+              fact_check
+            </span>
+            Red flags &amp; checks
+          </h4>
+          <ul className="grid grid-cols-1 @3xl:grid-cols-2 gap-4">
+            {analysis.redFlags.map((f) => {
+              const icon = FLAG_ICON[f.severity] ?? FLAG_ICON.warn;
+              return (
+                <li key={f.title} className="flex gap-3 text-sm">
+                  <span
+                    className={`material-symbols-outlined shrink-0 ${icon.className}`}
+                    style={{ fontSize: 18 }}
+                    aria-hidden
+                  >
+                    {icon.icon}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="font-semibold text-slate-900">{f.title}</span>
+                    <span className="text-slate-500"> — {f.detail}</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       </div>
 
-      {/* Panels. Side by side only once the column is wide enough for two readable
-          lists; below that they stack rather than squeezing to ~280px each. */}
-      <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-4 items-start">
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
-          <h3 className="font-headline text-sm font-semibold text-slate-900 mb-3">
-            Red flags &amp; checks
-          </h3>
-          <div className="divide-y divide-slate-100">
-            {analysis.redFlags.map((f) => (
-              <div key={f.title} className="flex gap-3 py-3 first:pt-0 last:pb-0">
-                <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${FLAG_DOT[f.severity]}`} />
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">{f.title}</p>
-                  <p className="text-xs text-slate-500 mt-0.5 max-w-[60ch]">{f.detail}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
-          <h3 className="font-headline text-sm font-semibold text-slate-900 mb-3">
-            How your numbers were computed
-          </h3>
-          <div className="divide-y divide-slate-100">
-            {analysis.numbers.map((n, i) => (
-              <details key={n.label} className="py-2 first:pt-0 last:pb-0 group" open={i === 0}>
-                <summary className="cursor-pointer text-sm font-semibold text-slate-900 flex items-center gap-2 list-none">
-                  <span className="material-symbols-outlined text-slate-400 transition-transform group-open:rotate-90" style={{ fontSize: 14 }}>
-                    chevron_right
-                  </span>
-                  {n.label} <span className="font-tabular">{money(n.value)}</span>
-                </summary>
-                <p className="text-xs text-slate-500 mt-1.5 ml-6 max-w-[62ch]">{n.explanation}</p>
-              </details>
-            ))}
-          </div>
+      <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-6">
+        <h3 className="font-headline text-sm font-semibold text-slate-900 mb-3">
+          How your numbers were computed
+        </h3>
+        <div className="divide-y divide-slate-100">
+          {analysis.numbers.map((n, i) => (
+            <details key={n.label} className="py-2 first:pt-0 last:pb-0 group" open={i === 0}>
+              <summary className="cursor-pointer text-sm font-semibold text-slate-900 flex items-center gap-2 list-none">
+                <span
+                  className="material-symbols-outlined text-slate-400 transition-transform group-open:rotate-90"
+                  style={{ fontSize: 14 }}
+                >
+                  chevron_right
+                </span>
+                {n.label} <span className="font-tabular">{money(n.value)}</span>
+              </summary>
+              <p className="text-xs text-slate-500 mt-1.5 ml-6 max-w-[62ch]">{n.explanation}</p>
+            </details>
+          ))}
         </div>
       </div>
     </div>

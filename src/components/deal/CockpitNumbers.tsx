@@ -38,7 +38,7 @@ export default function CockpitNumbers({ deal }: { deal: Deal }) {
       {/* Two-up until the column is genuinely wide enough for four: at 1280 a quarter
           of this region is ~66px, where "Walk-away" wraps and drops its value a line
           below the other three, breaking the row they are meant to be read across. */}
-      <div className={`grid gap-2 grid-cols-2 ${figures.length === 4 ? "@sm:grid-cols-4" : "@sm:grid-cols-3"}`}>
+      <div className={`grid gap-2 grid-cols-2 ${figures.length === 4 ? "@2xs:grid-cols-4" : "@2xs:grid-cols-3"}`}>
         {figures.map((f) => (
           <div key={f.label} className="flex flex-col min-w-0">
             <span className="text-[10px] uppercase font-semibold tracking-wide text-slate-500 mb-1 whitespace-nowrap">

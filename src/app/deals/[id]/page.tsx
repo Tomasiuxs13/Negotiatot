@@ -9,7 +9,9 @@ import CockpitNumbers from "@/components/deal/CockpitNumbers";
 import AffordabilityPanel from "@/components/deal/AffordabilityPanel";
 import MetricBand from "@/components/deal/MetricBand";
 import DealProgress from "@/components/deal/DealProgress";
-import DealTabs from "@/components/deal/DealTabs";
+import DealWorkspace from "@/components/deal/DealWorkspace";
+import AudienceDataEditor from "@/components/deal/AudienceDataEditor";
+import { suspectAudienceData } from "@/lib/audience-sanity";
 import DeleteDealButton from "@/components/deal/DeleteDealButton";
 import CompleteDealButton from "@/components/deal/CompleteDealButton";
 import DeclineDealButton from "@/components/deal/DeclineDealButton";
@@ -168,7 +170,7 @@ export default async function DealPage({
     const usage = getUsageTotals(deal.id);
     const estCost = (usage.inputTokens / 1_000_000) * 5 + (usage.outputTokens / 1_000_000) * 25;
     return (
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
         <div className="flex items-baseline justify-between mb-3">
           <h3 className="font-headline text-sm font-semibold text-slate-900">Deal history</h3>
           {usage.calls > 0 && (
@@ -207,12 +209,16 @@ export default async function DealPage({
     <main className="flex-1 overflow-y-auto">
       <JobPoller active={deal.job_status != null || contract?.status === "parsing"} />
 
-      {/* One sticky app bar rather than a loose breadcrumb floating above a rounded
-          card. The deal's identity and its irreversible actions stay pinned while the
-          analysis scrolls, and the page gains a real top edge instead of starting in
-          mid-air on the grey background. */}
-      <header className="bg-white border-b border-slate-200 px-8 py-3.5 sticky top-0 z-30 shadow-sm">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+      <DealWorkspace
+        defaultTab={
+          ({ analysis: "Analysis", negotiation: "Negotiation", fulfillment: "Fulfillment", actuals: "Actuals", history: "History" } as Record<string, string>)[tab ?? ""] ??
+          (deal.stage === "agreed"
+            ? "Fulfillment"
+            : deal.stage === "negotiating" || deal.stage === "offer_sent"
+              ? "Negotiation"
+              : "Analysis")
+        }
+        breadcrumb={
           <nav className="text-[13px] font-medium text-slate-500">
             <Link href="/pipeline" className="hover:text-brand transition-colors">
               Pipeline
@@ -220,8 +226,10 @@ export default async function DealPage({
             <span className="mx-1.5 text-slate-300">/</span>
             <span className="text-slate-900">{deal.creator}</span>
           </nav>
+        }
+        actions={
+          <>
 
-          <div className="flex items-center gap-3 flex-wrap">
             <span
               className="text-xs text-slate-500"
               title={
@@ -250,11 +258,10 @@ export default async function DealPage({
               !closed && <DeclineDealButton dealId={deal.id} />
             )}
             <DeleteDealButton dealId={deal.id} creator={deal.creator} />
-          </div>
-        </div>
-      </header>
-
-      <div className={`p-8 flex flex-col gap-6 ${PAGE_WIDTH}`}>
+          </>
+        }
+        cockpit={
+          <>
         {deal.job_error && !deal.job_status && (
           <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
             {deal.job_error}
@@ -262,7 +269,7 @@ export default async function DealPage({
         )}
 
         {deal.stage === "declined" ? (
-          <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
+          <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
             <div className="flex items-baseline gap-2 flex-wrap">
               <span className="text-sm font-semibold text-slate-900">
                 Declined
@@ -288,7 +295,7 @@ export default async function DealPage({
             )}
           </section>
         ) : closed ? (
-          <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
+          <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
             <DealProgress
               deal={deal}
               contentItems={contentItems}
@@ -313,7 +320,7 @@ export default async function DealPage({
           /* The cockpit: who this is, what the numbers are, and whether we can afford
              it — the three things needed to decide an offer, side by side rather than
              stacked down the page with the money furthest from the identity. */
-          <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
+          <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
             <div className="lg:col-span-4 flex items-start gap-4 min-w-0">
               <div className="w-16 h-16 rounded-lg bg-brand/10 text-brand-dark flex items-center justify-center font-bold text-2xl shrink-0">
                 {deal.creator.charAt(0)}
@@ -383,40 +390,39 @@ export default async function DealPage({
             </div>
           </section>
         )}
-
-      {/* Deal fundamentals, full width above the tabs — see MetricBand for why they
-          no longer live inside the Analysis tab. */}
-      {parsedAnalysis && parsedAnalysis.metrics.length > 0 && (
-        <MetricBand metrics={parsedAnalysis.metrics} />
-      )}
-
-      {/* Work column and rail in fixed proportion. The old flex pair pinned the rail at
-          a constant 320px and let the work column absorb everything else, so on a wide
-          screen the rail looked stranded and on a narrow one the analysis was squeezed
-          to its 560px minimum. */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)] gap-6 items-start">
-        <div className="min-w-0">
-          <DealTabs
-            defaultTab={
-              // An attention item deep-links to the tab where its action lives; the
-              // stage-based default only applies when nothing was asked for.
-              ({ analysis: "Analysis", negotiation: "Negotiation", fulfillment: "Fulfillment", actuals: "Actuals", history: "History" } as Record<string, string>)[tab ?? ""] ??
-              (deal.stage === "agreed"
-                ? "Fulfillment"
-                : deal.stage === "negotiating" || deal.stage === "offer_sent"
-                  ? "Negotiation"
-                  : "Analysis")
-            }
-            analysis={
-              <AnalysisTab
-                deal={deal}
-                followers={followers}
-                analyzedAt={getLastRunAt(deal.id, "analysis")}
-              />
-            }
-            negotiation={<NegotiationTab deal={deal} messages={messages} />}
-            fulfillment={
-              showFulfillment ? (
+          </>
+        }
+        band={
+          parsedAnalysis && parsedAnalysis.metrics.length > 0 ? (
+            <MetricBand metrics={parsedAnalysis.metrics} />
+          ) : undefined
+        }
+        rail={
+          <>
+            {/* Reference data and private context, visible from every tab — a note or a
+                promise like "ask again in three months" shouldn't hide behind whichever
+                tab happened to be open. */}
+            <AudienceDataEditor
+              dealId={deal.id}
+              avgViews={deal.avg_views}
+              engagementRate={deal.engagement_rate}
+              suspect={suspectAudienceData({ avgViews: deal.avg_views, followers })}
+            />
+            <DealNotes dealId={deal.id} initialNotes={deal.notes ?? ""} />
+            <RemindersBlock
+              reminders={getRemindersFor({ dealId: deal.id })}
+              dealId={deal.id}
+              partnerId={deal.partner_id ?? undefined}
+            />
+          </>
+        }
+        tabs={[
+          { name: "Analysis", node: (
+              <AnalysisTab deal={deal} analyzedAt={getLastRunAt(deal.id, "analysis")} />
+            ) },
+          { name: "Negotiation", node: <NegotiationTab deal={deal} messages={messages} /> },
+          ...(showFulfillment
+            ? [{ name: "Fulfillment", node: (
                 <div className="space-y-4 max-w-4xl">
                   {/* Fulfillment is a sequence, not a pile: finished phases fold to a
                       checkmark line so the current one is what the eye lands on. */}
@@ -494,35 +500,21 @@ export default async function DealPage({
                     </div>
                   </details>
                 </div>
-              ) : undefined
-            }
-            actuals={
-              closed || deal.agreed_price != null ? (
+              ) }]
+            : []),
+          ...(closed || deal.agreed_price != null
+            ? [{ name: "Actuals", node: (
                 <ActualsPanel
                   deal={deal}
                   contentItems={contentItems}
                   expectedReach={expectedReach}
                   windows={getSetting<MeasurementWindows>("measurement_windows") ?? {}}
                 />
-              ) : undefined
-            }
-            history={<HistoryTab />}
-          />
-        </div>
-
-        {/* Beside the tabs, visible from every one — a note or a promise like
-            "ask again in three months" shouldn't hide behind whichever tab was open.
-            Wraps to full width below the tabs on narrow windows. */}
-        <aside className="space-y-4">
-          <DealNotes dealId={deal.id} initialNotes={deal.notes ?? ""} />
-          <RemindersBlock
-            reminders={getRemindersFor({ dealId: deal.id })}
-            dealId={deal.id}
-            partnerId={deal.partner_id ?? undefined}
-          />
-        </aside>
-        </div>
-      </div>
+              ) }]
+            : []),
+          { name: "History", node: <HistoryTab /> },
+        ]}
+      />
     </main>
   );
 }

@@ -38,7 +38,7 @@ export default function MetricBand({ metrics }: { metrics: DealAnalysis["metrics
         return (
           <div
             key={m.label}
-            className="bg-white border border-slate-200 shadow-sm p-4 rounded-lg flex flex-col gap-1"
+            className="bg-white border border-slate-200 shadow-sm p-4 rounded-xl flex flex-col gap-1"
           >
             <span className="text-[11px] uppercase font-semibold tracking-wider text-slate-500">
               {m.label}
