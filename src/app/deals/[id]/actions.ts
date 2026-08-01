@@ -2,12 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { addMessage, getContractDraft, getDeal, getPartner, markContractDraftSigned, saveContractDraft, setJob, updateDeal } from "@/lib/db";
+import { addMessage, getContractDraft, getDeal, getPartner, markContractDraftSigned, saveContractDraft, setJob, updateDeal, upsertPartnerChannel } from "@/lib/db";
 import { getContentItems, getPaymentItems } from "@/lib/fulfillment";
 import { generateContractText } from "@/lib/contract-template";
 import { getSetting } from "@/lib/db";
 import { hasApiKey } from "@/lib/claude";
-import { performAnalysis, performRecommendation } from "@/lib/engine";
+import { performAnalysis, performRecommendation, platformsOf } from "@/lib/engine";
 
 const NO_KEY_ERROR =
   "No ANTHROPIC_API_KEY configured — add it to counterpart/.env.local and restart the dev server.";
@@ -124,6 +124,24 @@ export async function saveAudienceData(
   // Lock the figures: a hand-set number is a correction, and a re-run analysis must
   // not overwrite it with a fresh estimate of the same wrong thing.
   updateDeal(dealId, { avg_views: avgViews, engagement_rate: engagementRate, audience_locked: 1 });
+
+  // Write the correction back to the partner's channel record too. playbookContext feeds
+  // the prompt's channelReach from partner_channels, not from the deal — so a correction
+  // that stopped at the deal row left the engine still pricing on the stale intake figure,
+  // with the deal sheet and the analysis disagreeing by 16x and no way to reconcile them.
+  // Only the platforms on THIS deal are touched; a creator's other channels keep their own reach.
+  if (deal.partner_id != null && (avgViews != null || engagementRate != null)) {
+    for (const platform of platformsOf(deal)) {
+      upsertPartnerChannel({
+        partnerId: deal.partner_id,
+        platform,
+        avgViews: avgViews ?? undefined,
+        engagementRate: engagementRate ?? undefined,
+      });
+    }
+    revalidatePath("/partners");
+  }
+
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/");
   revalidatePath("/pipeline");
