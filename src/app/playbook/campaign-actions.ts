@@ -56,3 +56,75 @@ export async function uploadCampaignBriefAction(campaignId: number, formData: Fo
   revalidatePath("/playbook");
   return {};
 }
+
+/**
+ * Read the attached brief into the obligations a posted video can be checked against.
+ *
+ * Separate from the upload on purpose: extraction costs a model call and the manager
+ * should be able to re-run it after editing the list, or skip it entirely for a campaign
+ * where nobody intends to check videos.
+ */
+export async function extractBriefRequirementsAction(
+  campaignId: number
+): Promise<{ error?: string }> {
+  const { getCampaign, setCampaignBriefRequirements, getBrandProfile, logUsage } = await import(
+    "@/lib/db"
+  );
+  const { readFile } = await import("@/lib/files");
+  const { parseBrief, MODEL, hasApiKey } = await import("@/lib/claude");
+
+  if (!hasApiKey()) return { error: "No Anthropic API key configured." };
+  const campaign = getCampaign(campaignId);
+  if (!campaign?.brief_path) return { error: "Attach a brief first." };
+
+  try {
+    const buffer = readFile(campaign.brief_path);
+    const brand = getBrandProfile() as Record<string, string> | null;
+    const isPdf = campaign.brief_mime === "application/pdf";
+
+    const result = await parseBrief({
+      pdfBase64: isPdf ? buffer.toString("base64") : undefined,
+      // HTML briefs go in as text: the markup carries no obligation the prose doesn't,
+      // and stripping it keeps the model from reading nav links as requirements.
+      text: isPdf ? undefined : stripHtml(buffer.toString("utf8")),
+      brandName: brand?.brandName || brand?.productName || undefined,
+    });
+
+    setCampaignBriefRequirements(campaignId, JSON.stringify(result.requirements));
+    logUsage(null, "brief", MODEL, result.usage.inputTokens, result.usage.outputTokens);
+    revalidatePath("/playbook");
+    return {};
+  } catch (err) {
+    console.error("extractBriefRequirementsAction failed:", err);
+    return { error: err instanceof Error ? err.message : "Could not read the brief." };
+  }
+}
+
+/** Manager edits — the extracted list is a starting point, not the authority. */
+export async function saveBriefRequirementsAction(
+  campaignId: number,
+  json: string
+): Promise<{ error?: string }> {
+  const { getCampaign, setCampaignBriefRequirements } = await import("@/lib/db");
+  if (!getCampaign(campaignId)) return { error: "Campaign not found" };
+  try {
+    JSON.parse(json);
+  } catch {
+    return { error: "Requirements are not valid JSON." };
+  }
+  setCampaignBriefRequirements(campaignId, json);
+  revalidatePath("/playbook");
+  return {};
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60000);
+}

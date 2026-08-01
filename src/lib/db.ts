@@ -351,7 +351,7 @@ CREATE TABLE IF NOT EXISTS usage_log (
       .map((c) => c.name);
     // Two build workers can race this block; a duplicate-column error just means the
     // other worker won, so each ALTER stands alone and swallows that specific failure.
-    for (const col of ["brief_path", "brief_filename", "brief_mime"]) {
+    for (const col of ["brief_path", "brief_filename", "brief_mime", "brief_requirements"]) {
       if (ccols2.length > 0 && !ccols2.includes(col)) {
         try {
           db.exec(`ALTER TABLE campaigns ADD COLUMN ${col} TEXT`);
@@ -905,12 +905,27 @@ export function savePartnerLegalDetails(
   ).run(f.legalName || null, f.companyName || null, f.taxId || null, f.legalAddress || null, partnerId);
 }
 
+/**
+ * The brief's checkable obligations, extracted once and then owned by the manager.
+ *
+ * Stored as JSON on the campaign rather than normalised into rows because it is edited
+ * as a whole — you re-read the brief, fix the list, save — and never queried across
+ * campaigns. Writing null clears it, which is what happens when a new brief is uploaded
+ * and the old requirements no longer describe it.
+ */
+export function setCampaignBriefRequirements(campaignId: number, json: string | null) {
+  db.prepare("UPDATE campaigns SET brief_requirements = ? WHERE id = ?").run(json, campaignId);
+}
+
 export function setCampaignBrief(
   campaignId: number,
   f: { path: string; filename: string; mime: string }
 ) {
-  db.prepare("UPDATE campaigns SET brief_path = ?, brief_filename = ?, brief_mime = ? WHERE id = ?")
-    .run(f.path, f.filename, f.mime, campaignId);
+  // Clearing the requirements is deliberate: they described the brief being replaced,
+  // and silently keeping them would check videos against a document nobody uploaded.
+  db.prepare(
+    "UPDATE campaigns SET brief_path = ?, brief_filename = ?, brief_mime = ?, brief_requirements = NULL WHERE id = ?"
+  ).run(f.path, f.filename, f.mime, campaignId);
 }
 
 /* ------------------------------------------------------------- reminders */
@@ -1187,7 +1202,7 @@ export function clearJob(dealId: number, error?: string) {
 
 export function logUsage(
   dealId: number | null,
-  kind: "analysis" | "recommendation",
+  kind: "analysis" | "recommendation" | "brief" | "integration_check",
   model: string,
   inputTokens: number,
   outputTokens: number

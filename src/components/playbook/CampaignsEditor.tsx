@@ -10,6 +10,7 @@ import {
 } from "@/lib/campaigns";
 import { money } from "@/lib/format";
 import { uploadCampaignBriefAction } from "@/app/playbook/campaign-actions";
+import BriefRequirements from "./BriefRequirements";
 import { archiveCampaignAction, saveCampaignAction } from "@/app/playbook/campaign-actions";
 
 const inputClass =
@@ -147,6 +148,12 @@ export default function CampaignsEditor({
                   </button>
                 </div>
               </div>
+
+              <BriefRequirements
+                campaignId={c.id}
+                hasBrief={Boolean(c.brief_filename)}
+                initialJson={c.brief_requirements ?? null}
+              />
               {c.budget != null && (
                 <div className="w-full bg-slate-100 rounded-full h-1 mt-2">
                   <div

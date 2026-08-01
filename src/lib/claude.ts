@@ -793,6 +793,114 @@ export async function parseContract(params: {
   };
 }
 
+const BRIEF_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    minIntegrationSeconds: {
+      type: ["number", "null"],
+      description:
+        "Minimum spoken integration length in SECONDS if the brief states one. Convert minutes to seconds. Null if the brief gives no explicit floor — do not infer one.",
+    },
+    requirements: {
+      type: "array",
+      description: "Obligations that could be judged from a transcript of the video.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          id: { type: "string", description: "Short stable slug, e.g. 'brand-name'" },
+          kind: { type: "string", enum: ["mention", "disclosure", "prohibited"] },
+          label: { type: "string", description: "The obligation in one short line" },
+          phrases: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Spoken forms that satisfy (or, for prohibited, violate) this. Include natural variants a creator would actually say.",
+          },
+        },
+        required: ["id", "kind", "label", "phrases"],
+      },
+    },
+    notCheckable: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Obligations the brief makes that a transcript cannot settle — on-screen logo, pinned comment, link in description, B-roll, thumbnail.",
+    },
+  },
+  required: ["minIntegrationSeconds", "requirements", "notCheckable"],
+} as const;
+
+export interface BriefParseResult {
+  requirements: unknown;
+  usage: TokenUsage;
+}
+
+/**
+ * Reads a brand brief into the obligations that can be checked against a transcript.
+ *
+ * The split that matters here is checkable versus not. A brief asks for many things —
+ * say the name, show the logo, pin a comment, keep it over ninety seconds — and only
+ * some of those survive contact with an audio transcript. Sorting them honestly is the
+ * whole job: a requirement listed as checkable that actually cannot be checked would
+ * later be reported as "missed" on a video that fully complied.
+ */
+export async function parseBrief(params: {
+  pdfBase64?: string;
+  text?: string;
+  brandName?: string;
+}): Promise<BriefParseResult> {
+  const client = getClient();
+  const content: Anthropic.ContentBlockParam[] = [];
+
+  if (params.pdfBase64) {
+    content.push({
+      type: "document",
+      source: { type: "base64", media_type: "application/pdf", data: params.pdfBase64 },
+    });
+  }
+  content.push({
+    type: "text",
+    text: [
+      "Extract from this brand brief the obligations the creator must satisfy IN THE VIDEO ITSELF.",
+      "Rules:",
+      "- Only list something under `requirements` if it could be judged from a transcript of the spoken audio. Everything else goes in `notCheckable`.",
+      "- `mention` is something that must be said. `disclosure` is the sponsorship/ad disclosure. `prohibited` is something that must NOT be said.",
+      "- For `phrases`, list the realistic spoken forms. Transcription mangles brand names, so include the plain name and natural variants a creator would say out loud. Do not include on-screen-only text.",
+      "- minIntegrationSeconds only if the brief states a length. Convert minutes to seconds. If it gives a range, use the lower bound. If it states none, return null — never invent a floor.",
+      "- Do not invent obligations. If the brief is vague, prefer fewer, well-grounded requirements.",
+      params.brandName ? `\nThe brand is: ${params.brandName}` : "",
+      params.text ? `\nBrief:\n"""${params.text}"""` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  });
+
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 16000,
+    thinking: { type: "adaptive" },
+    system:
+      "You are Counterpart, reading brand briefs for an influencer marketing manager. You extract obligations faithfully, you never invent them, and you are honest about which ones an audio transcript cannot settle.",
+    messages: [{ role: "user", content }],
+    output_config: {
+      format: { type: "json_schema", schema: BRIEF_SCHEMA as unknown as Record<string, unknown> },
+    },
+  });
+
+  const text = finalText(response);
+  if (!text) throw new Error("Empty brief parse response.");
+
+  return {
+    requirements: JSON.parse(text),
+    usage: {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+    },
+  };
+}
+
 /**
  * What this creator has cost before. In a repeat negotiation your own history is a
  * stronger anchor than any market rate, so it goes into the prompt whenever it exists.
