@@ -8,6 +8,7 @@ import { partnerStats, partnerStatus } from "@/lib/partners";
 import PartnerStatusPill from "@/components/partners/PartnerStatusPill";
 import { dealPlatforms, PLATFORM_META, STAGE_LABELS } from "@/lib/types";
 import { money, moneyCpm } from "@/lib/format";
+import { PAGE_WIDTH } from "@/lib/layout";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,7 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
         </span>
       </div>
 
-      <div className="space-y-4 max-w-5xl">
+      <div className={`space-y-4 ${PAGE_WIDTH}`}>
         <PartnerProfile partner={partner} channels={channels} dealCount={deals.length} />
 
         <RemindersBlock reminders={getRemindersFor({ partnerId: partner.id })} partnerId={partner.id} />

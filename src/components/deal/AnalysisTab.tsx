@@ -108,8 +108,10 @@ export default function AnalysisTab({
         <p className="text-sm text-slate-700 max-w-[80ch]">{analysis.verdictSummary}</p>
       </div>
 
-      {/* Metrics */}
-      <div className="grid grid-cols-4 gap-4">
+      {/* Metrics. Four hard columns inside the tab's ~560px min width gave each card
+          about 130px, so labels like "Avg views / integration" wrapped to three lines
+          and the value clipped. Two up until there is genuinely room for four. */}
+      <div className="grid grid-cols-2 2xl:grid-cols-4 gap-4">
         {analysis.metrics.map((m) => (
           <div key={m.label} className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
             <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">

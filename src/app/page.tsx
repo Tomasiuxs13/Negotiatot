@@ -12,6 +12,8 @@ import {
 } from "@/lib/fulfillment";
 import { STAGES, TERMINAL_STAGES } from "@/lib/types";
 import { money, moneyCpm } from "@/lib/format";
+import { PAGE_WIDTH } from "@/lib/layout";
+import { DEAL_STAGE_TONE } from "@/lib/status-tones";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +84,14 @@ export default function DashboardPage() {
     count: deals.filter((d) => d.stage === s.key).length,
   }));
 
+  // The right rail. Reminders deliberately aren't repeated here — they already surface
+  // in "Needs your attention" — so this shows what actually moved, from the deals'
+  // own updated_at rather than a separate activity log the app doesn't keep.
+  const recent = [...deals]
+    .filter((d) => d.updated_at)
+    .sort((a, b) => (a.updated_at! < b.updated_at! ? 1 : -1))
+    .slice(0, 6);
+
   return (
     <>
       <PageHeader
@@ -90,45 +100,115 @@ export default function DashboardPage() {
         actions={<NewDealButton />}
       />
       <main className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-5xl space-y-6">
-          <AttentionPanel items={attention} />
-
+        <div className={`${PAGE_WIDTH} space-y-6`}>
+          {/* KPIs lead: four equal columns across the full width, so the numbers get
+              room instead of being quarter-width cards beside empty space. */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {kpiCards.map((k) => (
               <Link
                 key={k.label}
                 href={k.href}
-                className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm hover:border-slate-300 transition-colors"
+                className="bg-white rounded-lg p-5 border border-slate-200 shadow-sm hover:border-slate-300 transition-colors"
               >
                 <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
                   {k.label}
                 </div>
-                <div className="text-2xl font-semibold text-slate-900 font-tabular mt-1">
+                <div className="text-3xl font-semibold text-slate-900 font-tabular mt-2">
                   {k.value}
                 </div>
-                <div className={`text-xs mt-0.5 ${k.noteTone}`}>{k.note}</div>
+                <div className={`text-xs mt-1 ${k.noteTone}`}>{k.note}</div>
               </Link>
             ))}
           </div>
 
+          {/* The work split: what needs doing on the left, what just happened on the
+              right. Previously both were full-width bands stacked down a narrow column. */}
+          <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_1fr] gap-6 items-start">
+            <AttentionPanel items={attention} />
+
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
+              <h2 className="font-headline text-sm font-semibold text-slate-900 mb-3">
+                Recent activity
+              </h2>
+              {recent.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  Nothing yet — activity appears as deals are analyzed and negotiated.
+                </p>
+              ) : (
+                <ol className="space-y-3">
+                  {recent.map((d) => (
+                    <li key={d.id}>
+                      <Link href={`/deals/${d.id}`} className="flex gap-3 group">
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${
+                            DEAL_STAGE_TONE[d.stage] === "action"
+                              ? "bg-amber-400"
+                              : DEAL_STAGE_TONE[d.stage] === "done"
+                                ? "bg-emerald-500"
+                                : DEAL_STAGE_TONE[d.stage] === "problem"
+                                  ? "bg-red-500"
+                                  : DEAL_STAGE_TONE[d.stage] === "active"
+                                    ? "bg-sky-500"
+                                    : "bg-slate-300"
+                          }`}
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-sm text-slate-900 group-hover:text-brand truncate">
+                            <span className="font-medium">{d.status_label ?? "Updated"}</span>
+                            <span className="text-slate-500"> · {d.creator}</span>
+                          </span>
+                          <span className="block text-xs text-slate-400 font-tabular">
+                            {d.updated_at?.slice(0, 16).replace("T", " ")}
+                          </span>
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          </div>
+
+          {/* Pipeline: counters spread evenly across the whole width with a tone bar
+              under each, rather than small pills bunched at the left edge. */}
           <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
-            <div className="flex items-baseline justify-between mb-3">
+            <div className="flex items-baseline justify-between mb-4">
               <h2 className="font-headline text-sm font-semibold text-slate-900">Pipeline</h2>
               <Link href="/pipeline" className="text-xs font-medium text-brand-dark hover:underline">
                 Open board →
               </Link>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
               {counts.map((s) => (
                 <Link
                   key={s.key}
                   href={`/pipeline?stage=${s.key}`}
-                  className="flex items-baseline gap-2 border border-slate-200 rounded-lg px-3 py-2 hover:border-slate-300 transition-colors"
+                  className="group"
+                  aria-label={`${s.count} deals in ${s.label}`}
                 >
-                  <span className="text-lg font-semibold font-tabular text-slate-900">
+                  <div
+                    className={`text-3xl font-semibold font-tabular ${
+                      s.count > 0 ? "text-slate-900" : "text-slate-300"
+                    }`}
+                  >
                     {s.count}
-                  </span>
-                  <span className="text-xs text-slate-500">{s.label}</span>
+                  </div>
+                  <div className="text-[11px] uppercase tracking-wider text-slate-500 mt-1 mb-2">
+                    {s.label}
+                  </div>
+                  <div
+                    className={`h-1 rounded-full transition-colors ${
+                      s.count === 0
+                        ? "bg-slate-100"
+                        : DEAL_STAGE_TONE[s.key] === "action"
+                          ? "bg-amber-400"
+                          : DEAL_STAGE_TONE[s.key] === "done"
+                            ? "bg-emerald-500"
+                            : DEAL_STAGE_TONE[s.key] === "active"
+                              ? "bg-sky-500"
+                              : "bg-slate-300"
+                    }`}
+                  />
                 </Link>
               ))}
             </div>

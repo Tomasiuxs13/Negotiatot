@@ -7,6 +7,7 @@ import { filterPayments, paymentTotals } from "@/lib/payment-filters";
 import { PAYMENT_STATUS_LABEL, type PaymentStatus } from "@/lib/fulfillment-types";
 import { buildQuery, nextDir, sortBy, type SortDir } from "@/lib/table-sort";
 import { money } from "@/lib/format";
+import { PAGE_WIDTH } from "@/lib/layout";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +72,7 @@ export default async function PaymentsPage({
         }
       />
       <main className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-5xl space-y-4">
+        <div className={`${PAGE_WIDTH} space-y-4`}>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {kpis.map((k) => (
               <div key={k.label} className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm">

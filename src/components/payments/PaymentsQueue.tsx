@@ -9,6 +9,7 @@ import { PAYMENT_TONE, TONE_CLASS } from "@/lib/status-tones";
 import { SortHeader } from "@/components/FilterBar";
 import { nextDir, type SortDir } from "@/lib/table-sort";
 import { setPaymentStatusAction } from "@/app/deals/[id]/fulfillment-actions";
+import { PAGE_WIDTH } from "@/lib/layout";
 
 
 export default function PaymentsQueue({
@@ -48,7 +49,7 @@ export default function PaymentsQueue({
   }
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden max-w-5xl">
+    <div className={`bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden ${PAGE_WIDTH}`}>
       {actionError && (
         <p className="text-xs text-red-600 px-4 py-2 border-b border-red-100 bg-red-50">
           {actionError}

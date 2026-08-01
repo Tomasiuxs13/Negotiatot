@@ -313,8 +313,12 @@ export default async function DealPage({
         )}
       </div>
 
-      <div className="flex flex-wrap gap-4 items-start">
-        <div className="flex-1 min-w-[560px]">
+      {/* Work column and rail in fixed proportion. The old flex pair pinned the rail at
+          a constant 320px and let the work column absorb everything else, so on a wide
+          screen the rail looked stranded and on a narrow one the analysis was squeezed
+          to its 560px minimum. */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)] gap-4 items-start">
+        <div className="min-w-0">
           <DealTabs
             defaultTab={
               // An attention item deep-links to the tab where its action lives; the
@@ -426,7 +430,7 @@ export default async function DealPage({
         {/* Beside the tabs, visible from every one — a note or a promise like
             "ask again in three months" shouldn't hide behind whichever tab was open.
             Wraps to full width below the tabs on narrow windows. */}
-        <aside className="w-80 grow space-y-4">
+        <aside className="space-y-4">
           <DealNotes dealId={deal.id} initialNotes={deal.notes ?? ""} />
           <RemindersBlock
             reminders={getRemindersFor({ dealId: deal.id })}

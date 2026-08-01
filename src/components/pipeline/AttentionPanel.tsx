@@ -11,7 +11,7 @@ const SEVERITY: Record<AttentionItem["severity"], { dot: string; label: string }
 export default function AttentionPanel({ items }: { items: AttentionItem[] }) {
   if (items.length === 0) {
     return (
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm px-5 py-4 mb-6 flex items-center gap-3">
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm px-5 py-4 flex items-center gap-3">
         <span className="material-symbols-outlined text-emerald-600" style={{ fontSize: 18 }}>
           check_circle
         </span>
@@ -28,7 +28,7 @@ export default function AttentionPanel({ items }: { items: AttentionItem[] }) {
   const critical = items.filter((i) => i.severity === "critical").length;
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5 mb-6">
+    <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
       <div className="flex items-baseline justify-between mb-3">
         <h2 className="font-headline text-sm font-semibold text-slate-900">
           Needs your attention{" "}

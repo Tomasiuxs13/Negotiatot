@@ -6,6 +6,7 @@ import { benchmarkRows, platformAverages } from "@/lib/benchmark-rows";
 import { outcomes } from "@/lib/outcomes";
 import { PLATFORM_META } from "@/lib/types";
 import { money, moneyCpm, views as fmtViews } from "@/lib/format";
+import { PAGE_WIDTH } from "@/lib/layout";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export default function BenchmarksPage() {
       />
       <main className="flex-1 overflow-y-auto p-8">
         {result.lost + result.won > 0 && (
-          <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5 mb-6 max-w-5xl">
+          <div className={`bg-white rounded-lg border border-slate-200 shadow-sm p-5 mb-6 ${PAGE_WIDTH}`}>
             <div className="flex items-baseline justify-between mb-3">
               <h3 className="font-headline text-sm font-semibold text-slate-900">Win rate</h3>
               <span className="text-xs text-slate-400">
@@ -77,7 +78,7 @@ export default function BenchmarksPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-6 max-w-5xl">
+          <div className={`space-y-6 ${PAGE_WIDTH}`}>
             {/* Calibrated cards */}
             <div className="grid grid-cols-3 gap-4">
               {calibrated.map((c) => (
