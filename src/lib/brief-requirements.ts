@@ -65,6 +65,59 @@ export function parseRequirements(json: string | null | undefined): BriefRequire
   }
 }
 
+export interface CheckFinding {
+  id: string;
+  status: "met" | "missed" | "unclear";
+  evidence: string | null;
+  atSeconds: number | null;
+  note: string | null;
+}
+
+export interface IntegrationCheck {
+  integrationStartSeconds: number | null;
+  integrationEndSeconds: number | null;
+  findings: CheckFinding[];
+  summary: string;
+}
+
+export function parseCheck(json: string | null | undefined): IntegrationCheck | null {
+  if (!json) return null;
+  try {
+    const c = JSON.parse(json) as IntegrationCheck;
+    return Array.isArray(c.findings) ? c : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Measured length of the sponsored segment, or null when none was identified. */
+export function integrationSeconds(check: IntegrationCheck): number | null {
+  const { integrationStartSeconds: a, integrationEndSeconds: b } = check;
+  return a != null && b != null && b > a ? b - a : null;
+}
+
+/**
+ * What would go in a change-request email — the misses only.
+ *
+ * `unclear` is deliberately excluded. It means the transcript could not settle the
+ * question, which is a reason for the manager to watch that moment, not a reason to
+ * tell a creator they got something wrong.
+ */
+export function failedFindings(
+  check: IntegrationCheck,
+  requirements: BriefRequirement[]
+): { finding: CheckFinding; requirement: BriefRequirement }[] {
+  return check.findings.flatMap((f) => {
+    if (f.status !== "missed") return [];
+    // Findings whose id isn't a requirement we asked about are dropped. The model
+    // sometimes volunteers an extra one — a real run invented "duration-45s" — and
+    // without this the email printed a raw slug at the creator and duplicated the
+    // length complaint that is added deterministically below.
+    const requirement = requirements.find((r) => r.id === f.id);
+    return requirement ? [{ finding: f, requirement }] : [];
+  });
+}
+
 /** Seconds as "1m 38s" — durations here are read against a brief's "at least 90 seconds". */
 export function formatDuration(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));

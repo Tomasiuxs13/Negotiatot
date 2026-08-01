@@ -38,6 +38,7 @@ import NegotiationTab from "@/components/deal/NegotiationTab";
 import DealNotes from "@/components/deal/DealNotes";
 import { DEAL_STAGE_TONE, TONE_CLASS_BORDERED } from "@/lib/status-tones";
 import { PAGE_WIDTH } from "@/lib/layout";
+import { parseRequirements } from "@/lib/brief-requirements";
 import ContractDraftBlock from "@/components/deal/ContractDraftBlock";
 
 export const dynamic = "force-dynamic";
@@ -165,6 +166,8 @@ export default async function DealPage({
 
   const campaign = deal.campaign_id != null ? getCampaign(deal.campaign_id) : undefined;
   const campaignOverrides = campaign ? describeOverrides(parseOverrides(campaign.overrides)) : [];
+  /** The campaign brief's checkable obligations, for grading posted videos. */
+  const briefReqs = parseRequirements(campaign?.brief_requirements);
 
   function HistoryTab() {
     const usage = getUsageTotals(deal.id);
@@ -480,6 +483,8 @@ export default async function DealPage({
                             )}
                             creator={deal.creator}
                             senderName={(getSetting<Record<string, string>>("brand_profile")?.senderName ?? "")}
+                            requirements={briefReqs.requirements}
+                            minIntegrationSeconds={briefReqs.minIntegrationSeconds}
                           />
                           <ShipmentsBlock dealId={deal.id} shipments={shipments} />
                         </div>

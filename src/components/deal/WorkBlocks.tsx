@@ -6,6 +6,8 @@ import { CONTENT_STATUS_FLOW, CONTENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL, pendi
 import { isOverdue } from "@/lib/fulfillment-rules";
 import { DEFAULT_DRAFT_LEAD_DAYS, draftDueDate } from "@/lib/timeline";
 import { changeRequestEmail } from "@/lib/review-email";
+import type { BriefRequirement } from "@/lib/brief-requirements";
+import IntegrationCheckBlock from "./IntegrationCheckBlock";
 import {
   approveDraftAction,
   requestChangesAction,
@@ -38,6 +40,8 @@ export function ContentItemsBlock({
   draftLeadDays = DEFAULT_DRAFT_LEAD_DAYS,
   creator = "",
   senderName = "",
+  requirements = [],
+  minIntegrationSeconds = null,
 }: {
   dealId: number;
   items: ContentItem[];
@@ -46,6 +50,9 @@ export function ContentItemsBlock({
   /** For the generated change-request email. */
   creator?: string;
   senderName?: string;
+  /** The campaign brief's checkable obligations; empty when no brief was read. */
+  requirements?: BriefRequirement[];
+  minIntegrationSeconds?: number | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
@@ -249,6 +256,20 @@ export function ContentItemsBlock({
                   )}
                 </div>
               )}
+              {/* Only once it is live and only when the campaign actually has a brief to
+                  check against — otherwise this is an input with nothing behind it. */}
+              {(item.status === "posted" || item.status === "verified") &&
+                requirements.length > 0 && (
+                  <IntegrationCheckBlock
+                    contentItemId={item.id}
+                    dealId={dealId}
+                    checkResult={item.check_result ?? null}
+                    checkedAt={item.checked_at ?? null}
+                    requirements={requirements}
+                    minIntegrationSeconds={minIntegrationSeconds}
+                    senderName={senderName}
+                  />
+                )}
             </div>
           );
         })}

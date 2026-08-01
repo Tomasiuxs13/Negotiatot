@@ -290,6 +290,14 @@ CREATE TABLE IF NOT EXISTS usage_log (
     add("change_request", "change_request TEXT");
     add("approved_url", "approved_url TEXT");
     add("approved_at", "approved_at TEXT");
+    // The integration check: what was said, when, and how it graded against the brief.
+    // The transcript is kept because the check's findings are only auditable against it
+    // — "the brand name was never said" has to be arguable, not asserted.
+    add("video_path", "video_path TEXT");
+    add("transcript", "transcript TEXT");
+    add("transcript_chunks", "transcript_chunks TEXT");
+    add("check_result", "check_result TEXT");
+    add("checked_at", "checked_at TEXT");
   }
   // The partner portal is addressed by an unguessable per-partner token, never an id.
   {

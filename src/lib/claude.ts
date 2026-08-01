@@ -901,6 +901,126 @@ export async function parseBrief(params: {
   };
 }
 
+const CHECK_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    integrationStartSeconds: {
+      type: ["number", "null"],
+      description: "Where the sponsored segment begins. Null if no sponsored segment is present at all.",
+    },
+    integrationEndSeconds: { type: ["number", "null"] },
+    findings: {
+      type: "array",
+      description: "One entry per requirement given, in the same order, none omitted.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          id: { type: "string", description: "The requirement's id, copied exactly" },
+          status: {
+            type: "string",
+            enum: ["met", "missed", "unclear"],
+            description:
+              "'unclear' when the transcript is too garbled or ambiguous to decide — prefer it over guessing.",
+          },
+          evidence: {
+            type: ["string", "null"],
+            description: "The words from the transcript that decided it, quoted",
+          },
+          atSeconds: { type: ["number", "null"], description: "Where that evidence appears" },
+          note: { type: ["string", "null"], description: "Only when it needs explaining" },
+        },
+        required: ["id", "status", "evidence", "atSeconds", "note"],
+      },
+    },
+    summary: { type: "string", description: "Two sentences for the manager, plain language" },
+  },
+  required: ["integrationStartSeconds", "integrationEndSeconds", "findings", "summary"],
+} as const;
+
+export interface IntegrationCheckResult {
+  check: unknown;
+  usage: TokenUsage;
+}
+
+/**
+ * Grades a posted video's transcript against the campaign brief.
+ *
+ * Two things this is careful about. Transcription mangles brand names, so a requirement
+ * is met when the creator plainly said the thing, whatever the decoder wrote down —
+ * "Rioko Pro" is Ryoko Pro. And the honest third answer is "unclear": a missed finding
+ * here becomes a change-request email to a creator who may have complied perfectly, so
+ * guessing costs more than admitting the audio was ambiguous.
+ */
+export async function checkIntegration(params: {
+  requirements: { id: string; kind: string; label: string; phrases: string[] }[];
+  minIntegrationSeconds: number | null;
+  transcript: string;
+  creator: string;
+  brandName?: string;
+}): Promise<IntegrationCheckResult> {
+  const client = getClient();
+
+  const requirementLines = params.requirements
+    .map(
+      (r) =>
+        `- id:${r.id} [${r.kind}] ${r.label}${
+          r.phrases.length > 0 ? ` — counts if they say any of: ${r.phrases.join(" / ")}` : ""
+        }`
+    )
+    .join("\n");
+
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 16000,
+    thinking: { type: "adaptive" },
+    system:
+      "You are Counterpart, checking a creator's posted video against the brand brief for a marketing manager. You judge only what the transcript supports, you allow for transcription errors in brand names, and you say when something is unclear rather than guessing.",
+    messages: [
+      {
+        role: "user",
+        content: [
+          `Creator: ${params.creator}`,
+          params.brandName ? `Brand: ${params.brandName}` : "",
+          "",
+          "Requirements from the brief:",
+          requirementLines,
+          params.minIntegrationSeconds != null
+            ? `\nThe brief requires the integration to run at least ${params.minIntegrationSeconds} seconds.`
+            : "",
+          "",
+          "Rules:",
+          "- The transcript is machine-generated. Brand and product names are frequently misspelled — judge by what was clearly SAID, not by exact spelling.",
+          "- For a `prohibited` requirement, status 'met' means they correctly did NOT say it; 'missed' means they did say it.",
+          "- Return a finding for every requirement listed, using its exact id.",
+          "- The integration is the contiguous sponsored segment. Give its start and end in seconds from the timestamps.",
+          "- Use 'unclear' whenever the audio is too garbled or the wording too ambiguous to decide honestly.",
+          "",
+          "Transcript with timestamps:",
+          `"""\n${params.transcript}\n"""`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      },
+    ],
+    output_config: {
+      format: { type: "json_schema", schema: CHECK_SCHEMA as unknown as Record<string, unknown> },
+    },
+  });
+
+  const text = finalText(response);
+  if (!text) throw new Error("Empty integration check response.");
+
+  return {
+    check: JSON.parse(text),
+    usage: {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+    },
+  };
+}
+
 /**
  * What this creator has cost before. In a repeat negotiation your own history is a
  * stronger anchor than any market rate, so it goes into the prompt whenever it exists.

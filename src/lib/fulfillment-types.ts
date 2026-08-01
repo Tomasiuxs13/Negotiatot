@@ -60,6 +60,12 @@ export interface ContentItem {
   approved_at?: string | null;
   created_at: string;
   updated_at: string;
+  /** The posted video as uploaded for checking, relative to data/files. */
+  video_path?: string | null;
+  transcript?: string | null;
+  transcript_chunks?: string | null;
+  check_result?: string | null;
+  checked_at?: string | null;
 }
 
 export interface PaymentItem {
