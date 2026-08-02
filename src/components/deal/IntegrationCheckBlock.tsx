@@ -8,7 +8,11 @@ import {
   parseCheck,
   type BriefRequirement,
 } from "@/lib/brief-requirements";
-import { draftCheckChangeRequest, runIntegrationCheck } from "@/app/deals/[id]/check-actions";
+import {
+  draftCheckChangeRequest,
+  runIntegrationCheck,
+  signVideoUpload,
+} from "@/app/deals/[id]/check-actions";
 import { requestChangesAction } from "@/app/deals/[id]/fulfillment-actions";
 
 const STATUS_STYLE = {
@@ -47,7 +51,48 @@ export default function IntegrationCheckBlock({
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  /**
+   * Upload straight to fal, then check. XHR rather than fetch purely for progress —
+   * a 500MB upload with no feedback reads as a hung page, and this is the one step
+   * whose duration depends on the creator's connection rather than on us.
+   */
+  const upload = async (file: File) => {
+    setError(null);
+    const signed = await signVideoUpload(file.name, file.type || "video/mp4", file.size);
+    if (signed.error || !signed.uploadUrl || !signed.fileUrl) {
+      setError(signed.error ?? "Could not start the upload.");
+      return;
+    }
+    setUploadPct(0);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", signed.uploadUrl!);
+        xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setUploadPct(Math.round((e.loaded / e.total) * 100));
+        };
+        xhr.onload = () =>
+          xhr.status >= 200 && xhr.status < 300
+            ? resolve()
+            : reject(new Error(`Upload failed (${xhr.status}).`));
+        xhr.onerror = () => reject(new Error("Upload failed — check the connection."));
+        xhr.send(file);
+      });
+    } catch (err) {
+      setUploadPct(null);
+      setError(err instanceof Error ? err.message : "Upload failed.");
+      return;
+    }
+    setUploadPct(null);
+    startTransition(async () => {
+      const r = await runIntegrationCheck(contentItemId, signed.fileUrl!);
+      if (r?.error) setError(r.error);
+    });
+  };
 
   const check = parseCheck(checkResult);
   const seconds = check ? integrationSeconds(check) : null;
@@ -80,21 +125,48 @@ export default function IntegrationCheckBlock({
   return (
     <div className="mt-2 border-t border-slate-100 pt-2">
       {!check ? (
-        <div className="flex items-center gap-2">
-          <input
-            value={mediaUrl}
-            onChange={(e) => setMediaUrl(e.target.value)}
-            placeholder="Direct link to the video file, to check against the brief"
-            className="flex-1 border border-slate-200 rounded-md px-2 py-1 text-xs"
-          />
-          <button
-            onClick={run}
-            disabled={isPending}
-            className="text-xs font-medium text-brand-dark hover:underline disabled:opacity-60 whitespace-nowrap"
-          >
-            {isPending ? "Checking…" : "Check against brief"}
-          </button>
-        </div>
+        uploadPct != null ? (
+          <div className="flex items-center gap-2">
+            <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+              <div
+                className="bg-brand h-1.5 rounded-full transition-all"
+                style={{ width: `${uploadPct}%` }}
+              />
+            </div>
+            <span className="text-xs text-slate-500 font-tabular">{uploadPct}%</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 flex-wrap">
+            <label className="text-xs font-medium text-brand-dark hover:underline cursor-pointer whitespace-nowrap">
+              {isPending ? "Checking…" : "Upload video"}
+              <input
+                type="file"
+                accept="video/*,audio/*"
+                className="hidden"
+                disabled={isPending}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void upload(file);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            <span className="text-xs text-slate-300">or</span>
+            <input
+              value={mediaUrl}
+              onChange={(e) => setMediaUrl(e.target.value)}
+              placeholder="paste a direct media link"
+              className="flex-1 min-w-[180px] border border-slate-200 rounded-md px-2 py-1 text-xs"
+            />
+            <button
+              onClick={run}
+              disabled={isPending}
+              className="text-xs font-medium text-slate-600 hover:text-slate-900 disabled:opacity-60 whitespace-nowrap"
+            >
+              Check
+            </button>
+          </div>
+        )
       ) : (
         <div>
           <div className="flex items-center gap-2 flex-wrap text-xs">

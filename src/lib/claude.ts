@@ -1524,6 +1524,11 @@ export async function recommendNextMove(params: {
       "You are Counterpart, a negotiation copilot for influencer marketing managers. You are on the manager's side of the table. You give grounded, playbook-compliant negotiation moves with transparent reasoning, and you write natural, human-sounding messages the manager can send verbatim.",
     messages: [{ role: "user", content: userText }],
     output_config: {
+      // Held at high deliberately. Dropping to medium is the cheapest saving left on
+      // the table and the only one that would land on the drafts a creator actually
+      // reads — a tone regression here is both the hardest to notice in a spot-check
+      // and the most expensive to be wrong about.
+      effort: "high" as const,
       format: { type: "json_schema", schema: RECO_SCHEMA as unknown as Record<string, unknown> },
     },
   });

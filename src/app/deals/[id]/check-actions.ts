@@ -9,6 +9,34 @@ import { changesFromCheck, changeRequestEmail } from "@/lib/review-email";
 import { parseCheck } from "@/lib/brief-requirements";
 
 /**
+ * Hands the browser a signed target so the video uploads straight to fal.
+ *
+ * Only the signing needs the key, and it stays here; the bytes never pass through this
+ * server. Guarded on type and size so a mistaken upload fails before anyone waits for
+ * half a gigabyte to move.
+ */
+export async function signVideoUpload(
+  fileName: string,
+  contentType: string,
+  sizeBytes: number
+): Promise<{ uploadUrl?: string; fileUrl?: string; error?: string }> {
+  const { signUpload } = await import("@/lib/transcribe");
+  if (!/^(video|audio)\//.test(contentType)) {
+    return { error: "That doesn't look like a video or audio file." };
+  }
+  if (sizeBytes > 2 * 1024 * 1024 * 1024) {
+    return { error: "That file is over 2 GB — export a smaller version or upload the audio only." };
+  }
+  try {
+    const { uploadUrl, fileUrl } = await signUpload({ fileName, contentType });
+    return { uploadUrl, fileUrl };
+  } catch (err) {
+    console.error("signVideoUpload failed:", err);
+    return { error: err instanceof Error ? err.message : "Could not start the upload." };
+  }
+}
+
+/**
  * Transcribe a posted video and grade it against the campaign brief.
  *
  * The upload itself goes straight to fal from the creator's browser, so a 500MB mp4

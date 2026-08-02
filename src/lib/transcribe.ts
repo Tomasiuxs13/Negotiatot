@@ -34,6 +34,42 @@ export function hasFalKey(): boolean {
   return Boolean(process.env.FAL_KEY?.trim());
 }
 
+/**
+ * A one-shot signed target the browser can PUT a video straight to.
+ *
+ * The file never touches this server. A 20-minute 1080p upload is comfortably past what
+ * a server action will carry, and proxying it would mean holding hundreds of megabytes
+ * in a Next.js request just to forward them on. fal signs the destination for us, so the
+ * key stays server-side and the bytes go creator → fal directly.
+ */
+export async function signUpload(params: {
+  fileName: string;
+  contentType: string;
+}): Promise<{ uploadUrl: string; fileUrl: string }> {
+  if (!hasFalKey()) {
+    throw new Error("No FAL_KEY configured. Add it to .env.local and restart the server.");
+  }
+
+  const res = await fetch(
+    "https://rest.alpha.fal.ai/storage/upload/initiate?storage_type=fal-cdn-v3",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Key ${process.env.FAL_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content_type: params.contentType, file_name: params.fileName }),
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error(`Could not start the upload (${res.status}).`);
+  }
+  const json = (await res.json()) as { upload_url?: string; file_url?: string };
+  if (!json.upload_url || !json.file_url) throw new Error("Upload could not be started.");
+  return { uploadUrl: json.upload_url, fileUrl: json.file_url };
+}
+
 export async function transcribe(params: {
   /** Publicly reachable media URL — fal fetches it server-side. */
   audioUrl: string;
