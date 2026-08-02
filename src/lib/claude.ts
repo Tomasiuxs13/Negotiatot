@@ -1299,9 +1299,23 @@ export async function analyzeDeal(params: {
       ? [{ type: "web_search_20260209" as const, name: "web_search" as const, max_uses: 6 }]
       : undefined;
 
+  // The last content block carries the cache breakpoint, so system + tools + everything
+  // above it becomes a reusable prefix. This matters because of the pause_turn loop
+  // below: a web-searching analysis resends this entire prefix on every resume, up to
+  // five times, and a single logged analysis has already reached 68,711 input tokens.
+  // Uncached, most of that is the same bytes paid for repeatedly.
+  const last = userContent[userContent.length - 1];
+  if (last) {
+    (last as { cache_control?: { type: "ephemeral" } }).cache_control = { type: "ephemeral" };
+  }
+
   const baseRequest = {
     model: MODEL,
-    max_tokens: 16000,
+    // Thinking counts against this. The largest analysis logged output 13,409 tokens —
+    // and that was on Opus 4.8, where thinking was off unless asked for. Opus 5 thinks
+    // by default, so the real headroom under a 16,000 cap is smaller than that figure
+    // suggests and a long verdict can truncate mid-sentence with no error raised.
+    max_tokens: 32000,
     thinking: { type: "adaptive" as const },
     system:
       "You are Counterpart, a negotiation copilot for influencer marketing managers. You do rigorous, playbook-driven deal analysis. All prices in USD, integers. You value channels on real average views, never follower counts. You never invent statistics — when an input is missing and can't be researched, say so in the relevant metric/flag and widen your uncertainty.",
@@ -1315,29 +1329,42 @@ export async function analyzeDeal(params: {
   };
 
   const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+  let cacheReads = 0;
   const track = (r: Anthropic.Message) => {
     usage.inputTokens += r.usage.input_tokens;
     usage.outputTokens += r.usage.output_tokens;
+    cacheReads += r.usage.cache_read_input_tokens ?? 0;
   };
 
-  let response = await client.messages.create({
+  // Streamed, not because anything renders progressively but because the SDK refuses a
+  // non-streaming request it estimates will outrun the HTTP timeout — which a 32,000
+  // token cap on a thinking model does.
+  let response = await client.messages.stream({
     ...baseRequest,
     messages: [{ role: "user", content: userContent }],
-  });
+  }).finalMessage();
   track(response);
 
   // Server-side tools (web search) can pause the turn; resume until done.
   let pauseGuard = 0;
   while (response.stop_reason === "pause_turn" && pauseGuard < 5) {
     pauseGuard += 1;
-    response = await client.messages.create({
+    response = await client.messages.stream({
       ...baseRequest,
       messages: [
         { role: "user", content: userContent },
         { role: "assistant", content: response.content },
       ],
-    });
+    }).finalMessage();
     track(response);
+  }
+
+  // Zero cache reads across a resumed analysis means the breakpoint stopped working —
+  // usually something newly volatile crept into the prefix. Silent, and expensive.
+  if (pauseGuard > 0 && cacheReads === 0) {
+    console.warn(
+      `analysis resumed ${pauseGuard}x with no cache reads — the prompt prefix may have a silent invalidator`
+    );
   }
 
   if (response.stop_reason === "refusal") {
