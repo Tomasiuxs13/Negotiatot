@@ -72,6 +72,23 @@ describe("describeExtraction", () => {
     expect(describeExtraction(base({ viewsTrendBasis: null }))).toContain("treat with caution");
   });
 
+  it("attaches the source text to each figure, so a mis-mapping is visible in the prompt", () => {
+    const text = describeExtraction(
+      base({
+        viewsTrendPct: 233.08,
+        viewsTrendBasis: null,
+        fieldSources: [{ field: "viewsTrendPct", quote: "Account growth rate 233.08% yearly" }],
+      })
+    );
+    // The real failure: a follower growth rate landing in the views trend. With the
+    // quote attached, the model doing the reasoning can see the label disagrees.
+    expect(text).toContain('read from: "Account growth rate 233.08% yearly"');
+  });
+
+  it("omits the provenance clause for figures with no recorded source", () => {
+    expect(describeExtraction(base({ fieldSources: [] }))).not.toContain("read from");
+  });
+
   it("carries qualitative signals the fixed fields would have discarded", () => {
     const text = describeExtraction(
       base({ notableSignals: ["Report flags comment authenticity as low"] })

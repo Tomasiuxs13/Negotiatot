@@ -18,6 +18,8 @@ export interface ExtractedReport {
   rateCardFigures: string[];
   channelUrl: string | null;
   notableSignals: string[];
+  /** Verbatim text each figure was read from, so a mis-mapping is visible downstream. */
+  fieldSources?: { field: string; quote: string }[];
   missingFields: string[];
 }
 
@@ -49,22 +51,30 @@ export function isExtractionUsable(e: ExtractedReport | null): e is ExtractedRep
 export function describeExtraction(e: ExtractedReport): string {
   const lines: string[] = ["## Creator report (extracted from the uploaded document)"];
   const num = (n: number | null) => (n == null ? null : n.toLocaleString("en-US"));
+  // Each figure carries the words it was read from. A number that was labelled as
+  // something else in the source — a follower growth rate landing in a views trend —
+  // is then visible to the model doing the reasoning, not just to whoever reads the
+  // extraction afterwards. Guards catch impossible values; this catches wrong ones.
+  const src = (field: string) => {
+    const q = e.fieldSources?.find((f) => f.field === field)?.quote;
+    return q ? ` [read from: "${q}"]` : "";
+  };
 
   if (e.avgViews != null)
-    lines.push(`- Avg views: ${num(e.avgViews)}${e.avgViewsBasis ? ` (${e.avgViewsBasis})` : ""}`);
-  if (e.followers != null) lines.push(`- Followers: ${num(e.followers)}`);
-  if (e.engagementRatePct != null) lines.push(`- Engagement rate: ${e.engagementRatePct}%`);
+    lines.push(`- Avg views: ${num(e.avgViews)}${e.avgViewsBasis ? ` (${e.avgViewsBasis})` : ""}${src("avgViews")}`);
+  if (e.followers != null) lines.push(`- Followers: ${num(e.followers)}${src("followers")}`);
+  if (e.engagementRatePct != null) lines.push(`- Engagement rate: ${e.engagementRatePct}%${src("engagementRatePct")}`);
   if (e.audienceGeoTopShares.length > 0)
     lines.push(
       `- Audience geo: ${e.audienceGeoTopShares.map((g) => `${g.country} ${g.sharePct}%`).join(", ")}`
     );
-  if (e.fakeFollowerPct != null) lines.push(`- Fake followers: ${e.fakeFollowerPct}%`);
+  if (e.fakeFollowerPct != null) lines.push(`- Fake followers: ${e.fakeFollowerPct}%${src("fakeFollowerPct")}`);
   if (e.viewsTrendPct != null)
     lines.push(
       // Always qualified. A real report offered "233.08%" that was yearly follower
       // growth; unqualified it reads as views rocketing, which is the opposite kind of
       // fact and would have been graded as a strength.
-      `- Views/likes trend: ${e.viewsTrendPct}%${e.viewsTrendBasis ? ` (${e.viewsTrendBasis})` : " — basis not stated, treat with caution"}`
+      `- Views/likes trend: ${e.viewsTrendPct}%${e.viewsTrendBasis ? ` (${e.viewsTrendBasis})` : " — basis not stated, treat with caution"}${src("viewsTrendPct")}`
     );
   if (e.rateCardFigures.length > 0) lines.push(`- Stated rates: ${e.rateCardFigures.join(" · ")}`);
   if (e.notableSignals.length > 0) {

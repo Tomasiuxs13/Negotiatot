@@ -858,6 +858,20 @@ const EXTRACTION_SCHEMA = {
         "Anything else in the document a negotiator would want: audience quality warnings, brand safety notes, sponsor history, caveats about how a figure was measured.",
       items: { type: "string" },
     },
+    fieldSources: {
+      type: "array",
+      description:
+        "For every figure you filled in, the verbatim text you read it from. Use the field name exactly as it appears in this schema.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          field: { type: "string", description: "e.g. avgViews, engagementRatePct, viewsTrendPct" },
+          quote: { type: "string", description: "The words in the document that gave you it" },
+        },
+        required: ["field", "quote"],
+      },
+    },
     /** Absent must never arrive downstream as zero. */
     missingFields: {
       type: "array",
@@ -877,6 +891,7 @@ const EXTRACTION_SCHEMA = {
     "rateCardFigures",
     "channelUrl",
     "notableSignals",
+    "fieldSources",
     "missingFields",
   ],
 } as const;
@@ -912,6 +927,7 @@ export async function extractReportData(params: {
       "- Percentages as plain numbers (9.11 not '9.11%'). Views and followers as integers (13500 not '13.5K').",
       "- avgViewsBasis matters: an average over Shorts and long-form together means something different from long-form only. Quote how the report defines it.",
       "- notableSignals is for anything a negotiator would want that the fields above don't hold — audience quality warnings, brand safety notes, sponsor history, caveats about measurement.",
+      "- fieldSources: for every figure you filled in, quote the text you took it from. If a number is labelled as something other than the field you are putting it in, that is a sign it belongs in notableSignals instead.",
       params.text ? `\nReport text:\n"""${params.text}"""` : "",
     ]
       .filter(Boolean)
