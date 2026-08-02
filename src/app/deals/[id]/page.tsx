@@ -38,6 +38,7 @@ import NegotiationTab from "@/components/deal/NegotiationTab";
 import DealNotes from "@/components/deal/DealNotes";
 import { DEAL_STAGE_TONE, TONE_CLASS_BORDERED } from "@/lib/status-tones";
 import { PAGE_WIDTH } from "@/lib/layout";
+import { usageCostUsd } from "@/lib/usage-cost";
 import { parseRequirements } from "@/lib/brief-requirements";
 import ContractDraftBlock from "@/components/deal/ContractDraftBlock";
 
@@ -171,7 +172,7 @@ export default async function DealPage({
 
   function HistoryTab() {
     const usage = getUsageTotals(deal.id);
-    const estCost = (usage.inputTokens / 1_000_000) * 5 + (usage.outputTokens / 1_000_000) * 25;
+    const estCost = usageCostUsd(usage);
     return (
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
         <div className="flex items-baseline justify-between mb-3">

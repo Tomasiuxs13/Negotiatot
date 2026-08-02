@@ -23,8 +23,11 @@ import {
 export const MODEL = process.env.COUNTERPART_MODEL || "claude-opus-5";
 
 export interface TokenUsage {
+  /** Uncached input only — cached tokens are reported separately by the API. */
   inputTokens: number;
   outputTokens: number;
+  cacheCreationTokens?: number;
+  cacheReadTokens?: number;
 }
 
 export function hasApiKey(): boolean {
@@ -1333,6 +1336,9 @@ export async function analyzeDeal(params: {
   const track = (r: Anthropic.Message) => {
     usage.inputTokens += r.usage.input_tokens;
     usage.outputTokens += r.usage.output_tokens;
+    usage.cacheCreationTokens =
+      (usage.cacheCreationTokens ?? 0) + (r.usage.cache_creation_input_tokens ?? 0);
+    usage.cacheReadTokens = (usage.cacheReadTokens ?? 0) + (r.usage.cache_read_input_tokens ?? 0);
     cacheReads += r.usage.cache_read_input_tokens ?? 0;
   };
 

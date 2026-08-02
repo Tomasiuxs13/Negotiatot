@@ -1,19 +1,17 @@
 import PageHeader from "@/components/PageHeader";
 import { getDeals, getUsageTotals } from "@/lib/db";
 import { hasApiKey, MODEL } from "@/lib/claude";
+import { usageCostUsd, totalTokens } from "@/lib/usage-cost";
 
 export const dynamic = "force-dynamic";
 
-// Opus-tier pricing (USD per million tokens) — identical for claude-opus-5 and claude-opus-4-8
-const INPUT_PER_M = 5;
-const OUTPUT_PER_M = 25;
+
 
 export default function SettingsPage() {
   const keyConfigured = hasApiKey();
   const dealCount = getDeals().length;
   const usage = getUsageTotals();
-  const estCost =
-    (usage.inputTokens / 1_000_000) * INPUT_PER_M + (usage.outputTokens / 1_000_000) * OUTPUT_PER_M;
+  const estCost = usageCostUsd(usage);
 
   const rows = [
     {
@@ -44,7 +42,7 @@ export default function SettingsPage() {
       label: "API usage",
       value: `${usage.calls} call${usage.calls === 1 ? "" : "s"} · ≈ $${estCost.toFixed(2)}`,
       tone: "text-slate-900",
-      note: `${usage.inputTokens.toLocaleString("en")} input + ${usage.outputTokens.toLocaleString("en")} output tokens across all analyses and recommendations. Estimate at $${INPUT_PER_M}/$${OUTPUT_PER_M} per million tokens; cached tokens make the real bill slightly lower.`,
+      note: `${totalTokens(usage).toLocaleString("en")} tokens across all analyses and recommendations, including ${usage.cacheReadTokens.toLocaleString("en")} served from cache at a tenth of input price. Priced at $5/$25 per million.`,
     },
   ];
 

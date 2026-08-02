@@ -155,7 +155,15 @@ export async function performAnalysis(
       history: dealHistory(deal),
     });
 
-    logUsage(dealId, "analysis", MODEL, result.usage.inputTokens, result.usage.outputTokens);
+    logUsage(
+      dealId,
+      "analysis",
+      MODEL,
+      result.usage.inputTokens,
+      result.usage.outputTokens,
+      result.usage.cacheCreationTokens ?? 0,
+      result.usage.cacheReadTokens ?? 0
+    );
 
     updateDeal(dealId, {
       channel_url: inputs.channelUrl || deal.channel_url || result.extractedChannelUrl,

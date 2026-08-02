@@ -1213,17 +1213,29 @@ export function logUsage(
   kind: "analysis" | "recommendation" | "brief" | "integration_check" | "extraction",
   model: string,
   inputTokens: number,
-  outputTokens: number
+  outputTokens: number,
+  /**
+   * Cached tokens, which are NOT part of inputTokens.
+   *
+   * The API reports input_tokens as the uncached remainder only. Once a cache
+   * breakpoint is in play that number collapses — a real analysis logged 2 — so
+   * recording it alone made the most expensive call in the product look free.
+   */
+  cacheCreationTokens = 0,
+  cacheReadTokens = 0
 ) {
   db.prepare(
-    "INSERT INTO usage_log (deal_id, kind, model, input_tokens, output_tokens) VALUES (?, ?, ?, ?, ?)"
-  ).run(dealId, kind, model, inputTokens, outputTokens);
+    `INSERT INTO usage_log (deal_id, kind, model, input_tokens, output_tokens,
+       cache_creation_tokens, cache_read_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(dealId, kind, model, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens);
 }
 
 export interface UsageTotals {
   calls: number;
   inputTokens: number;
   outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
 }
 
 export function getUsageTotals(dealId?: number): UsageTotals {
@@ -1231,7 +1243,9 @@ export function getUsageTotals(dealId?: number): UsageTotals {
   const row = db
     .prepare(
       `SELECT COUNT(*) AS calls, COALESCE(SUM(input_tokens),0) AS inputTokens,
-              COALESCE(SUM(output_tokens),0) AS outputTokens FROM usage_log ${where}`
+              COALESCE(SUM(output_tokens),0) AS outputTokens,
+              COALESCE(SUM(cache_creation_tokens),0) AS cacheCreationTokens,
+              COALESCE(SUM(cache_read_tokens),0) AS cacheReadTokens FROM usage_log ${where}`
     )
     .get(...(dealId != null ? [dealId] : [])) as UsageTotals;
   return row;
