@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCampaign, getContractDraft, getDeal, getMessages, getNegotiationStyle, getPartnerChannels, getPlaybook, getLastRunAt, getRemindersFor, getSetting, getUsageTotals } from "@/lib/db";
+import { ensurePartnerPortalToken, getCampaign, getContractDraft, getDeal, getMessages, getNegotiationStyle, getPartner, getPartnerChannels, getPlaybook, getLastRunAt, getRemindersFor, getSetting, getUsageTotals } from "@/lib/db";
+import ContactStrip from "@/components/deal/ContactStrip";
 import RemindersBlock from "@/components/RemindersBlock";
 import type { MeasurementWindows } from "@/lib/measurement";
 import { describeOverrides, parseOverrides } from "@/lib/campaigns";
@@ -428,6 +429,21 @@ export default async function DealPage({
           ...(showFulfillment
             ? [{ name: "Fulfillment", node: (
                 <div className="space-y-4 max-w-4xl">
+                  {/* Who to talk to, above the work about them. Every attention item
+                      that says "check in with the creator" lands on this tab, so their
+                      email and portal link have to be here, not on the partner page. */}
+                  {(() => {
+                    const partner = deal.partner_id != null ? getPartner(deal.partner_id) : null;
+                    return (
+                      <ContactStrip
+                        creator={deal.creator}
+                        email={partner?.email ?? null}
+                        portalPath={
+                          partner ? `/portal/${ensurePartnerPortalToken(partner.id)}` : null
+                        }
+                      />
+                    );
+                  })()}
                   {/* Fulfillment is a sequence, not a pile: finished phases fold to a
                       checkmark line so the current one is what the eye lands on. */}
                   <details open={contract?.status !== "confirmed"} className="group">
@@ -475,6 +491,13 @@ export default async function DealPage({
                             creator={deal.creator}
                             tasks={onboarding}
                             hasPartner={deal.partner_id != null}
+                            senderName={(getSetting<Record<string, string>>("brand_profile")?.senderName ?? "")}
+                            brandName={(getSetting<Record<string, string>>("brand_profile")?.brandName ?? "")}
+                            portalPath={
+                              deal.partner_id != null
+                                ? `/portal/${ensurePartnerPortalToken(deal.partner_id)}`
+                                : null
+                            }
                           />
                           <ContentItemsBlock
                             dealId={deal.id}
@@ -486,6 +509,11 @@ export default async function DealPage({
                             senderName={(getSetting<Record<string, string>>("brand_profile")?.senderName ?? "")}
                             requirements={briefReqs.requirements}
                             minIntegrationSeconds={briefReqs.minIntegrationSeconds}
+                            portalPath={
+                              deal.partner_id != null
+                                ? `/portal/${ensurePartnerPortalToken(deal.partner_id)}`
+                                : null
+                            }
                           />
                           <ShipmentsBlock dealId={deal.id} shipments={shipments} />
                         </div>

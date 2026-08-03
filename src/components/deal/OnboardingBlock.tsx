@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import type { OnboardingTask, TaskOwner } from "@/lib/fulfillment-types";
 import { ONBOARDING_ICON } from "@/lib/fulfillment-types";
+import { onboardingEmail } from "@/lib/nudge-email";
 import {
   addOnboardingTaskAction,
   deleteOnboardingTaskAction,
@@ -29,10 +30,13 @@ function TaskRow({
   task,
   dealId,
   creator,
+  onGenerateEmail,
 }: {
   task: OnboardingTask;
   dealId: number;
   creator: string;
+  /** Set only on the welcome-email step — the one task whose output is a message. */
+  onGenerateEmail?: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
@@ -125,6 +129,15 @@ function TaskRow({
         </button>
       )}
 
+      {onGenerateEmail && (
+        <button
+          onClick={onGenerateEmail}
+          className="text-xs font-medium text-brand-dark hover:underline shrink-0"
+        >
+          Generate email
+        </button>
+      )}
+
       {done && task.completed_at && (
         <span className="text-xs text-slate-400 font-tabular shrink-0">
           {shared ? `done ${task.completed_at}` : task.completed_at}
@@ -158,20 +171,46 @@ export default function OnboardingBlock({
   creator,
   tasks,
   hasPartner,
+  senderName = "",
+  brandName = "",
+  portalPath = null,
 }: {
   dealId: number;
   creator: string;
   tasks: OnboardingTask[];
   hasPartner: boolean;
+  /** For the generated welcome email. */
+  senderName?: string;
+  brandName?: string;
+  portalPath?: string | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
   const [owner, setOwner] = useState<TaskOwner>("us");
+  // The welcome-email composer. Prefilled from whatever setup already exists — the
+  // tracking link and coupon are pulled from their sibling tasks at open time, so
+  // generating the email after issuing the link includes it, and before doesn't.
+  const [welcomeText, setWelcomeText] = useState<string | null>(null);
 
   const partnerTasks = tasks.filter((t) => t.deal_id == null);
   const dealTasks = tasks.filter((t) => t.deal_id != null);
   const outstanding = tasks.filter((t) => t.status !== "done").length;
+
+  const openWelcome = () =>
+    setWelcomeText(
+      onboardingEmail({
+        creator,
+        brandName: brandName || undefined,
+        trackingLink: tasks.find((t) => t.kind === "tracking_link")?.value ?? null,
+        couponCode: tasks.find((t) => t.kind === "coupon_code")?.value ?? null,
+        portalUrl: portalPath ? `${window.location.origin}${portalPath}` : null,
+        senderName,
+      })
+    );
+
+  const emailProp = (t: OnboardingTask) =>
+    t.kind === "onboarding_email" ? { onGenerateEmail: openWelcome } : {};
 
   if (tasks.length === 0) {
     return (
@@ -235,7 +274,7 @@ export default function OnboardingBlock({
             {creator} — one-time setup
           </div>
           {partnerTasks.map((t) => (
-            <TaskRow key={t.id} task={t} dealId={dealId} creator={creator} />
+            <TaskRow key={t.id} task={t} dealId={dealId} creator={creator} {...emailProp(t)} />
           ))}
         </div>
       )}
@@ -246,8 +285,33 @@ export default function OnboardingBlock({
             This collaboration
           </div>
           {dealTasks.map((t) => (
-            <TaskRow key={t.id} task={t} dealId={dealId} creator={creator} />
+            <TaskRow key={t.id} task={t} dealId={dealId} creator={creator} {...emailProp(t)} />
           ))}
+        </div>
+      )}
+
+      {welcomeText !== null && (
+        <div className="mt-3 space-y-2">
+          <textarea
+            value={welcomeText}
+            onChange={(e) => setWelcomeText(e.target.value)}
+            rows={12}
+            className="w-full border border-slate-200 rounded-md px-3 py-2 text-xs text-slate-800 font-mono resize-y"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigator.clipboard.writeText(welcomeText).catch(() => {})}
+              className="text-xs font-medium border border-slate-200 hover:border-slate-400 text-slate-700 rounded-md px-2.5 py-1"
+            >
+              Copy email
+            </button>
+            <button onClick={() => setWelcomeText(null)} className="text-xs text-slate-500 px-1">
+              Close
+            </button>
+            <span className="text-[11px] text-slate-400">
+              Attach the campaign brief yourself — nothing is sent from here.
+            </span>
+          </div>
         </div>
       )}
 

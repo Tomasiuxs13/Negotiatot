@@ -6,6 +6,7 @@ import { CONTENT_STATUS_FLOW, CONTENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL, pendi
 import { isOverdue } from "@/lib/fulfillment-rules";
 import { DEFAULT_DRAFT_LEAD_DAYS, draftDueDate } from "@/lib/timeline";
 import { changeRequestEmail } from "@/lib/review-email";
+import { awaitingPostEmail, chaseDraftEmail } from "@/lib/nudge-email";
 import type { BriefRequirement } from "@/lib/brief-requirements";
 import IntegrationCheckBlock from "./IntegrationCheckBlock";
 import {
@@ -42,6 +43,7 @@ export function ContentItemsBlock({
   senderName = "",
   requirements = [],
   minIntegrationSeconds = null,
+  portalPath = null,
 }: {
   dealId: number;
   items: ContentItem[];
@@ -53,6 +55,8 @@ export function ContentItemsBlock({
   /** The campaign brief's checkable obligations; empty when no brief was read. */
   requirements?: BriefRequirement[];
   minIntegrationSeconds?: number | null;
+  /** The creator's portal path, quoted inside nudge emails as a full URL. */
+  portalPath?: string | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
@@ -62,6 +66,31 @@ export function ContentItemsBlock({
   const [composing, setComposing] = useState<number | null>(null);
   const [emailText, setEmailText] = useState("");
   const [reviewError, setReviewError] = useState<string | null>(null);
+  // The nudge composer — copy-only, since a chase changes no state, only the silence.
+  const [nudging, setNudging] = useState<number | null>(null);
+  const [nudgeText, setNudgeText] = useState("");
+
+  const portalUrl = () =>
+    portalPath ? `${window.location.origin}${portalPath}` : null;
+
+  const openNudge = (item: ContentItem) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const common = {
+      creator,
+      itemTitle: item.title,
+      publishDate: item.due_date,
+      today,
+      senderName,
+      portalUrl: portalUrl(),
+    };
+    setNudgeText(
+      item.status === "approved"
+        ? awaitingPostEmail(common)
+        : chaseDraftEmail({ ...common, leadDays: draftLeadDays })
+    );
+    setComposing(null);
+    setNudging(item.id);
+  };
 
   const add = () => {
     if (!draft.title.trim()) return;
@@ -124,6 +153,21 @@ export function ContentItemsBlock({
                       : "no date"}
                   {overdue && " · overdue"}
                 </span>
+                {/* The chase, where the chase actually happens. Every "check in with the
+                    creator" journey lands on this row — before this button it landed on
+                    "Mark submitted", which marks work the creator hasn't done. */}
+                {(item.status === "planned" ||
+                  item.status === "in_production" ||
+                  item.status === "approved") && (
+                  <button
+                    onClick={() => (nudging === item.id ? setNudging(null) : openNudge(item))}
+                    className={`text-xs font-medium hover:underline ${
+                      overdue ? "text-amber-700" : "text-slate-500"
+                    }`}
+                  >
+                    Nudge
+                  </button>
+                )}
                 {next && (
                   <button
                     onClick={() =>
@@ -149,6 +193,30 @@ export function ContentItemsBlock({
                   <span className="material-symbols-outlined" style={{ fontSize: 15 }}>close</span>
                 </button>
               </div>
+              {nudging === item.id && (
+                <div className="mt-1.5 pl-1 space-y-2">
+                  <textarea
+                    value={nudgeText}
+                    onChange={(e) => setNudgeText(e.target.value)}
+                    rows={10}
+                    className="w-full border border-slate-200 rounded-md px-3 py-2 text-xs text-slate-800 font-mono resize-y"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => navigator.clipboard.writeText(nudgeText).catch(() => {})}
+                      className="text-xs font-medium border border-slate-200 hover:border-slate-400 text-slate-700 rounded-md px-2.5 py-1"
+                    >
+                      Copy email
+                    </button>
+                    <button onClick={() => setNudging(null)} className="text-xs text-slate-500 px-1">
+                      Close
+                    </button>
+                    <span className="text-[11px] text-slate-400">
+                      Copy it into your mail client — nothing is sent from here.
+                    </span>
+                  </div>
+                </div>
+              )}
               {item.status === "submitted" && item.draft_url && (
                 <div className="mt-1.5 pl-1 space-y-2">
                   <div className="flex items-center gap-3">

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import PartnerProfile from "@/components/partners/PartnerProfile";
 import { ensurePartnerPortalToken, getPartner, getPartnerChannels, getPartnerDeals, getRemindersFor } from "@/lib/db";
 import RemindersBlock from "@/components/RemindersBlock";
+import ContactStrip from "@/components/deal/ContactStrip";
 import { getPartnerOnboarding } from "@/lib/fulfillment";
 import { partnerStats, partnerStatus } from "@/lib/partners";
 import PartnerStatusPill from "@/components/partners/PartnerStatusPill";
@@ -59,16 +60,13 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
         <RemindersBlock reminders={getRemindersFor({ partnerId: partner.id })} partnerId={partner.id} />
 
         {/* The creator's own window into their collaborations — the link is the
-            credential, so share it only with them. */}
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4 flex items-center gap-3 flex-wrap">
-          <span className="text-xs font-medium text-slate-600">Partner portal link</span>
-          <code className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 break-all">
-            /portal/{ensurePartnerPortalToken(partner.id)}
-          </code>
-          <span className="text-[11px] text-slate-400">
-            Their deliverables, delivery and payment status — share it with {partner.name} only.
-          </span>
-        </div>
+            credential, so share it only with them. Copied as a full URL: a pasted
+            relative path is a broken link. */}
+        <ContactStrip
+          creator={partner.name}
+          email={partner.email}
+          portalPath={`/portal/${ensurePartnerPortalToken(partner.id)}`}
+        />
 
         <div className="grid grid-cols-5 gap-3">
           {kpis.map((k) => (

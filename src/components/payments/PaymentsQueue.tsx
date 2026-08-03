@@ -94,7 +94,7 @@ export default function PaymentsQueue({
                 </span>
               </td>
               <td className="px-4 py-3">
-                <Link href={`/deals/${p.deal_id}`} className="font-medium text-slate-900 hover:text-brand">
+                <Link href={`/deals/${p.deal_id}?tab=fulfillment`} className="font-medium text-slate-900 hover:text-brand">
                   {p.creator}
                 </Link>
               </td>

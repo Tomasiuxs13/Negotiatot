@@ -120,7 +120,8 @@ in-progress — an outstanding welcome email is a courtesy; an outstanding track
 makes every result unattributable. A filter pill surfaces creators missing tracking setup.
 
 `/partners/[id]` — profile with contact and legal details, per-platform channels and their
-average views, deal history, and the creator's portal link.
+average views, deal history, and the creator's portal link (copied as a full URL — the
+same contact strip the deal's Fulfillment tab carries).
 
 ### Payments
 `/payments` — *Everything owed across deals*
@@ -182,7 +183,7 @@ fake-follower share, view trend — each graded against the playbook with a reas
 |---|---|
 | **Analysis** | Verdict (accept / negotiate / decline), reasoning, red flags, the numbers behind them, audience-data editor |
 | **Negotiation** | Round-by-round thread, the Copilot's recommendation with a single ready-to-send draft, on-demand tone rewrite, reply capture |
-| **Fulfillment** *(signed deals)* | Contract upload and parsing, generated contract draft, onboarding checklist, content items with the draft review loop, integration check, product delivery, payments |
+| **Fulfillment** *(signed deals)* | Contact strip (creator email + copyable portal URL), contract upload and parsing, generated contract draft, onboarding checklist with a generated welcome email, content items with the draft review loop and per-item nudge emails, integration check, product delivery, payments |
 | **Actuals** *(delivered deals)* | Per-item views, clicks, orders and revenue, with the measurement window state |
 | **History** | Every model call for this deal: kind, model, tokens, cache reads, cost |
 
@@ -248,6 +249,17 @@ whether it counts toward the averages.
 **Portal → your worklist.** A creator submitting a draft moves the item to *submitted*,
 which puts it on your board and in the attention panel with a review clock running from
 submission — not from when you happen to open the deal.
+
+**Worklist → an email in hand.** Every journey that ends "contact the creator" lands on
+the Fulfillment tab, which carries the creator's email and copyable portal URL, and
+generates the message itself: a per-item **nudge** whose wording follows the item's actual
+state (draft coming due → heads-up; deadline passed → buffer warning; slot missed →
+renegotiate the date, blame-free; approved but not live → "when is it going up"), and a
+**welcome email** behind the onboarding checklist's email step that includes only the
+setup that exists — an unissued coupon is omitted, never rendered as a blank. All
+deterministic like the change-request email: instant, editable, copied never sent. Portal
+URLs are assembled client-side from the browser's origin, because a copied relative path
+is a broken link.
 
 **Everything → the attention panel.** Every domain above contributes; grouping and owner
 tagging keep it readable as it grows.
