@@ -1,17 +1,20 @@
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import ContentBoard from "@/components/content/ContentBoard";
+import ContentCalendar from "@/components/content/ContentCalendar";
 import ContentTable from "@/components/content/ContentTable";
 import { getDeals, getCampaigns, getSetting } from "@/lib/db";
-import { getAllContentItems } from "@/lib/fulfillment";
+import { getAllContentItems, getAllOnboardingTasks } from "@/lib/fulfillment";
 import { dealPlatforms } from "@/lib/types";
 import {
+  blockingSetup,
   needsAttention,
   nextAction,
   resolvePlatform,
   urgencyScore,
   type ContentRow,
 } from "@/lib/content-queue";
+import { DEFAULT_MIN_GAP_DAYS } from "@/lib/content-calendar";
 import { buildQuery, sortBy, type SortDir } from "@/lib/table-sort";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +38,7 @@ export default async function ContentPage({
     focus?: string;
     sort?: string;
     dir?: string;
+    month?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -47,16 +51,22 @@ export default async function ContentPage({
     sort = "",
     dir = "asc",
   } = params;
-  const isList = view === "list";
   const onlyAttention = focus === "attention";
 
   const today = new Date().toISOString().slice(0, 10);
-  const draftLeadDays = Number(getSetting<Record<string, number>>("workflow")?.draftLeadDays ?? 10);
+  const month = /^\d{4}-\d{2}$/.test(params.month ?? "") ? params.month! : today.slice(0, 7);
+  const workflow = getSetting<Record<string, number>>("workflow");
+  const draftLeadDays = Number(workflow?.draftLeadDays ?? 10);
+  const minGapDays = Number(workflow?.minPostGapDays ?? DEFAULT_MIN_GAP_DAYS);
 
   // Content belongs to a deal, and a deliverable read without knowing whose it is or
   // which campaign it serves is unusable — so the deal is joined in here rather than
   // being fetched per card.
   const dealById = new Map(getDeals().map((d) => [d.id, d]));
+  // The setup checklist is joined in here for the same reason: the affiliate link and
+  // coupon code are what make a result measurable, and an item whose tracking doesn't
+  // exist yet is not really on schedule however good its dates look.
+  const onboarding = getAllOnboardingTasks();
   const allRows: ContentRow[] = [];
   for (const item of getAllContentItems()) {
     const deal = dealById.get(item.deal_id);
@@ -67,6 +77,7 @@ export default async function ContentPage({
       creator: deal.creator,
       campaign: deal.campaign?.trim() || null,
       platform: resolvePlatform(item, dealPlatforms(deal)),
+      blockedBy: blockingSetup(onboarding, deal.id, deal.partner_id),
     });
   }
 
@@ -117,12 +128,13 @@ export default async function ContentPage({
               {[
                 { key: "board", label: "Board", icon: "view_kanban" },
                 { key: "list", label: "List", icon: "view_list" },
+                { key: "calendar", label: "Calendar", icon: "calendar_month" },
               ].map((v) => (
                 <Link
                   key={v.key}
                   href={query({ view: v.key })}
                   className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded transition-colors ${
-                    (v.key === "list") === isList
+                    v.key === view
                       ? "bg-white text-slate-900 shadow-sm"
                       : "text-slate-500 hover:text-slate-800"
                   }`}
@@ -209,7 +221,7 @@ export default async function ContentPage({
 
           {(campaign || q || platform || sort || onlyAttention) && (
             <Link
-              href={isList ? "/content?view=list" : "/content"}
+              href={view === "board" ? "/content" : `/content?view=${view}`}
               className="text-xs text-brand-dark font-medium hover:underline"
             >
               Clear filters
@@ -226,13 +238,22 @@ export default async function ContentPage({
               Fulfillment tab.
             </p>
           </div>
-        ) : isList ? (
+        ) : view === "list" ? (
           <ContentTable
             rows={listed}
             today={today}
             draftLeadDays={draftLeadDays}
             sort={sort}
             dir={dir as SortDir}
+            hrefFor={query}
+          />
+        ) : view === "calendar" ? (
+          <ContentCalendar
+            rows={rows}
+            month={month}
+            today={today}
+            draftLeadDays={draftLeadDays}
+            minGapDays={minGapDays}
             hrefFor={query}
           />
         ) : (

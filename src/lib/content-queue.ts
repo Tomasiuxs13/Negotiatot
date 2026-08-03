@@ -8,7 +8,8 @@
  * are different kinds of stuck, and only one of them is your problem to solve today.
  */
 
-import type { ContentItem, ContentStatus, TaskOwner } from "./fulfillment-types";
+import type { ContentItem, ContentStatus, OnboardingTask, TaskOwner } from "./fulfillment-types";
+import { BLOCKING_KINDS } from "./fulfillment-types";
 import { isOverdue } from "./fulfillment-rules";
 import {
   DEFAULT_DRAFT_LEAD_DAYS,
@@ -25,6 +26,40 @@ export interface ContentRow {
   campaign: string | null;
   /** What to display: the item's own platform, or the deal's when it is unambiguous. */
   platform: string | null;
+  /**
+   * Unfinished setup tasks this item's tracking depends on — the affiliate link and the
+   * coupon code. A video can go live perfectly and still return nothing measurable if
+   * these are missing, which is the one failure you cannot fix after the fact.
+   */
+  blockedBy: string[];
+}
+
+/**
+ * The setup tasks standing between this deal and a measurable result, by label.
+ *
+ * Scope matters: registration and the affiliate link are issued once per creator, so a
+ * task with no deal_id belongs to every deal that partner has. A coupon code is
+ * campaign-specific and hangs off the deal. Matching only on deal_id would miss the
+ * partner-wide link entirely — which is the one that most often isn't there.
+ */
+export function blockingSetup(
+  tasks: Pick<OnboardingTask, "status" | "kind" | "deal_id" | "partner_id" | "label">[],
+  dealId: number,
+  partnerId: number | null
+): string[] {
+  return tasks
+    .filter(
+      (t) =>
+        t.status !== "done" &&
+        BLOCKING_KINDS.includes(t.kind) &&
+        (t.deal_id === dealId || (t.deal_id == null && t.partner_id === partnerId))
+    )
+    .map((t) => t.label);
+}
+
+/** Statuses where the shoot is under way, so missing tracking is now urgent. */
+function workStarted(status: ContentStatus): boolean {
+  return status !== "planned";
 }
 
 /**
@@ -32,6 +67,7 @@ export interface ContentRow {
  * card offering three buttons is a status display; a card offering one is a worklist.
  */
 export type ActionKind =
+  | "blocked"
   | "set_date"
   | "chase_draft"
   | "await_draft"
@@ -59,6 +95,22 @@ export function nextAction(
   leadDays = DEFAULT_DRAFT_LEAD_DAYS
 ): NextAction {
   const item = row.item;
+
+  // Tracking that doesn't exist outranks everything else still to do, but only once
+  // filming has started — chasing a link for a video nobody has begun is noise, and on a
+  // posted item it is too late to be an action, so it stays a flag rather than a task.
+  if (
+    row.blockedBy.length > 0 &&
+    workStarted(item.status) &&
+    item.status !== "posted" &&
+    item.status !== "verified"
+  ) {
+    return {
+      kind: "blocked",
+      label: `Blocked: ${row.blockedBy.join(" and ").toLowerCase()}`,
+      owner: "us",
+    };
+  }
 
   switch (item.status) {
     case "planned":
@@ -142,6 +194,7 @@ export function needsAttention(
   leadDays = DEFAULT_DRAFT_LEAD_DAYS
 ): boolean {
   const item = row.item;
+  if (row.blockedBy.length > 0 && workStarted(item.status)) return true;
   if (isOverdue(item, today)) return true;
   if (shouldRequestDraft(item, today, leadDays)) return true;
   if (item.status === "submitted") {

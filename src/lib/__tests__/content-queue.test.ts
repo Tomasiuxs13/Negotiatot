@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  blockingSetup,
   daysInStatus,
   groupByStatus,
   leadDate,
@@ -41,6 +42,7 @@ const row = (over: Partial<ContentItem> = {}, rest: Partial<ContentRow> = {}): C
   creator: "TheOldCoupleOutdoors",
   campaign: null,
   platform: "youtube",
+  blockedBy: [],
   ...rest,
 });
 
@@ -85,6 +87,75 @@ describe("nextAction", () => {
     const done = nextAction(row({ status: "verified", actual_views: 42_000 }), TODAY);
     expect(done.kind).toBe("done");
     expect(done.owner).toBeNull();
+  });
+});
+
+describe("blockingSetup", () => {
+  const task = (over: Partial<Parameters<typeof blockingSetup>[0][number]> = {}) => ({
+    status: "todo" as const,
+    kind: "tracking_link" as const,
+    deal_id: null,
+    partner_id: 5,
+    label: "Affiliate tracking link issued",
+    ...over,
+  });
+
+  it("catches a partner-wide link that no deal_id points at", () => {
+    // The affiliate link is issued once per creator, so it carries no deal_id. Matching
+    // on deal_id alone would miss the one that is most often missing.
+    expect(blockingSetup([task()], 10, 5)).toEqual(["Affiliate tracking link issued"]);
+  });
+
+  it("catches a deal-scoped coupon code", () => {
+    expect(
+      blockingSetup([task({ kind: "coupon_code", deal_id: 10, label: "Send campaign coupon code" })], 10, 5)
+    ).toEqual(["Send campaign coupon code"]);
+  });
+
+  it("ignores another partner's tasks and another deal's", () => {
+    expect(blockingSetup([task({ partner_id: 99 })], 10, 5)).toEqual([]);
+    expect(blockingSetup([task({ deal_id: 77 })], 10, 5)).toEqual([]);
+  });
+
+  it("ignores completed tasks and non-blocking ones", () => {
+    expect(blockingSetup([task({ status: "done" })], 10, 5)).toEqual([]);
+    expect(blockingSetup([task({ kind: "onboarding_email" })], 10, 5)).toEqual([]);
+  });
+});
+
+describe("blocked content", () => {
+  const blocked = { blockedBy: ["Affiliate tracking link issued"] };
+
+  it("outranks every other action once filming has started", () => {
+    const a = nextAction(row({ status: "in_production", due_date: "2026-08-08" }, blocked), TODAY);
+    expect(a.kind).toBe("blocked");
+    expect(a.owner).toBe("us");
+    // Without it, this same item would be a draft chase.
+    expect(nextAction(row({ status: "in_production", due_date: "2026-08-08" }), TODAY).kind).toBe(
+      "chase_draft"
+    );
+  });
+
+  it("stays quiet on a planned item — nobody has started filming yet", () => {
+    expect(nextAction(row({ status: "planned", due_date: "2026-09-30" }, blocked), TODAY).kind).toBe(
+      "await_draft"
+    );
+  });
+
+  it("does not become an action once the video is already live", () => {
+    // The link cannot be applied retroactively, so it is a flag, not a task.
+    expect(
+      nextAction(row({ status: "posted", posted_at: "2026-08-01" }, blocked), TODAY).kind
+    ).toBe("check");
+  });
+
+  it("counts as needing attention from the moment work starts", () => {
+    expect(needsAttention(row({ status: "in_production", due_date: "2026-09-30" }, blocked), TODAY)).toBe(
+      true
+    );
+    expect(needsAttention(row({ status: "planned", due_date: "2026-09-30" }, blocked), TODAY)).toBe(
+      false
+    );
   });
 });
 

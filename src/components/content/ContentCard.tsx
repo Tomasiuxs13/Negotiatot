@@ -63,7 +63,11 @@ export default function ContentCard({
   return (
     <div
       className={`bg-white rounded-lg p-3 shadow-sm border transition-shadow hover:shadow-md ${
-        attention ? "border-amber-300" : "border-slate-200"
+        action.kind === "blocked"
+          ? "border-red-300"
+          : attention
+            ? "border-amber-300"
+            : "border-slate-200"
       }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -97,6 +101,17 @@ export default function ContentCard({
           </span>
         )}
       </div>
+
+      {/* Once it is live the missing link is no longer a task — but it still explains why
+          the numbers will never arrive, so it stays visible rather than disappearing. */}
+      {action.kind !== "blocked" && row.blockedBy.length > 0 && (
+        <p
+          className="mt-2 text-[11px] text-red-600 font-medium truncate"
+          title={row.blockedBy.join(", ")}
+        >
+          untracked · {row.blockedBy.join(" and ").toLowerCase()}
+        </p>
+      )}
 
       {(lead || (item.revision_round ?? 0) > 1) && (
         <div className="mt-2 flex items-center gap-2 flex-wrap">
@@ -158,7 +173,11 @@ export default function ContentCard({
           <div className="flex items-center justify-between gap-2">
             <span
               className={`text-[11px] font-medium rounded px-1.5 py-0.5 ${
-                action.owner ? OWNER_STYLE[action.owner] : "bg-emerald-50 text-emerald-700"
+                action.kind === "blocked"
+                  ? "bg-red-50 text-red-700"
+                  : action.owner
+                    ? OWNER_STYLE[action.owner]
+                    : "bg-emerald-50 text-emerald-700"
               }`}
             >
               {action.label}

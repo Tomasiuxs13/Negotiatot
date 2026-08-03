@@ -86,8 +86,22 @@ export default function ContentTable({
                     {row.creator}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-slate-600 max-w-64 truncate" title={item.title}>
-                  {item.title}
+                {/* Flex, not a truncating cell: a long title must not be able to clip the
+                    one marker on the row that says the result will never be measurable. */}
+                <td className="px-4 py-3 text-slate-600 max-w-64">
+                  <span className="flex items-center gap-2">
+                    <span className="truncate" title={item.title}>
+                      {item.title}
+                    </span>
+                    {row.blockedBy.length > 0 && (
+                      <span
+                        className="shrink-0 text-[10px] font-semibold bg-red-50 text-red-700 rounded-full px-1.5 py-0.5"
+                        title={`Tracking setup missing: ${row.blockedBy.join(", ")}`}
+                      >
+                        untracked
+                      </span>
+                    )}
+                  </span>
                 </td>
                 <td className="px-4 py-3 text-slate-500">
                   {meta ? (
@@ -118,7 +132,15 @@ export default function ContentTable({
                   {overdue && " · overdue"}
                 </td>
                 <td className="px-4 py-3 text-xs whitespace-nowrap">
-                  <span className={action.owner === "us" ? "text-brand-dark font-medium" : "text-slate-500"}>
+                  <span
+                    className={
+                      action.kind === "blocked"
+                        ? "text-red-600 font-medium"
+                        : action.owner === "us"
+                          ? "text-brand-dark font-medium"
+                          : "text-slate-500"
+                    }
+                  >
                     {action.label}
                   </span>
                 </td>
