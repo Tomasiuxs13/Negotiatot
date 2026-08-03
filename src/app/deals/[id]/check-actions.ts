@@ -111,6 +111,10 @@ export async function runIntegrationCheck(
     // it twice.
     try {
       revalidatePath(`/deals/${deal.id}`);
+      // The check result is what flips the Content board's next action from "run the
+      // check" to "log the results", so that board has to hear about it too.
+      revalidatePath("/content");
+      revalidatePath("/");
     } catch (err) {
       console.error("revalidate after integration check failed:", err);
     }

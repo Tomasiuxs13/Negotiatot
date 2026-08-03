@@ -171,6 +171,9 @@ export async function saveActuals(
   revalidatePath("/benchmarks");
   revalidatePath("/");
   revalidatePath("/pipeline");
+  // Actual views are what turn a partner's committed spend into a real CPM, so the
+  // partners table is reading the number this action just changed.
+  revalidatePath("/partners");
   return {};
 }
 

@@ -5,6 +5,19 @@ import { getPartnerByToken, getPartnerDeals, savePartnerLegalDetails } from "@/l
 import { getContentItems, submitDraft, updateContentItem } from "@/lib/fulfillment";
 
 /**
+ * A creator's write lands on every screen that reads content status, not just the deal
+ * page. A submitted draft is meant to appear on the Content board and start its review
+ * clock on the dashboard the moment it arrives — revalidating only the deal page is how
+ * a draft sits unnoticed until somebody happens to open that one deal.
+ */
+function refreshContentSurfaces(dealId: number) {
+  revalidatePath(`/deals/${dealId}`);
+  revalidatePath("/content");
+  revalidatePath("/pipeline");
+  revalidatePath("/");
+}
+
+/**
  * The creator reports their own live URL. Token-scoped like every public write: the
  * item must belong to one of THIS partner's deals, the URL must be http(s), and the
  * status only advances from approved/posted — a creator can't verify their own work.
@@ -28,7 +41,7 @@ export async function submitLiveUrlAction(token: string, contentItemId: number, 
     // so a URL pasted early can't skip the review loop.
     ...(item.status === "approved" || item.status === "posted" ? { status: "posted" as const } : {}),
   });
-  revalidatePath(`/deals/${item.deal_id}`);
+  refreshContentSurfaces(item.deal_id);
   return {};
 }
 
@@ -45,7 +58,7 @@ export async function submitDraftAction(token: string, contentItemId: number, ur
   if (!submitDraft(contentItemId, trimmed)) {
     return { error: "This item is past the draft stage — contact us to change it." };
   }
-  revalidatePath(`/deals/${item.deal_id}`);
+  refreshContentSurfaces(item.deal_id);
   return {};
 }
 
