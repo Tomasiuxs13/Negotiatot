@@ -4,9 +4,10 @@ import ContentBoard from "@/components/content/ContentBoard";
 import ContentCalendar from "@/components/content/ContentCalendar";
 import ContentTable from "@/components/content/ContentTable";
 import { getDeals, getCampaigns, getSetting } from "@/lib/db";
-import { getAllContentItems, getAllOnboardingTasks } from "@/lib/fulfillment";
+import { getAllContentItems, getAllOnboardingTasks, getAllShipments } from "@/lib/fulfillment";
 import { dealPlatforms } from "@/lib/types";
 import {
+  awaitingShipment,
   blockingSetup,
   needsAttention,
   nextAction,
@@ -67,6 +68,9 @@ export default async function ContentPage({
   // coupon code are what make a result measurable, and an item whose tracking doesn't
   // exist yet is not really on schedule however good its dates look.
   const onboarding = getAllOnboardingTasks();
+  // Shipments for the same reason again, one step earlier: a creator cannot film what
+  // has not arrived, and without this the board reads an unposted parcel as a late draft.
+  const shipments = getAllShipments();
   const allRows: ContentRow[] = [];
   for (const item of getAllContentItems()) {
     const deal = dealById.get(item.deal_id);
@@ -78,6 +82,7 @@ export default async function ContentPage({
       campaign: deal.campaign?.trim() || null,
       platform: resolvePlatform(item, dealPlatforms(deal)),
       blockedBy: blockingSetup(onboarding, deal.id, deal.partner_id),
+      awaitingProduct: awaitingShipment(shipments, deal.id),
     });
   }
 

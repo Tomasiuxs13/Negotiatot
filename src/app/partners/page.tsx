@@ -2,6 +2,9 @@ import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import NewPartnerButton from "@/components/partners/NewPartnerButton";
 import { getPartnerChannels, getPartnerDeals, getPartners } from "@/lib/db";
+import { getAllOnboardingTasks } from "@/lib/fulfillment";
+import { setupProgress, setupState } from "@/lib/setup-progress";
+import { blockingLabel } from "@/lib/fulfillment-types";
 import { parseTags, partnerStats, partnerStatus } from "@/lib/partners";
 import PartnerStatusPill from "@/components/partners/PartnerStatusPill";
 import DeletePartnerButton from "@/components/partners/DeletePartnerButton";
@@ -24,14 +27,19 @@ export const dynamic = "force-dynamic";
 export default async function PartnersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; sort?: string; dir?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; setup?: string; sort?: string; dir?: string }>;
 }) {
   const params = await searchParams;
-  const { q = "", status = "", sort = "", dir = "desc" } = params;
+  const { q = "", status = "", setup = "", sort = "", dir = "desc" } = params;
   const needle = q.trim().toLowerCase();
+
+  // Onboarding is partner-scoped by design, so "is this creator ready" belongs here
+  // rather than being rediscovered one deal page at a time.
+  const onboarding = getAllOnboardingTasks();
 
   const rows = getPartners().map((p) => {
     const deals = getPartnerDeals(p.id);
+    const progress = setupProgress(onboarding, p.id);
     return {
       partner: p,
       tags: parseTags(p.tags),
@@ -39,6 +47,8 @@ export default async function PartnersPage({
       partnerDeals: deals,
       status: partnerStatus(deals),
       stats: partnerStats(deals),
+      progress,
+      setup: setupState(progress),
     };
   });
 
@@ -51,6 +61,9 @@ export default async function PartnersPage({
       )
     : rows;
   if (status) filtered = filtered.filter((r) => r.status === status);
+  if (setup === "blocked") filtered = filtered.filter((r) => r.setup === "blocked");
+  else if (setup === "incomplete")
+    filtered = filtered.filter((r) => r.setup === "blocked" || r.setup === "in_progress");
 
   // Name order is the sensible default; anything else you ask for wins.
   if (sort) {
@@ -107,7 +120,24 @@ export default async function PartnersPage({
               })).filter((o) => o.count > 0),
             ]}
           />
-          {(q || status || sort) && (
+          {/* Its own control rather than another status pill: setup is orthogonal to the
+              lifecycle — a creator can be mid-delivery and still have no tracking link. */}
+          {rows.some((r) => r.setup === "blocked") && (
+            <Link
+              href={href({ setup: setup === "blocked" ? "" : "blocked" })}
+              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                setup === "blocked"
+                  ? "bg-red-600 text-white border-red-600"
+                  : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+              }`}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                link_off
+              </span>
+              {rows.filter((r) => r.setup === "blocked").length} missing tracking setup
+            </Link>
+          )}
+          {(q || status || setup || sort) && (
             <Link href="/partners" className="text-xs text-slate-500 hover:text-slate-800">
               Clear
             </Link>
@@ -132,6 +162,7 @@ export default async function PartnersPage({
                 <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
                   <SortHeader label="Partner" href={sortHref("name")} active={sort === "name"} dir={dir as SortDir} />
                   <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Setup</th>
                   <th className="px-4 py-3 font-medium">Channels</th>
                   <SortHeader label="Deals" align="right" href={sortHref("deals")} active={sort === "deals"} dir={dir as SortDir} />
                   <SortHeader label="Committed" align="right" href={sortHref("committed")} active={sort === "committed"} dir={dir as SortDir} />
@@ -142,7 +173,7 @@ export default async function PartnersPage({
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(({ partner, tags, channels, status: rowStatus, stats }) => (
+                {filtered.map(({ partner, tags, channels, status: rowStatus, stats, progress, setup: rowSetup }) => (
                   <tr key={partner.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <Link
@@ -166,6 +197,26 @@ export default async function PartnersPage({
                     </td>
                     <td className="px-4 py-3">
                       <PartnerStatusPill status={rowStatus} />
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {rowSetup === "none" ? (
+                        <span className="text-xs text-slate-300">—</span>
+                      ) : rowSetup === "ready" ? (
+                        <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5">
+                          Ready
+                        </span>
+                      ) : rowSetup === "blocked" ? (
+                        <span
+                          className="text-[11px] font-semibold text-red-700 bg-red-50 rounded-full px-2 py-0.5"
+                          title={`Missing: ${blockingLabel(progress!.blockingLeft)}`}
+                        >
+                          No {blockingLabel(progress!.blockingLeft)}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-medium text-slate-500 font-tabular">
+                          {progress!.done}/{progress!.total} done
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-2 text-slate-500">

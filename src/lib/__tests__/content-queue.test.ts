@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  awaitingShipment,
   blockingSetup,
   daysInStatus,
   groupByStatus,
@@ -10,6 +11,7 @@ import {
   urgencyScore,
   type ContentRow,
 } from "../content-queue";
+import { blockingLabel } from "../fulfillment-types";
 import type { ContentItem, ContentStatus } from "../fulfillment-types";
 
 const TODAY = "2026-08-03";
@@ -43,6 +45,7 @@ const row = (over: Partial<ContentItem> = {}, rest: Partial<ContentRow> = {}): C
   campaign: null,
   platform: "youtube",
   blockedBy: [],
+  awaitingProduct: null,
   ...rest,
 });
 
@@ -103,13 +106,13 @@ describe("blockingSetup", () => {
   it("catches a partner-wide link that no deal_id points at", () => {
     // The affiliate link is issued once per creator, so it carries no deal_id. Matching
     // on deal_id alone would miss the one that is most often missing.
-    expect(blockingSetup([task()], 10, 5)).toEqual(["Affiliate tracking link issued"]);
+    expect(blockingSetup([task()], 10, 5)).toEqual(["tracking_link"]);
   });
 
   it("catches a deal-scoped coupon code", () => {
     expect(
-      blockingSetup([task({ kind: "coupon_code", deal_id: 10, label: "Send campaign coupon code" })], 10, 5)
-    ).toEqual(["Send campaign coupon code"]);
+      blockingSetup([task({ kind: "coupon_code", deal_id: 10 })], 10, 5)
+    ).toEqual(["coupon_code"]);
   });
 
   it("ignores another partner's tasks and another deal's", () => {
@@ -123,8 +126,87 @@ describe("blockingSetup", () => {
   });
 });
 
+describe("blockingLabel", () => {
+  it("shortens stored sentences into something that fits a card", () => {
+    // The stored labels are full sentences; two of them concatenated wrap to three lines.
+    expect(blockingLabel(["tracking_link", "coupon_code"])).toBe("tracking link and coupon code");
+  });
+});
+
+describe("awaitingShipment", () => {
+  const ship = (over: Partial<Parameters<typeof awaitingShipment>[0][number]> = {}) => ({
+    deal_id: 10,
+    product: "Trail Pack 40L",
+    status: "to_prepare" as const,
+    ...over,
+  });
+
+  it("reports an unsent parcel", () => {
+    expect(awaitingShipment([ship()], 10)).toEqual({
+      product: "Trail Pack 40L",
+      status: "to_prepare",
+    });
+  });
+
+  it("stops reporting once it has been delivered — the dependency is over", () => {
+    expect(awaitingShipment([ship({ status: "delivered" })], 10)).toBeNull();
+  });
+
+  it("ignores another deal's shipment", () => {
+    expect(awaitingShipment([ship()], 99)).toBeNull();
+  });
+
+  it("leads with the parcel still sitting with us over one already in transit", () => {
+    const result = awaitingShipment(
+      [ship({ product: "In transit", status: "shipped" }), ship({ product: "On my desk" })],
+      10
+    );
+    expect(result?.product).toBe("On my desk");
+  });
+});
+
+describe("content waiting on a product", () => {
+  const unsent = { awaitingProduct: { product: "Trail Pack 40L", status: "to_prepare" as const } };
+  const transit = { awaitingProduct: { product: "Trail Pack 40L", status: "shipped" as const } };
+
+  it("makes it ours, not theirs — they cannot film what has not arrived", () => {
+    // The bug this fixes: the board previously said "waiting on the draft" while the
+    // parcel sat unposted on our desk.
+    const a = nextAction(row({ status: "planned", due_days_after_delivery: 14 }, unsent), TODAY);
+    expect(a.kind).toBe("await_product");
+    expect(a.owner).toBe("us");
+  });
+
+  it("outranks setting a date — a date means nothing before the product ships", () => {
+    expect(nextAction(row({ status: "planned" }, unsent), TODAY).kind).toBe("await_product");
+  });
+
+  it("outranks missing tracking setup", () => {
+    expect(
+      nextAction(row({ status: "planned" }, { ...unsent, blockedBy: ["tracking_link"] }), TODAY).kind
+    ).toBe("await_product");
+  });
+
+  it("gives an in-transit parcel no owner — nobody can act on it", () => {
+    const a = nextAction(row({ status: "planned" }, transit), TODAY);
+    expect(a.kind).toBe("await_product");
+    expect(a.owner).toBeNull();
+    expect(needsAttention(row({ status: "planned" }, transit), TODAY)).toBe(false);
+  });
+
+  it("flags an unsent parcel as needing attention", () => {
+    expect(needsAttention(row({ status: "planned" }, unsent), TODAY)).toBe(true);
+  });
+
+  it("stops applying once filming has started — they evidently have what they needed", () => {
+    expect(nextAction(row({ status: "in_production", due_date: "2026-09-30" }, unsent), TODAY).kind).toBe(
+      "await_draft"
+    );
+  });
+});
+
 describe("blocked content", () => {
-  const blocked = { blockedBy: ["Affiliate tracking link issued"] };
+  const blocked = { blockedBy: ["tracking_link" as const] };
 
   it("outranks every other action once filming has started", () => {
     const a = nextAction(row({ status: "in_production", due_date: "2026-08-08" }, blocked), TODAY);

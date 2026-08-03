@@ -8,8 +8,15 @@
  * are different kinds of stuck, and only one of them is your problem to solve today.
  */
 
-import type { ContentItem, ContentStatus, OnboardingTask, TaskOwner } from "./fulfillment-types";
-import { BLOCKING_KINDS } from "./fulfillment-types";
+import type {
+  ContentItem,
+  ContentStatus,
+  OnboardingKind,
+  OnboardingTask,
+  Shipment,
+  TaskOwner,
+} from "./fulfillment-types";
+import { BLOCKING_KINDS, blockingLabel } from "./fulfillment-types";
 import { isOverdue } from "./fulfillment-rules";
 import {
   DEFAULT_DRAFT_LEAD_DAYS,
@@ -27,15 +34,29 @@ export interface ContentRow {
   /** What to display: the item's own platform, or the deal's when it is unambiguous. */
   platform: string | null;
   /**
-   * Unfinished setup tasks this item's tracking depends on — the affiliate link and the
-   * coupon code. A video can go live perfectly and still return nothing measurable if
-   * these are missing, which is the one failure you cannot fix after the fact.
+   * Unfinished setup this item's tracking depends on — the affiliate link and the coupon
+   * code. A video can go live perfectly and still return nothing measurable if these are
+   * missing, which is the one failure you cannot fix after the fact.
    */
-  blockedBy: string[];
+  blockedBy: OnboardingKind[];
+  /**
+   * Product that has to reach the creator before they can film. Null once it has landed,
+   * or when the deal sends nothing.
+   */
+  awaitingProduct: AwaitedProduct | null;
+}
+
+export interface AwaitedProduct {
+  product: string;
+  status: "to_prepare" | "shipped";
 }
 
 /**
- * The setup tasks standing between this deal and a measurable result, by label.
+ * The setup standing between this deal and a measurable result.
+ *
+ * Returns kinds rather than labels: the stored labels are full sentences ("Affiliate
+ * tracking link issued"), and two of them concatenated will not fit on a card. The
+ * caller renders whichever length its space allows.
  *
  * Scope matters: registration and the affiliate link are issued once per creator, so a
  * task with no deal_id belongs to every deal that partner has. A coupon code is
@@ -43,10 +64,10 @@ export interface ContentRow {
  * partner-wide link entirely — which is the one that most often isn't there.
  */
 export function blockingSetup(
-  tasks: Pick<OnboardingTask, "status" | "kind" | "deal_id" | "partner_id" | "label">[],
+  tasks: Pick<OnboardingTask, "status" | "kind" | "deal_id" | "partner_id">[],
   dealId: number,
   partnerId: number | null
-): string[] {
+): OnboardingKind[] {
   return tasks
     .filter(
       (t) =>
@@ -54,7 +75,25 @@ export function blockingSetup(
         BLOCKING_KINDS.includes(t.kind) &&
         (t.deal_id === dealId || (t.deal_id == null && t.partner_id === partnerId))
     )
-    .map((t) => t.label);
+    .map((t) => t.kind);
+}
+
+/**
+ * The undelivered product for a deal, if it has one.
+ *
+ * A creator cannot film what has not arrived, so this is the difference between "they
+ * are late" and "we are". Delivered shipments return null — the dependency is over.
+ */
+export function awaitingShipment(
+  shipments: Pick<Shipment, "deal_id" | "product" | "status">[],
+  dealId: number
+): AwaitedProduct | null {
+  // Not-yet-prepared outranks in-transit: it is the one still sitting with us.
+  const forDeal = shipments.filter((s) => s.deal_id === dealId && s.status !== "delivered");
+  const pending =
+    forDeal.find((s) => s.status === "to_prepare") ?? forDeal[0];
+  if (!pending) return null;
+  return { product: pending.product, status: pending.status as AwaitedProduct["status"] };
 }
 
 /** Statuses where the shoot is under way, so missing tracking is now urgent. */
@@ -67,6 +106,7 @@ function workStarted(status: ContentStatus): boolean {
  * card offering three buttons is a status display; a card offering one is a worklist.
  */
 export type ActionKind =
+  | "await_product"
   | "blocked"
   | "set_date"
   | "chase_draft"
@@ -96,6 +136,17 @@ export function nextAction(
 ): NextAction {
   const item = row.item;
 
+  // The product outranks everything: there is no video to chase, date or track until it
+  // arrives. Only on a planned item — anything further along means filming has begun, so
+  // whatever the creator needed, they evidently have.
+  if (item.status === "planned" && row.awaitingProduct) {
+    return row.awaitingProduct.status === "to_prepare"
+      ? { kind: "await_product", label: "Product not sent yet", owner: "us" }
+      : // In transit is nobody's move — flagging it as yours would pad the count with
+        // work you cannot actually do. The dashboard chases it if it goes stale.
+        { kind: "await_product", label: "Product in transit", owner: null };
+  }
+
   // Tracking that doesn't exist outranks everything else still to do, but only once
   // filming has started — chasing a link for a video nobody has begun is noise, and on a
   // posted item it is too late to be an action, so it stays a flag rather than a task.
@@ -107,7 +158,7 @@ export function nextAction(
   ) {
     return {
       kind: "blocked",
-      label: `Blocked: ${row.blockedBy.join(" and ").toLowerCase()}`,
+      label: `Blocked: ${blockingLabel(row.blockedBy)}`,
       owner: "us",
     };
   }
@@ -194,6 +245,9 @@ export function needsAttention(
   leadDays = DEFAULT_DRAFT_LEAD_DAYS
 ): boolean {
   const item = row.item;
+  // An unsent parcel is ours and nothing moves until it goes; one in transit is not
+  // something you can act on, so it does not belong in a list of things to do.
+  if (item.status === "planned" && row.awaitingProduct?.status === "to_prepare") return true;
   if (row.blockedBy.length > 0 && workStarted(item.status)) return true;
   if (isOverdue(item, today)) return true;
   if (shouldRequestDraft(item, today, leadDays)) return true;

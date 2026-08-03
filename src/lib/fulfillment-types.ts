@@ -180,6 +180,23 @@ export const ONBOARDING_ICON: Record<OnboardingKind, string> = {
 /** Tasks whose output other work depends on — content can't be tracked without them. */
 export const BLOCKING_KINDS: OnboardingKind[] = ["tracking_link", "coupon_code"];
 
+/**
+ * Short names for the checklist steps. The stored labels are full sentences ("Affiliate
+ * tracking link issued") written to be read in a checklist; two of them concatenated
+ * into a card or a headline wrap to three lines and stop being scannable.
+ */
+export const SHORT_KIND: Record<OnboardingKind, string> = {
+  account: "creator account",
+  tracking_link: "tracking link",
+  coupon_code: "coupon code",
+  onboarding_email: "onboarding email",
+  custom: "setup step",
+};
+
+export function blockingLabel(kinds: OnboardingKind[]): string {
+  return kinds.map((k) => SHORT_KIND[k] ?? k).join(" and ");
+}
+
 export interface Shipment {
   id: number;
   deal_id: number;

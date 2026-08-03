@@ -1,12 +1,27 @@
 import type { Deal } from "./types";
-import type { ContentItem, OnboardingTask, PaymentItem, Shipment } from "./fulfillment-types";
-import { BLOCKING_KINDS } from "./fulfillment-types";
+import type { ContentItem, OnboardingTask, PaymentItem, Shipment, TaskOwner } from "./fulfillment-types";
+import { BLOCKING_KINDS, blockingLabel } from "./fulfillment-types";
 import { isOverdue } from "./fulfillment-rules";
 import { measurementState, type MeasurementWindows } from "./measurement";
 import { dueReminders, reminderHref, type Reminder } from "./reminders";
 import { DEFAULT_DRAFT_LEAD_DAYS, daysToPublish, shouldRequestDraft } from "./timeline";
 
 export type AttentionSeverity = "critical" | "warning" | "info";
+
+/**
+ * What kind of work this is. A flat list of twenty mixes "review this draft" with "chase
+ * a reply" and "approve a payment" — all yours, but each needing a different head. The
+ * groups exist so the day can be worked in batches rather than context-switched through.
+ */
+export type AttentionGroup = "content" | "negotiation" | "delivery" | "money" | "followups";
+
+export const ATTENTION_GROUP_LABEL: Record<AttentionGroup, string> = {
+  content: "Content",
+  negotiation: "Negotiation",
+  delivery: "Setup & delivery",
+  money: "Money",
+  followups: "Follow-ups",
+};
 
 export interface AttentionItem {
   id: string;
@@ -15,6 +30,87 @@ export interface AttentionItem {
   detail: string;
   href: string;
   amount?: number;
+  group: AttentionGroup;
+  /** Null when nobody can act — in transit, or simply information. */
+  owner: TaskOwner | null;
+}
+
+/**
+ * Item ids are already a stable taxonomy — every rule below namespaces its own — so the
+ * classification is derived from them in one pass rather than repeated at twenty push
+ * sites, where it would drift the first time a rule was added in a hurry.
+ *
+ * `owner` is the split that matters most: "chase them" and "do it yourself" look
+ * identical in a list and are not remotely the same job.
+ */
+const CLASSIFY: [prefix: string, group: AttentionGroup, owner: TaskOwner | null][] = [
+  ["reminder-", "followups", "us"],
+  ["draft-request-", "content", "creator"],
+  ["draft-review-", "content", "us"],
+  ["content-overdue-", "content", "creator"],
+  ["content-soon-", "content", "creator"],
+  ["measure-", "content", "us"],
+  ["payment-", "money", "us"],
+  ["shipment-prepare-", "delivery", "us"],
+  ["shipment-stuck-", "delivery", null],
+  ["onboarding-", "delivery", "us"],
+  ["silent-", "negotiation", "creator"],
+  ["verdict-", "negotiation", "us"],
+  ["your-move-", "negotiation", "us"],
+  ["stale-lead-", "negotiation", "us"],
+  ["revisit-", "followups", "us"],
+  ["wrap-up-", "followups", "us"],
+];
+
+export function classifyAttention(id: string): {
+  group: AttentionGroup;
+  owner: TaskOwner | null;
+} {
+  const hit = CLASSIFY.find(([prefix]) => id.startsWith(prefix));
+  // An unclassified id is a new rule nobody wired up; "follow-ups" keeps it visible
+  // rather than dropping it, which is the failure that would go unnoticed.
+  return hit ? { group: hit[1], owner: hit[2] } : { group: "followups", owner: "us" };
+}
+
+export interface AttentionBucket {
+  key: AttentionGroup;
+  label: string;
+  items: AttentionItem[];
+  /** How many of these are somebody else's move, so the group can say so up front. */
+  waitingOnThem: number;
+}
+
+/** Fixed order, used only to break ties between groups of equal urgency. */
+const GROUP_ORDER: AttentionGroup[] = ["content", "money", "delivery", "negotiation", "followups"];
+
+const SEVERITY_RANK: Record<AttentionSeverity, number> = { critical: 0, warning: 1, info: 2 };
+
+/**
+ * Buckets the worklist, ordered by whatever is most on fire rather than by a fixed menu:
+ * grouping must not bury a critical item under a heading that always sits last.
+ */
+export function groupAttention(items: AttentionItem[]): AttentionBucket[] {
+  const buckets = new Map<AttentionGroup, AttentionItem[]>();
+  for (const item of items) {
+    const list = buckets.get(item.group);
+    if (list) list.push(item);
+    else buckets.set(item.group, [item]);
+  }
+
+  return [...buckets.entries()]
+    .map(([key, list]) => ({
+      key,
+      label: ATTENTION_GROUP_LABEL[key],
+      items: [...list].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]),
+      waitingOnThem: list.filter((i) => i.owner === "creator").length,
+    }))
+    .sort((a, b) => {
+      const worst = (g: AttentionBucket) =>
+        Math.min(...g.items.map((i) => SEVERITY_RANK[i.severity]));
+      return (
+        worst(a) - worst(b) || GROUP_ORDER.indexOf(a.key) - GROUP_ORDER.indexOf(b.key)
+      );
+    });
 }
 
 export interface AttentionInput {
@@ -63,7 +159,8 @@ export function attentionItems({
   stuckDays = 7,
   windows = {},
 }: AttentionInput): AttentionItem[] {
-  const items: AttentionItem[] = [];
+  // Built without the classification, which is applied in one pass at the end.
+  const items: Omit<AttentionItem, "group" | "owner">[] = [];
   const dealById = new Map(deals.map((d) => [d.id, d]));
   const nameOf = (dealId: number) => dealById.get(dealId)?.creator ?? "Unknown";
 
@@ -285,7 +382,7 @@ export function attentionItems({
     items.push({
       id: `onboarding-${d.id}`,
       severity: started ? "warning" : "info",
-      title: `${d.creator} — ${blocking.map((t) => t.label.toLowerCase()).join(" and ")} still missing`,
+      title: `${d.creator} — no ${blockingLabel(blocking.map((t) => t.kind))}`,
       detail: started
         ? "Content is already in production — without this the results can't be tracked"
         : "Set this up before the content goes live",
@@ -328,6 +425,7 @@ export function attentionItems({
     }
   }
 
-  const rank: Record<AttentionSeverity, number> = { critical: 0, warning: 1, info: 2 };
-  return items.sort((a, b) => rank[a.severity] - rank[b.severity]);
+  return items
+    .map((i) => ({ ...i, ...classifyAttention(i.id) }))
+    .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
 }

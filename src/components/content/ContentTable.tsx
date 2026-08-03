@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { PLATFORM_META, type Platform } from "@/lib/types";
-import { CONTENT_STATUS_LABEL } from "@/lib/fulfillment-types";
+import { CONTENT_STATUS_LABEL, blockingLabel } from "@/lib/fulfillment-types";
 import { CONTENT_TONE, TONE_CLASS } from "@/lib/status-tones";
 import { isOverdue } from "@/lib/fulfillment-rules";
 import { SortHeader } from "@/components/FilterBar";
 import { nextDir, type SortDir } from "@/lib/table-sort";
-import { daysInStatus, leadDate, nextAction, type ContentRow } from "@/lib/content-queue";
+import {
+  daysInStatus,
+  leadDate,
+  nextAction,
+  type ContentRow,
+} from "@/lib/content-queue";
 
 /**
  * The scan-everything view of the same items the board shows. It carries the columns a
@@ -96,7 +101,7 @@ export default function ContentTable({
                     {row.blockedBy.length > 0 && (
                       <span
                         className="shrink-0 text-[10px] font-semibold bg-red-50 text-red-700 rounded-full px-1.5 py-0.5"
-                        title={`Tracking setup missing: ${row.blockedBy.join(", ")}`}
+                        title={`Tracking setup missing: ${blockingLabel(row.blockedBy)}`}
                       >
                         untracked
                       </span>

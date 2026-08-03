@@ -42,6 +42,7 @@ const row = (over: Partial<ContentItem> = {}, creator = "TheOldCoupleOutdoors"):
   campaign: null,
   platform: "youtube",
   blockedBy: [],
+  awaitingProduct: null,
 });
 
 describe("landsOn", () => {

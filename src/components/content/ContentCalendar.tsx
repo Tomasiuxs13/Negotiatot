@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PLATFORM_META, type Platform } from "@/lib/types";
 import { needsAttention, type ContentRow } from "@/lib/content-queue";
+import { blockingLabel } from "@/lib/fulfillment-types";
 import {
   calendarEntries,
   isInMonth,
@@ -48,7 +49,7 @@ function Chip({
     <Link
       href={`/deals/${row.dealId}?tab=fulfillment`}
       title={`${row.creator} — ${row.item.title}${kind === "draft" ? " (draft due)" : ""}${
-        blocked ? ` · blocked: ${row.blockedBy.join(", ")}` : ""
+        blocked ? ` · blocked: ${blockingLabel(row.blockedBy)}` : ""
       }`}
       className={`flex items-center gap-1 rounded px-1 py-0.5 text-[10px] leading-tight truncate hover:brightness-95 ${style}`}
     >

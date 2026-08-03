@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { PLATFORM_META, type Platform } from "@/lib/types";
 import { isOverdue } from "@/lib/fulfillment-rules";
+import { blockingLabel } from "@/lib/fulfillment-types";
 import {
   daysInStatus,
   leadDate,
@@ -19,6 +20,21 @@ const OWNER_STYLE: Record<"us" | "creator", string> = {
   us: "bg-brand/10 text-brand-dark",
   creator: "bg-slate-100 text-slate-500",
 };
+
+/**
+ * Red is reserved for missing tracking, because that is the only failure here that
+ * cannot be repaired after the video goes live. A parcel that hasn't shipped is amber:
+ * it delays everything but costs nothing permanently.
+ */
+function chipStyle(action: { kind: string; owner: string | null }): string {
+  if (action.kind === "blocked") return "bg-red-50 text-red-700";
+  if (action.kind === "await_product") {
+    return action.owner === "us" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-500";
+  }
+  if (action.owner === "us") return OWNER_STYLE.us;
+  if (action.owner === "creator") return OWNER_STYLE.creator;
+  return "bg-emerald-50 text-emerald-700";
+}
 
 function platformMeta(platform: string | null) {
   if (!platform) return null;
@@ -107,9 +123,9 @@ export default function ContentCard({
       {action.kind !== "blocked" && row.blockedBy.length > 0 && (
         <p
           className="mt-2 text-[11px] text-red-600 font-medium truncate"
-          title={row.blockedBy.join(", ")}
+          title={`Tracking setup missing: ${blockingLabel(row.blockedBy)}`}
         >
-          untracked · {row.blockedBy.join(" and ").toLowerCase()}
+          untracked · no {blockingLabel(row.blockedBy)}
         </p>
       )}
 
@@ -156,42 +172,38 @@ export default function ContentCard({
               Set
             </button>
           </div>
-        ) : action.kind === "await_post" ? (
-          <div className="flex items-center justify-between gap-2">
-            <span className={`text-[11px] font-medium rounded px-1.5 py-0.5 ${OWNER_STYLE.creator}`}>
-              {action.label}
-            </span>
-            <button
-              onClick={() => run(() => setContentStatusAction(item.id, row.dealId, "posted"))}
-              disabled={isPending}
-              className="text-[11px] font-semibold text-brand-dark hover:underline disabled:opacity-40"
-            >
-              Mark posted
-            </button>
-          </div>
         ) : (
           <div className="flex items-center justify-between gap-2">
             <span
-              className={`text-[11px] font-medium rounded px-1.5 py-0.5 ${
-                action.kind === "blocked"
-                  ? "bg-red-50 text-red-700"
-                  : action.owner
-                    ? OWNER_STYLE[action.owner]
-                    : "bg-emerald-50 text-emerald-700"
-              }`}
+              className={`text-[11px] font-medium rounded px-1.5 py-0.5 truncate ${chipStyle(action)}`}
+              title={action.kind === "await_product" ? row.awaitingProduct?.product : undefined}
             >
               {action.label}
             </span>
-            {action.owner === "us" && (
-              <Link href={dealHref} className="text-[11px] font-semibold text-brand-dark hover:underline">
-                Open →
-              </Link>
-            )}
-            {action.kind === "chase_draft" && (
-              <Link href={dealHref} className="text-[11px] font-semibold text-amber-700 hover:underline">
-                Chase →
-              </Link>
-            )}
+            <span className="flex items-center gap-2 shrink-0">
+              {/* Offered whenever the item is approved, including when something else is
+                  blocking it: if it does go live, you must still be able to say so. */}
+              {item.status === "approved" && (
+                <button
+                  onClick={() => run(() => setContentStatusAction(item.id, row.dealId, "posted"))}
+                  disabled={isPending}
+                  className="text-[11px] font-semibold text-brand-dark hover:underline disabled:opacity-40"
+                >
+                  Mark posted
+                </button>
+              )}
+              {action.kind === "chase_draft" ? (
+                <Link href={dealHref} className="text-[11px] font-semibold text-amber-700 hover:underline">
+                  Chase →
+                </Link>
+              ) : (
+                (action.owner === "us" || action.kind === "await_product") && (
+                  <Link href={dealHref} className="text-[11px] font-semibold text-brand-dark hover:underline">
+                    Open →
+                  </Link>
+                )
+              )}
+            </span>
           </div>
         )}
         {error && <p className="mt-1.5 text-[11px] text-red-600">{error}</p>}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attentionItems } from "../attention";
+import { attentionItems, classifyAttention, groupAttention } from "../attention";
 import type { Deal } from "../types";
 import type { ContentItem, OnboardingTask, PaymentItem, Shipment } from "../fulfillment-types";
 
@@ -311,9 +311,11 @@ describe("onboarding gaps", () => {
       contentItems: [content({ status: "in_production" })],
       onboarding: [task({})],
     });
-    const gap = items.find((i) => i.title.includes("still missing"))!;
+    const gap = items.find((i) => i.id.startsWith("onboarding-"))!;
     expect(gap.severity).toBe("warning");
     expect(gap.detail).toContain("already in production");
+    // Short enough to read as a headline: the stored label is a whole sentence.
+    expect(gap.title).toContain("no tracking link");
   });
 
   it("mentions it quietly while nothing has started", () => {
@@ -323,7 +325,7 @@ describe("onboarding gaps", () => {
       contentItems: [content({ status: "planned" })],
       onboarding: [task({})],
     });
-    expect(items.find((i) => i.title.includes("still missing"))!.severity).toBe("info");
+    expect(items.find((i) => i.id.startsWith("onboarding-"))!.severity).toBe("info");
   });
 
   it("stays quiet once the blocking setup is done", () => {
@@ -333,7 +335,7 @@ describe("onboarding gaps", () => {
       contentItems: [content({ status: "in_production" })],
       onboarding: [task({ status: "done" })],
     });
-    expect(items.some((i) => i.title.includes("still missing"))).toBe(false);
+    expect(items.some((i) => i.id.startsWith("onboarding-"))).toBe(false);
   });
 
   it("ignores steps that don't block tracking", () => {
@@ -343,7 +345,7 @@ describe("onboarding gaps", () => {
       contentItems: [content({ status: "in_production" })],
       onboarding: [task({ kind: "onboarding_email", label: "Send onboarding email" })],
     });
-    expect(items.some((i) => i.title.includes("still missing"))).toBe(false);
+    expect(items.some((i) => i.id.startsWith("onboarding-"))).toBe(false);
   });
 
   it("applies a partner-level gap to that partner's deal only", () => {
@@ -354,7 +356,7 @@ describe("onboarding gaps", () => {
       contentItems: [],
       onboarding: [task({})],
     });
-    const gaps = items.filter((i) => i.title.includes("still missing"));
+    const gaps = items.filter((i) => i.id.startsWith("onboarding-"));
     expect(gaps).toHaveLength(1);
     expect(gaps[0].title).toContain("Marta");
   });
@@ -474,5 +476,104 @@ describe("draft request trigger", () => {
       contentItems: [content({ status: "planned", due_date: "2026-08-01" })],
     });
     expect(negotiating.find((i) => i.id === "draft-request-1")).toBeUndefined();
+  });
+});
+
+describe("classifyAttention", () => {
+  it("splits chase-them from do-it-yourself", () => {
+    // The distinction the flat list could not make: both are on your screen, neither is
+    // the same job.
+    expect(classifyAttention("draft-request-4").owner).toBe("creator");
+    expect(classifyAttention("draft-review-4").owner).toBe("us");
+  });
+
+  it("gives an in-transit shipment no owner — nobody can speed up a courier", () => {
+    expect(classifyAttention("shipment-stuck-2").owner).toBeNull();
+    expect(classifyAttention("shipment-prepare-2").owner).toBe("us");
+  });
+
+  it("keeps the two content- rules apart despite the shared prefix", () => {
+    expect(classifyAttention("content-overdue-9").group).toBe("content");
+    expect(classifyAttention("content-soon-9").group).toBe("content");
+    expect(classifyAttention("content-overdue-9").owner).toBe("creator");
+  });
+
+  it("files an unrecognised id rather than dropping it", () => {
+    // A new rule nobody wired up must still be visible; silently vanishing is the
+    // failure that would go unnoticed.
+    expect(classifyAttention("brand-new-rule-1")).toEqual({ group: "followups", owner: "us" });
+  });
+
+  it("classifies every rule the engine actually emits", () => {
+    const emitted = attentionItems({
+      deals: [
+        deal({ id: 1, your_move: 1 }),
+        deal({ id: 2, stage: "lead", updated_at: "2026-06-01 09:00:00" }),
+      ],
+      contentItems: [],
+      shipments: [],
+      payments: [],
+      today: TODAY,
+    });
+    expect(emitted.length).toBeGreaterThan(0);
+    for (const item of emitted) {
+      expect(item.group).toBeDefined();
+      // "followups" is the fallback, so a real rule landing there means it was missed.
+      if (!item.id.startsWith("reminder-") && !item.id.startsWith("revisit-") && !item.id.startsWith("wrap-up-")) {
+        expect(item.group).not.toBe("followups");
+      }
+    }
+  });
+});
+
+describe("groupAttention", () => {
+  const item = (id: string, severity: "critical" | "warning" | "info") => ({
+    id,
+    severity,
+    title: id,
+    detail: "",
+    href: "#",
+    ...classifyAttention(id),
+  });
+
+  it("leads with whatever is most on fire, not a fixed menu", () => {
+    // Grouping must never bury a critical item under a heading that always sits last.
+    const buckets = groupAttention([
+      item("your-move-1", "info"),
+      item("reminder-1", "critical"),
+      item("payment-1", "warning"),
+    ]);
+    expect(buckets.map((b) => b.key)).toEqual(["followups", "money", "negotiation"]);
+  });
+
+  it("breaks ties between equally urgent groups in a stable order", () => {
+    const buckets = groupAttention([
+      item("your-move-1", "warning"),
+      item("payment-1", "warning"),
+      item("draft-review-1", "warning"),
+    ]);
+    expect(buckets.map((b) => b.key)).toEqual(["content", "money", "negotiation"]);
+  });
+
+  it("counts what is somebody else's move per group", () => {
+    const buckets = groupAttention([
+      item("draft-request-1", "warning"),
+      item("content-overdue-1", "critical"),
+      item("draft-review-1", "warning"),
+    ]);
+    expect(buckets[0].key).toBe("content");
+    expect(buckets[0].waitingOnThem).toBe(2);
+  });
+
+  it("sorts inside a group by severity", () => {
+    const buckets = groupAttention([
+      item("draft-review-1", "info"),
+      item("content-overdue-1", "critical"),
+    ]);
+    expect(buckets[0].items.map((i) => i.severity)).toEqual(["critical", "info"]);
+  });
+
+  it("returns nothing for an empty worklist", () => {
+    expect(groupAttention([])).toEqual([]);
   });
 });
