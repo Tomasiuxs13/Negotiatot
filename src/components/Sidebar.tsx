@@ -16,10 +16,15 @@ import { money } from "@/lib/format";
  *
  * There is deliberately no "Deals" entry: Pipeline is the deals home — board plus a
  * filterable list view — and /deals already redirects into it.
+ *
+ * Content sits between Pipeline and Payments because that is the order the work runs in:
+ * win the deal, deliver the content, release the money. Its items are also the thing you
+ * chase most often, and chasing them one deal page at a time is what the page replaces.
  */
 const WORK_NAV = [
   { href: "/", label: "Dashboard", icon: "space_dashboard" },
   { href: "/pipeline", label: "Pipeline", icon: "account_tree" },
+  { href: "/content", label: "Content", icon: "movie" },
   { href: "/partners", label: "Partners", icon: "group" },
   { href: "/payments", label: "Payments", icon: "payments" },
 ];

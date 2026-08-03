@@ -2,10 +2,19 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "counterpart-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "autoPort": true,
+      "cwd": "/Users/tomasnorkus/Influncer negotiations/counterpart-dev"
+    },
+    {
       "name": "counterpart",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000,
+      "autoPort": true,
       "cwd": "/Users/tomasnorkus/Influncer negotiations/counterpart"
     }
   ]

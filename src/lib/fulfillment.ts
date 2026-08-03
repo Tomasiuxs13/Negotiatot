@@ -179,10 +179,20 @@ export function recomputeDealActuals(dealId: number) {
 
 export function updateContentItem(
   id: number,
-  fields: { status?: ContentStatus; postedUrl?: string | null; dueDate?: string | null; notes?: string | null }
+  fields: {
+    status?: ContentStatus;
+    postedUrl?: string | null;
+    dueDate?: string | null;
+    platform?: string | null;
+    notes?: string | null;
+  }
 ) {
   const sets: string[] = [];
   const params: unknown[] = [];
+  if (fields.platform !== undefined) {
+    sets.push("platform = ?");
+    params.push(fields.platform);
+  }
   if (fields.status !== undefined) {
     sets.push("status = ?");
     params.push(fields.status);

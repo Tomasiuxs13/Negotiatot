@@ -7,6 +7,8 @@ import { getDeal, getSetting, logUsage, updateDeal } from "@/lib/db";
 import { hasApiKey, parseContract, MODEL, type ImageMediaType } from "@/lib/claude";
 import { money } from "@/lib/format";
 import { canTransition, isPaymentStatus } from "@/lib/payment-transitions";
+import { resolvePlatform } from "@/lib/content-queue";
+import { dealPlatforms } from "@/lib/types";
 import { saveFile, deleteFile } from "@/lib/files";
 import {
   confirmContract,
@@ -58,6 +60,7 @@ function refresh(dealId: number) {
   revalidatePath("/payments");
   revalidatePath("/");
   revalidatePath("/pipeline");
+  revalidatePath("/content");
 }
 
 /* ---------------------------------------------------------------- contract */
@@ -198,7 +201,10 @@ export async function confirmContractAction(
         createContentItem({
           dealId,
           title: quantity > 1 ? `${deliverable.description} (${i + 1}/${quantity})` : deliverable.description,
-          platform: deliverable.platform,
+          // A contract often names the deliverable without naming the channel. Inheriting
+          // the deal's platform costs nothing when the deal has only one, and an item
+          // with no platform is invisible to every platform filter downstream.
+          platform: resolvePlatform({ platform: deliverable.platform }, dealPlatforms(deal)),
           dueDate: deliverable.dueDate,
           dueRule: deliverable.dueRule,
           dueDaysAfterDelivery: deliverable.dueDaysAfterDelivery,
@@ -305,7 +311,12 @@ export async function addContentItemAction(
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
   if (!fields.title.trim()) return { error: "Give the content item a name." };
-  createContentItem({ dealId, ...fields, title: fields.title.trim() });
+  createContentItem({
+    dealId,
+    ...fields,
+    title: fields.title.trim(),
+    platform: resolvePlatform({ platform: fields.platform ?? null }, dealPlatforms(deal)),
+  });
   refreshPaymentStatuses(dealId);
   refresh(dealId);
   return {};
