@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { runAnalysis, saveAudienceData } from "@/app/deals/[id]/actions";
-import { views as fmtViews } from "@/lib/format";
+import { parseDecimal, views as fmtViews } from "@/lib/format";
 
 /**
  * The audience figures every price on this deal derives from, editable in place.
@@ -36,11 +36,18 @@ export default function AudienceDataEditor({
 
   const save = (thenReRun: boolean) => {
     setError(null);
+    // Parsed here, not in the input: a number-typed input would refuse the comma
+    // keystroke before the value ever reached us, so "11,45" could not even be typed.
+    const parsedRate = parseDecimal(rate);
+    if (rate.trim() !== "" && parsedRate == null) {
+      setError("Engagement rate must be a number — 11.45 and 11,45 both work.");
+      return;
+    }
     startTransition(async () => {
       const result = await saveAudienceData(
         dealId,
         views.trim() === "" ? null : Number(views),
-        rate.trim() === "" ? null : Number(rate)
+        parsedRate
       );
       if (result?.error) {
         setError(result.error);
@@ -115,13 +122,14 @@ export default function AudienceDataEditor({
         </label>
         <label className="block">
           <span className="block text-xs text-slate-600 mb-1">Engagement rate (%)</span>
+          {/* Text, not number: a number input rejects the comma half of Europe types as
+              the decimal mark, and its step validation rejects two decimals outright. */}
           <input
-            type="number"
-            min="0"
-            step="0.1"
+            type="text"
+            inputMode="decimal"
             value={rate}
             onChange={(e) => setRate(e.target.value)}
-            placeholder="e.g. 3.7"
+            placeholder="e.g. 11.45"
             className="border border-slate-200 rounded-md px-2 py-1.5 text-sm text-slate-900 font-tabular w-32"
           />
         </label>

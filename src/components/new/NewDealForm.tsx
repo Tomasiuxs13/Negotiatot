@@ -356,7 +356,9 @@ export default function NewDealForm({
           <label className="block text-xs font-semibold text-slate-700 mb-1.5">
             Known engagement % <span className="font-normal text-slate-500">(optional)</span>
           </label>
-          <input name="known_engagement" type="number" min="0" step="0.1" placeholder="e.g. 4.5" className={inputClass} />
+          {/* Text, not number: a number input rejects the comma half of Europe types as
+              the decimal mark, and step validation rejects two decimals outright. */}
+          <input name="known_engagement" type="text" inputMode="decimal" placeholder="e.g. 11.45" className={inputClass} />
         </div>
       </div>
 

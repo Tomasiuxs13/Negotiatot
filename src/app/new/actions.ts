@@ -20,6 +20,7 @@ import {
 import { hasApiKey, type ImageMediaType } from "@/lib/claude";
 import { performAnalysis } from "@/lib/engine";
 import { priorDeals } from "@/lib/partners";
+import { parseDecimal } from "@/lib/format";
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
@@ -66,7 +67,9 @@ export async function createDealAction(
   const message = String(formData.get("message") ?? "").trim();
   const channelUrl = String(formData.get("channel_url") ?? "").trim();
   const knownAvgViews = Number(formData.get("known_avg_views")) || null;
-  const knownEngagement = Number(formData.get("known_engagement")) || null;
+  // parseDecimal, not Number: the form field is free text so "11,45" can be typed,
+  // which means the comma has to be understood here too.
+  const knownEngagement = parseDecimal(String(formData.get("known_engagement") ?? ""));
   const stageRaw = String(formData.get("stage") ?? "").trim();
   // Leads and contacted deals are captured now and analyzed later, so we skip the API call.
   const isPreAnalysis = stageRaw === "lead" || stageRaw === "contacted";

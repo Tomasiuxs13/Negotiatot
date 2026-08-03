@@ -23,3 +23,32 @@ export function views(n: number | null | undefined): string {
   if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
   return String(n);
 }
+
+/**
+ * Parses a decimal the way a person typed it, not the way JavaScript expects it.
+ *
+ * An engagement rate copied from a report reads "11,45" in half of Europe, and a
+ * `type="number"` input plus `Number()` rejects it twice over — the browser refuses the
+ * comma keystroke, and the parser turns it into NaN. This accepts both separators:
+ * when only one kind is present it is the decimal mark; when both appear ("1,234.56")
+ * the commas are thousands separators and are dropped.
+ *
+ * Returns null for empty or unparseable input — the caller decides whether that is
+ * "not provided" or an error. Rounded to 2 decimals: more precision than that in an
+ * engagement rate is noise pretending to be signal.
+ */
+export function parseDecimal(raw: string | null | undefined): number | null {
+  if (raw == null) return null;
+  let s = raw.trim().replace(/\s+/g, "");
+  if (s === "") return null;
+  if (s.includes(",") && s.includes(".")) {
+    s = s.replace(/,/g, "");
+  } else {
+    s = s.replace(",", ".");
+  }
+  // parseFloat would silently accept "11.4abc"; a full-string match refuses it.
+  if (!/^-?\d*\.?\d+$/.test(s)) return null;
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n * 100) / 100;
+}
