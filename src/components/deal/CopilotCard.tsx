@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { CopilotReco } from "@/lib/types";
-import { markDraftAsSent } from "@/app/deals/[id]/actions";
+import { markDraftAsSent, rewriteDraftAction } from "@/app/deals/[id]/actions";
 
 const TONES = ["balanced", "warm", "firm"] as const;
 type ToneKey = (typeof TONES)[number];
@@ -11,9 +11,29 @@ export default function CopilotCard({ dealId, reco }: { dealId: number; reco: Co
   const [tone, setTone] = useState<ToneKey>("balanced");
   const [copied, setCopied] = useState(false);
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  /**
+   * Only the balanced draft is written up front. The other tones were 53% of the
+   * generated tokens and mostly went unread, so they are rewritten on request and held
+   * here for the rest of the session.
+   */
+  const [extra, setExtra] = useState<Record<string, string>>({});
 
-  const draft = reco.drafts[tone];
+  const draft = extra[tone] ?? reco.drafts[tone] ?? "";
+
+  const pickTone = (t: ToneKey) => {
+    setTone(t);
+    setError(null);
+    if (extra[t] || reco.drafts[t]) return;
+    const source = reco.drafts.balanced ?? Object.values(reco.drafts)[0] ?? "";
+    if (!source) return;
+    startTransition(async () => {
+      const r = await rewriteDraftAction(dealId, source, t);
+      if (r.error) setError(r.error);
+      else if (r.draft) setExtra((e) => ({ ...e, [t]: r.draft! }));
+    });
+  };
 
   const copy = async () => {
     await navigator.clipboard.writeText(draft);
@@ -72,7 +92,7 @@ export default function CopilotCard({ dealId, reco }: { dealId: number; reco: Co
               key={t}
               role="tab"
               aria-selected={tone === t}
-              onClick={() => setTone(t)}
+              onClick={() => pickTone(t)}
               className={`text-xs font-semibold px-3 py-1 rounded-full border capitalize transition-colors ${
                 tone === t
                   ? "bg-slate-900 text-white border-slate-900"
@@ -85,12 +105,14 @@ export default function CopilotCard({ dealId, reco }: { dealId: number; reco: Co
         </div>
 
         <div className="bg-white border border-dashed border-slate-300 rounded-lg px-3.5 py-3 text-sm text-slate-700 whitespace-pre-line">
-          {draft}
+          {draft || (isPending ? `Rewriting in a ${tone} tone…` : "")}
         </div>
+        {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
 
         <div className="flex gap-2 mt-3.5">
           <button
             onClick={copy}
+            disabled={!draft}
             className="bg-brand hover:bg-brand-dark text-white rounded-md py-1.5 px-3.5 text-sm font-medium transition-colors shadow-sm"
           >
             {copied ? "Copied ✓" : "Copy draft"}

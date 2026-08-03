@@ -1474,15 +1474,14 @@ const RECO_SCHEMA = {
         "3-5 bullets: the CPM math, the reciprocity/negotiation principle, what scope is being traded, and the expected counter with a plan for it.",
       items: { type: "string" },
     },
-    drafts: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        balanced: { type: "string", description: "A ready-to-send message, formatted as an email rather than one block of prose. Use real line breaks (\\n): greeting on its own line, a blank line between paragraphs, and paragraphs of 1-3 sentences. When the offer has three or more components, list them as short \"- \" bullets on their own lines instead of running them into a sentence. End with a single clear question and a sign-off line. No markdown headings or bold — plain text that can be pasted straight into an email." },
-        warm: { type: "string", description: "A ready-to-send message, formatted as an email rather than one block of prose. Use real line breaks (\\n): greeting on its own line, a blank line between paragraphs, and paragraphs of 1-3 sentences. When the offer has three or more components, list them as short \"- \" bullets on their own lines instead of running them into a sentence. End with a single clear question and a sign-off line. No markdown headings or bold — plain text that can be pasted straight into an email." },
-        firm: { type: "string", description: "A ready-to-send message, formatted as an email rather than one block of prose. Use real line breaks (\\n): greeting on its own line, a blank line between paragraphs, and paragraphs of 1-3 sentences. When the offer has three or more components, list them as short \"- \" bullets on their own lines instead of running them into a sentence. End with a single clear question and a sign-off line. No markdown headings or bold — plain text that can be pasted straight into an email." },
-      },
-      required: ["balanced", "warm", "firm"],
+    // One draft, not three. Generating balanced/warm/firm every round made the drafts
+    // 53% of output on a measured call — 1,362 of 2,572 tokens — and two of the three
+    // were discarded unread. The other tones are now written on request, so a rewrite
+    // is paid for when it is wanted.
+    draft: {
+      type: "string",
+      description:
+        "A ready-to-send message, formatted as an email rather than one block of prose. Use real line breaks (\\n): greeting on its own line, a blank line between paragraphs, and paragraphs of 1-3 sentences. When the offer has three or more components, list them as short \"- \" bullets on their own lines instead of running them into a sentence. End with a single clear question and a sign-off line. No markdown headings or bold — plain text that can be pasted straight into an email.",
     },
     theirCurrentPosition: {
       type: ["number", "null"],
@@ -1490,7 +1489,7 @@ const RECO_SCHEMA = {
         "The creator's latest asking price in USD as stated in the conversation (their current position after all counters), else null if they haven't named a price",
     },
   },
-  required: ["headline", "proposedOffer", "pills", "reasoning", "drafts", "theirCurrentPosition"],
+  required: ["headline", "proposedOffer", "pills", "reasoning", "draft", "theirCurrentPosition"],
 } as const;
 
 export interface RecoResult {
@@ -1498,7 +1497,8 @@ export interface RecoResult {
   proposedOffer: number;
   pills: { label: string; tone: "good" | "plain" }[];
   reasoning: string[];
-  drafts: { balanced: string; warm: string; firm: string };
+  /** Keyed by tone. Only `balanced` is generated up front; others on request. */
+  drafts: Record<string, string>;
   theirCurrentPosition: number | null;
   usage: TokenUsage;
 }
@@ -1559,7 +1559,7 @@ export async function recommendNextMove(params: {
     `- State each term exactly once. The product, the code, the trackable link, the approval step — each belongs in one place, either the offer list or the house-rules line, never both. Repeating a term is padding, and repeating a price reads as overselling.`,
     `- If no cash fee is being offered, say so plainly and early — one sentence, before the terms: this is a product and performance partnership rather than a paid placement. Leaving it unsaid is not tact. The creator assumes a rate is coming, replies asking for it, and feels misled when the answer is none, which costs a round and the goodwill you opened with. Naming the structure is not the same as apologising for it.`,
     `- Never justify a no-fee or low-fee structure by the creator's size. "Given where your channel is right now" reads as "you're too small to pay" and loses deals. Name the structure as a choice, and frame performance terms as uncapped upside they own, not as a consolation for not being paid.`,
-    `- Format drafts as a real email, not a paragraph: greeting on its own line, blank line between paragraphs, 1-3 sentences each. Put a multi-part offer in "- " bullets on separate lines — a creator should be able to see what they get at a glance. Finish with one clear question and a sign-off.`,
+    `- Write ONE draft, in a balanced tone — professional and warm, neither pushy nor deferential. Format it as a real email, not a paragraph: greeting on its own line, blank line between paragraphs, 1-3 sentences each. Put a multi-part offer in "- " bullets on separate lines — a creator should be able to see what they get at a glance. Finish with one clear question and a sign-off.`,
     `- A draft is read by the CREATOR. Never disclose internal figures in one: cost of goods, gross margin, breakeven, walk-away, target price, CPM ceilings, or what you can "afford". Quote only what is being offered to them — fee, commission, tier thresholds, their discount code, and the product's price exactly as given under "Voice and product". Internal numbers belong in the reasoning, which the manager alone sees.`,
   ]
     .filter(Boolean)
@@ -1587,10 +1587,61 @@ export async function recommendNextMove(params: {
   }
   const text = finalText(response);
   if (!text) throw new Error("Empty recommendation response from Claude.");
-  const parsed = JSON.parse(text) as Omit<RecoResult, "usage">;
+  const parsed = JSON.parse(text) as Omit<RecoResult, "usage" | "drafts"> & { draft: string };
   return {
     ...parsed,
     proposedOffer: Math.round(parsed.proposedOffer),
+    // Stored keyed by tone so a later rewrite merges alongside rather than replacing,
+    // and so messages written when three tones were generated still render.
+    drafts: { balanced: parsed.draft },
+    usage: {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+    },
+  };
+}
+
+/**
+ * Rewrites an existing draft in a different tone, on request.
+ *
+ * Deliberately narrow: it gets the finished draft and rewrites it, rather than
+ * re-deriving the recommendation. The numbers, the concession and the reasoning were
+ * already decided — re-running the whole prompt to change register would risk moving a
+ * figure the manager has already read, and cost several times as much.
+ */
+export async function rewriteDraft(params: {
+  draft: string;
+  tone: string;
+  creator: string;
+}): Promise<{ draft: string; usage: TokenUsage }> {
+  const client = getClient();
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 2000,
+    system:
+      "You rewrite outreach emails for an influencer marketing manager. You change register only. Every figure, term and commitment stays exactly as written — you are not renegotiating.",
+    messages: [
+      {
+        role: "user",
+        content: [
+          `Rewrite this message to ${params.creator} in a ${params.tone} tone.`,
+          `Keep every number, term and the same offer. Do not add or drop a commitment.`,
+          `Keep the email formatting: greeting on its own line, blank lines between paragraphs, "- " bullets where they are used, one closing question and a sign-off.`,
+          `Return only the rewritten email, no preamble.`,
+          ``,
+          params.draft,
+        ].join("\n"),
+      },
+    ],
+    // The judgement is already made; this is register only, so it does not need the
+    // effort the recommendation itself gets.
+    output_config: { effort: "low" as const },
+  });
+
+  const text = finalText(response);
+  if (!text) throw new Error("Empty rewrite response.");
+  return {
+    draft: text.trim(),
     usage: {
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,

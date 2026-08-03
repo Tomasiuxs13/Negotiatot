@@ -228,3 +228,31 @@ export async function deleteDeal(dealId: number) {
   revalidatePath("/pipeline");
   return {};
 }
+
+/**
+ * Rewrites the copilot's draft in another tone, on request.
+ *
+ * Not persisted: the rewrite lives in the card for the session. The stored recommendation
+ * is the record of what the Copilot advised, and quietly rewriting it afterwards would
+ * make the history disagree with what was actually reasoned.
+ */
+export async function rewriteDraftAction(
+  dealId: number,
+  draft: string,
+  tone: string
+): Promise<{ draft?: string; error?: string }> {
+  const { rewriteDraft, MODEL, hasApiKey } = await import("@/lib/claude");
+  const { getDeal, logUsage } = await import("@/lib/db");
+  if (!hasApiKey()) return { error: "No Anthropic API key configured." };
+  if (!draft.trim()) return { error: "Nothing to rewrite yet." };
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found." };
+  try {
+    const r = await rewriteDraft({ draft, tone, creator: deal.creator });
+    logUsage(dealId, "rewrite", MODEL, r.usage.inputTokens, r.usage.outputTokens);
+    return { draft: r.draft };
+  } catch (err) {
+    console.error("rewriteDraftAction failed:", err);
+    return { error: err instanceof Error ? err.message : "Could not rewrite the draft." };
+  }
+}
