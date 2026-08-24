@@ -206,6 +206,16 @@ price).
 ### New deal
 `/new`
 
+**Bulk import API** — `POST /api/deals/bulk` takes a JSON array of items shaped like the
+form's fields (`creatorName`, `platform`, `email`, `stage` "lead"/"contacted", commission
+and discount overriding Playbook defaults). Rows are independent — the response returns
+`created` ids, per-row `errors`, and `duplicates`: creators (matched by name or email)
+who already have a live deal are skipped, not doubled. Every row runs through the same
+create path as the form. Analysis never runs from the import — stage "analyzing" is
+refused, so a file can never silently start model runs. Unauthenticated, like the rest of
+the app: local single-user use only until the deferred auth work lands.
+
+
 An **On create** choice sits at the top: *Analyze now* (runs the pricing analysis),
 *Outreach first* (saved as contacted — analyze when they reply, no credits spent), or
 *Just track it* (a lead: a CRM row, nothing runs). The pipeline's per-column add buttons
