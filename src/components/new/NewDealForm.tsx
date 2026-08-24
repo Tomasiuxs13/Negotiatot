@@ -37,7 +37,15 @@ export default function NewDealForm({
   defaultDiscount?: number;
   defaultDiscountType?: string;
 }) {
-  const isLeadCapture = stage === "lead" || stage === "contacted";
+  // The URL param seeds the choice; the form owns it from there. Before this was a
+  // visible control, capture-without-analysis only existed behind the per-column "+"
+  // on the pipeline board — functionality nobody can find is functionality that
+  // doesn't exist. "Use it as a CRM first, spend credits when they reply" is a mode,
+  // and a mode belongs on the form.
+  const [stageChoice, setStageChoice] = useState(
+    stage === "lead" || stage === "contacted" ? stage : "analyzing"
+  );
+  const isLeadCapture = stageChoice === "lead" || stageChoice === "contacted";
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
@@ -112,7 +120,35 @@ export default function NewDealForm({
 
   return (
     <form ref={formRef} onSubmit={submit} className="space-y-4">
-      {stage && <input type="hidden" name="stage" value={stage} />}
+      <input type="hidden" name="stage" value={stageChoice === "analyzing" ? "" : stageChoice} />
+
+      {/* What happens on create — the credits question, answered before it costs anything. */}
+      <div>
+        <span className="block text-xs font-semibold text-slate-700 mb-1.5">On create</span>
+        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="What happens on create">
+          {[
+            { key: "analyzing", label: "Analyze now", hint: "Runs the pricing analysis (uses API credits)" },
+            { key: "contacted", label: "Outreach first", hint: "Saved as contacted — analyze when they reply, no credits spent" },
+            { key: "lead", label: "Just track it", hint: "Saved as a lead — a CRM row, nothing runs" },
+          ].map((o) => (
+            <button
+              key={o.key}
+              type="button"
+              role="radio"
+              aria-checked={stageChoice === o.key}
+              onClick={() => setStageChoice(o.key)}
+              className={`text-left rounded-lg border px-3 py-2 transition-colors ${
+                stageChoice === o.key
+                  ? "border-brand bg-brand/5"
+                  : "border-slate-200 bg-white hover:border-slate-300"
+              }`}
+            >
+              <span className="block text-xs font-semibold text-slate-800">{o.label}</span>
+              <span className="block text-[11px] text-slate-500 mt-0.5">{o.hint}</span>
+            </button>
+          ))}
+        </div>
+      </div>
 
       {known && (
         <div className="bg-brand/5 border border-brand/30 rounded-lg px-4 py-3">

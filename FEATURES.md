@@ -206,7 +206,11 @@ price).
 ### New deal
 `/new`
 
-Creator name, platform(s), deliverables, campaign, stage, their opening message, and an
+An **On create** choice sits at the top: *Analyze now* (runs the pricing analysis),
+*Outreach first* (saved as contacted — analyze when they reply, no credits spent), or
+*Just track it* (a lead: a CRM row, nothing runs). The pipeline's per-column add buttons
+preselect the matching mode. Then creator name, platform(s), deliverables, campaign,
+their opening message, and an
 optional analytics report (PDF or screenshot). Starting from a partner profile loads the
 creator's name, email, platforms, primary channel URL, audience figures and operational
 record on the first render; the manager can still update them for the new deal. On a
