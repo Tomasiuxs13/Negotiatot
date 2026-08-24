@@ -1,6 +1,7 @@
 import PageHeader from "@/components/PageHeader";
 import NewDealForm from "@/components/new/NewDealForm";
-import { getCampaigns, getPartner, getPartners, getSetting } from "@/lib/db";
+import { getCampaigns, getPartners, getSetting } from "@/lib/db";
+import { partnerPrefillById } from "@/lib/partner-prefill";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +14,22 @@ export default async function NewDealPage({
   const isLeadCapture = stage === "lead" || stage === "contacted";
   const campaigns = getCampaigns().map((c) => ({ id: c.id, name: c.name }));
   const partners = getPartners().map((p) => ({ id: p.id, name: p.name }));
-  const preset = partnerParam ? getPartner(Number(partnerParam)) : undefined;
-  const presetPartner = preset ? { id: preset.id, name: preset.name } : undefined;
+  const presetPartner = partnerParam
+    ? (partnerPrefillById(Number(partnerParam)) ?? undefined)
+    : undefined;
   // Your standard program rate, so a hybrid deal doesn't need it retyped every time.
   const econ = getSetting<Record<string, number>>("unit_economics");
-  const defaultCommission = econ?.commissionPercent ?? 0;
+  const defaultCommissionType = Number(econ?.commissionPerOrder ?? 0) > 0
+    ? "per_order"
+    : Number(econ?.commissionPercent ?? 0) > 0
+      ? "percent"
+      : "none";
+  const defaultCommission =
+    defaultCommissionType === "per_order"
+      ? Number(econ?.commissionPerOrder ?? 0)
+      : defaultCommissionType === "percent"
+        ? Number(econ?.commissionPercent ?? 0)
+        : 0;
   const defaultDiscount = (econ?.discountFixed || econ?.discountPercent) ?? 0;
   const defaultDiscountType = econ?.discountFixed
     ? "fixed"
@@ -35,7 +47,7 @@ export default async function NewDealPage({
         }
       />
       <main className="flex-1 overflow-y-auto p-8">
-        <div className="grid grid-cols-[1.3fr_0.7fr] gap-4 items-start max-w-5xl">
+        <div className="grid grid-cols-1 xl:grid-cols-[1.3fr_0.7fr] gap-4 items-start max-w-5xl">
           <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
             <NewDealForm
               campaigns={campaigns}
@@ -43,6 +55,7 @@ export default async function NewDealPage({
               presetPartner={presetPartner}
               stage={stage}
               defaultCommission={defaultCommission}
+              defaultCommissionType={defaultCommissionType}
               defaultDiscount={defaultDiscount}
               defaultDiscountType={defaultDiscountType}
             />
@@ -59,8 +72,8 @@ export default async function NewDealPage({
                   body: "Claude reads the report and message, pulls the real stats (avg views, engagement, audience), and checks them against your Playbook.",
                 },
                 {
-                  title: "Your three numbers",
-                  body: "Target, walk-away, and breakeven are computed from your rules and unit economics — with the math shown for each.",
+                  title: "Your four numbers",
+                  body: "Anchor, target, walk-away, and breakeven are computed from your rules and unit economics — with the math shown for each.",
                 },
                 {
                   title: "Verdict & first offer",

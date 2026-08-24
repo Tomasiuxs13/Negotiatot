@@ -10,7 +10,7 @@ export default function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <header className="bg-white h-16 sticky top-0 z-10 border-b border-slate-200 flex items-center justify-between gap-4 px-8 shrink-0">
+    <header className="bg-white h-16 sticky top-0 z-10 border-b border-slate-200 flex items-center justify-between gap-3 px-4 md:px-8 shrink-0">
       <div className="flex items-baseline gap-4 min-w-0">
         <h2 className="font-headline text-lg font-semibold text-slate-900 border-b-2 border-brand pb-4 mt-4 whitespace-nowrap">
           {title}
@@ -22,7 +22,7 @@ export default function PageHeader({
           </span>
         )}
       </div>
-      <div className="flex items-center gap-3 shrink-0">{actions}</div>
+      <div className="flex items-center gap-3 min-w-0 overflow-x-auto">{actions}</div>
     </header>
   );
 }

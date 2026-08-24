@@ -18,6 +18,7 @@ import type {
 } from "./fulfillment-types";
 import { BLOCKING_KINDS, blockingLabel } from "./fulfillment-types";
 import { isOverdue } from "./fulfillment-rules";
+import { parseCheck } from "./brief-requirements";
 import {
   DEFAULT_DRAFT_LEAD_DAYS,
   daysToPublish,
@@ -44,6 +45,8 @@ export interface ContentRow {
    * or when the deal sends nothing.
    */
   awaitingProduct: AwaitedProduct | null;
+  /** Whether the linked campaign brief requires a transcript check before verification. */
+  requiresCheck?: boolean;
 }
 
 export interface AwaitedProduct {
@@ -183,9 +186,17 @@ export function nextAction(
     case "posted":
       // The check reads the posted video against the brief; until it has run, "posted"
       // means delivered but unverified, which is not the same as done.
-      return item.check_result
+      if (row.requiresCheck === false) {
+        return { kind: "measure", label: "Log the results", owner: "us" };
+      }
+      const check = parseCheck(item.check_result);
+      return check && check.findings.every((finding) => finding.status === "met")
         ? { kind: "measure", label: "Log the results", owner: "us" }
-        : { kind: "check", label: "Run integration check", owner: "us" };
+        : {
+            kind: "check",
+            label: check ? "Resolve integration check" : "Run integration check",
+            owner: "us",
+          };
     case "verified":
       return item.actual_views == null
         ? { kind: "measure", label: "Log the results", owner: "us" }

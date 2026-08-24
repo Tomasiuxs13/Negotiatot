@@ -132,6 +132,30 @@ export const DEFAULT_NEGOTIATION_STYLE: Record<string, unknown> = {
   ],
   commissionTiers: [],
   nonNegotiables: ["Draft approval before publish", "Net-30 payment", "Trackable link + promo code"],
+  /**
+   * What usage rights, whitelisting and exclusivity add to a base fee. Judgement bands,
+   * not formulas — the engine applies them against the scope and duration marked on the
+   * deal. Industry defaults; edit to your own market.
+   */
+  rightsGuidance: [
+    "Organic usage beyond 30 days: +20–30% of base fee",
+    "Paid usage / ads: +25–50% of base fee per 30 days of use",
+    "Whitelisting: +25–50% of base fee per 30 days, priced as its own line item",
+    "Category exclusivity: 1mo +20–35%, 3mo +50–75%, 6mo +75–100%",
+    "Full exclusivity: 1mo +50–80%, 3mo +100–175% — prefer category scope with named competitors",
+    "Platform-only exclusivity: +10–20%",
+    "Push for shorter durations and named competitors; renewals can be priced later",
+  ],
+  // Machine-readable counterpart to the guidance above. The four guardrail numbers use
+  // these percentages; Claude receives the prose for negotiation judgement, not math.
+  rightsPricing: {
+    organicUsagePerMonthPct: 25,
+    paidUsagePerMonthPct: 37.5,
+    whitelistingPerMonthPct: 37.5,
+    categoryExclusivityPerMonthPct: 25,
+    fullExclusivityPerMonthPct: 60,
+    maxTotalPct: 250,
+  },
 };
 
 /** Fields the manager is expected to set themselves. */

@@ -40,7 +40,7 @@ export default function DealWorkspace({
 
   return (
     <>
-      <header className="bg-white border-b border-slate-200 px-6 sticky top-0 z-30 shadow-sm">
+      <header className="bg-white border-b border-slate-200 px-4 md:px-6 sticky top-0 z-30 shadow-sm">
         <div className="flex items-center justify-between gap-6 h-16">
           <div className="flex items-center gap-8 min-w-0">
             <div className="shrink-0">{breadcrumb}</div>
@@ -62,7 +62,7 @@ export default function DealWorkspace({
               ))}
             </nav>
           </div>
-          <div className="flex items-center gap-3 shrink-0">{actions}</div>
+          <div className="flex items-center gap-3 min-w-0 overflow-x-auto">{actions}</div>
         </div>
 
         {/* Below md the strip drops out of the bar rather than squeezing the actions
@@ -86,7 +86,7 @@ export default function DealWorkspace({
         </nav>
       </header>
 
-      <div className={`p-6 flex flex-col gap-6 ${PAGE_WIDTH}`}>
+      <div className={`p-4 md:p-6 flex flex-col gap-6 ${PAGE_WIDTH}`}>
         {cockpit}
         {band}
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,68%)_minmax(0,32%)] gap-6 items-start">

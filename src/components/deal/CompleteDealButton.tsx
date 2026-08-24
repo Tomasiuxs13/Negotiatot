@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { moveDealStage } from "@/app/pipeline-actions";
 
 /**
@@ -17,26 +17,35 @@ export default function CompleteDealButton({
   openWork: string;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   const run = () => {
-    if (!ready && !window.confirm(`${openWork} Mark this deal completed anyway?`)) return;
     startTransition(async () => {
-      await moveDealStage(dealId, "completed");
+      setError(null);
+      const result = await moveDealStage(dealId, "completed");
+      if (result.error) setError(result.error);
     });
   };
 
   return (
-    <button
-      onClick={run}
-      disabled={isPending}
-      title={ready ? "Everything delivered and paid" : openWork}
-      className={`text-xs font-medium rounded-md px-3 py-1.5 border transition-colors disabled:opacity-50 ${
-        ready
-          ? "bg-brand text-white border-brand hover:bg-brand-dark"
-          : "border-slate-200 text-slate-600 hover:border-slate-400"
-      }`}
-    >
-      Mark completed
-    </button>
+    <div className="relative">
+      <button
+        onClick={run}
+        disabled={isPending || !ready}
+        title={ready ? "Everything delivered and paid" : openWork}
+        className={`text-xs font-medium rounded-md px-3 py-1.5 border transition-colors disabled:opacity-50 ${
+          ready
+            ? "bg-brand text-white border-brand hover:bg-brand-dark"
+            : "border-slate-200 text-slate-600"
+        }`}
+      >
+        Mark completed
+      </button>
+      {error && (
+        <p className="absolute right-0 top-full mt-1 w-72 rounded-md border border-red-200 bg-white p-2 text-[11px] text-red-700 shadow-lg z-20">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

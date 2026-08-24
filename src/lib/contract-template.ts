@@ -1,4 +1,5 @@
 import type { Deal } from "./types";
+import { parseRights, rightsContractClause } from "./rights";
 import type { ContentItem, PaymentItem } from "./fulfillment-types";
 import type { Partner } from "./partners";
 import { money } from "./format";
@@ -53,7 +54,7 @@ export function generateContractText(params: {
     `  All links and codes provided by Brand must be used as supplied.`,
     ``,
     `5. USAGE RIGHTS & EXCLUSIVITY`,
-    `  [usage rights — e.g. 60 days paid amplification] · [exclusivity — e.g. category, 30 days]`,
+    `  ${rightsContractClause(parseRights(deal.rights))}`,
     ``,
     `Signed for the Brand: ____________________  Date: ________`,
     `Signed by the Creator: ____________________  Date: ________`,

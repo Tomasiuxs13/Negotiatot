@@ -9,21 +9,64 @@ import { allocateFee } from "@/lib/benchmark-rows";
 import type { MeasurementWindows } from "@/lib/measurement";
 import { saveActuals } from "@/app/deals/[id]/actions";
 import ContentActualsRow from "./ContentActualsRow";
+import {
+  actualDealCost,
+  returnOnAdSpend,
+  type Commission,
+  type CommissionTier,
+  type Discount,
+} from "@/lib/commission";
 
 const inputClass =
   "w-full border border-slate-200 rounded-md bg-white px-2.5 py-1.5 text-sm text-right font-tabular text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand";
+
+interface ActualsFinance {
+  aov: number;
+  commission: Commission;
+  discount: Discount;
+  commissionTiers: CommissionTier[];
+  productCost: number;
+}
+
+const EMPTY_FINANCE: ActualsFinance = {
+  aov: 0,
+  commission: { type: "none", value: 0 },
+  discount: { type: "none", value: 0 },
+  commissionTiers: [],
+  productCost: 0,
+};
+
+function actualCost(
+  fee: number,
+  orders: number,
+  revenue: number | null,
+  finance: ActualsFinance
+) {
+  return actualDealCost({
+    fee,
+    actualOrders: orders,
+    actualRevenue: revenue,
+    aov: finance.aov,
+    commission: finance.commission,
+    discount: finance.discount,
+    tiers: finance.commissionTiers,
+    productCost: finance.productCost,
+  });
+}
 
 export default function ActualsPanel({
   deal,
   contentItems,
   expectedReach,
   windows,
+  finance = EMPTY_FINANCE,
 }: {
   deal: Deal;
   contentItems: ContentItem[];
   /** Channel averages per platform, keyed by platform — mirrors the benchmark split. */
   expectedReach?: Record<string, number>;
   windows?: MeasurementWindows;
+  finance?: ActualsFinance;
 }) {
   const price = deal.agreed_price ?? deal.current_offer;
 
@@ -37,10 +80,11 @@ export default function ActualsPanel({
         price={price}
         expectedReach={expectedReach ?? {}}
         windows={windows ?? {}}
+        finance={finance}
       />
     );
   }
-  return <DealLevelActuals deal={deal} price={price} />;
+  return <DealLevelActuals deal={deal} price={price} finance={finance} />;
 }
 
 function PerItemActuals({
@@ -49,17 +93,24 @@ function PerItemActuals({
   price,
   expectedReach,
   windows,
+  finance,
 }: {
   deal: Deal;
   contentItems: ContentItem[];
   price: number | null;
   expectedReach: Record<string, number>;
   windows: MeasurementWindows;
+  finance: ActualsFinance;
 }) {
   const measured = contentItems.filter((c) => c.actual_views != null && c.actual_views > 0);
+  const unattributed = measured.filter((c) => !c.platform).length;
   const totalViews = measured.reduce((s, c) => s + (c.actual_views ?? 0), 0);
+  const hasRevenue = measured.some((c) => c.actual_revenue != null);
   const totalRevenue = measured.reduce((s, c) => s + (c.actual_revenue ?? 0), 0);
   const totalOrders = measured.reduce((s, c) => s + (c.actual_orders ?? 0), 0);
+  const cost = actualCost(price ?? 0, totalOrders, hasRevenue ? totalRevenue : null, finance);
+  const feeRoas = returnOnAdSpend(totalRevenue, price ?? 0);
+  const allInRoas = returnOnAdSpend(totalRevenue, cost.total);
 
   const platforms = dealPlatforms(deal);
   const multi = platforms.length > 1;
@@ -67,7 +118,7 @@ function PerItemActuals({
   // The exact rule the benchmarks use, so the two never tell different stories.
   const groups = platforms
     .map((p) => {
-      const group = measured.filter((c) => (c.platform ?? platforms[0]) === p);
+      const group = measured.filter((c) => c.platform === p);
       return group.length > 0
         ? {
             platform: p,
@@ -85,7 +136,8 @@ function PerItemActuals({
 
   /** An item's slice of its platform's fee, split by that item's share of the platform's views. */
   const shareOf = (item: ContentItem) => {
-    const platform = (item.platform ?? platforms[0]) as Platform;
+    if (!item.platform) return null;
+    const platform = item.platform as Platform;
     const group = groups.find((g) => g.platform === platform);
     const fee = feeOf(platform);
     if (!group || fee == null || !item.actual_views || group.actualViews === 0) return null;
@@ -113,6 +165,12 @@ function PerItemActuals({
           ? "Because this deal spans platforms, per-item numbers let Counterpart calibrate each platform separately instead of crediting the whole deal to one of them."
           : "Counterpart compares predicted vs actual and calibrates your CPM benchmarks, so your fair-price model sharpens with every closed deal."}
       </p>
+      {unattributed > 0 && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-3">
+          {unattributed} measured item{unattributed === 1 ? " is" : "s are"} excluded from
+          platform CPMs until its platform is assigned in Fulfillment.
+        </p>
+      )}
 
       <div className="space-y-2.5">
         {contentItems.map((item) => (
@@ -128,14 +186,17 @@ function PerItemActuals({
 
       {totalViews > 0 && (
         <div className="mt-4 border-t border-slate-100 pt-4">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: "Total views", value: fmtViews(totalViews) },
               { label: "Orders", value: totalOrders > 0 ? String(totalOrders) : "—" },
               {
-                label: "ROAS",
-                value:
-                  totalRevenue > 0 && price ? `${(totalRevenue / price).toFixed(2)}×` : "—",
+                label: "Fee ROAS",
+                value: feeRoas != null ? `${feeRoas.toFixed(2)}×` : "—",
+              },
+              {
+                label: "All-in ROAS",
+                value: allInRoas != null ? `${allInRoas.toFixed(2)}×` : "—",
               },
             ].map((s) => (
               <div key={s.label} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
@@ -144,6 +205,12 @@ function PerItemActuals({
               </div>
             ))}
           </div>
+          {(feeRoas != null || allInRoas != null) && (
+            <p className="text-[11px] text-slate-500 mt-2">
+              Fee ROAS uses the creator fee only. All-in ROAS also includes actual commission
+              and any gifted product cost.
+            </p>
+          )}
 
           {multi && byPlatform.length > 1 && (
             <div className="mt-3">
@@ -181,7 +248,15 @@ function PerItemActuals({
   );
 }
 
-function DealLevelActuals({ deal, price }: { deal: Deal; price: number | null }) {
+function DealLevelActuals({
+  deal,
+  price,
+  finance,
+}: {
+  deal: Deal;
+  price: number | null;
+  finance: ActualsFinance;
+}) {
   const [views, setViews] = useState(deal.actual_views?.toString() ?? "");
   const [clicks, setClicks] = useState(deal.actual_clicks?.toString() ?? "");
   const [orders, setOrders] = useState(deal.actual_orders?.toString() ?? "");
@@ -207,6 +282,12 @@ function DealLevelActuals({ deal, price }: { deal: Deal; price: number | null })
   const v = num(views);
   const actualCpm = v && price ? (price / v) * 1000 : null;
   const predictedCpm = deal.avg_views && price ? (price / deal.avg_views) * 1000 : null;
+  const actualOrders = num(orders) ?? 0;
+  const actualRevenueValue = num(revenue);
+  const actualRevenue = actualRevenueValue ?? 0;
+  const cost = actualCost(price ?? 0, actualOrders, actualRevenueValue, finance);
+  const feeRoas = returnOnAdSpend(actualRevenue, price ?? 0);
+  const allInRoas = returnOnAdSpend(actualRevenue, cost.total);
 
   const fields: [string, string, (s: string) => void, string][] = [
     ["Actual views delivered", views, setViews, "e.g. 88000"],
@@ -266,6 +347,29 @@ function DealLevelActuals({ deal, price }: { deal: Deal; price: number | null })
               {actualCpm != null ? moneyCpm(actualCpm) : "—"}
             </div>
           </div>
+        </div>
+      )}
+
+      {(feeRoas != null || allInRoas != null) && (
+        <div className="mt-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+              <div className="text-[11px] text-slate-500 uppercase tracking-wider">Fee ROAS</div>
+              <div className="font-tabular font-semibold text-slate-900">
+                {feeRoas != null ? `${feeRoas.toFixed(2)}×` : "—"}
+              </div>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+              <div className="text-[11px] text-slate-500 uppercase tracking-wider">All-in ROAS</div>
+              <div className="font-tabular font-semibold text-slate-900">
+                {allInRoas != null ? `${allInRoas.toFixed(2)}×` : "—"}
+              </div>
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-2">
+            Fee ROAS uses the creator fee only. All-in ROAS also includes actual commission
+            and any gifted product cost.
+          </p>
         </div>
       )}
 

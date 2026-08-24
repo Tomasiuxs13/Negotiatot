@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { savePlaybookAction, type PlaybookPayload } from "@/app/playbook/actions";
+import { DEFAULT_RIGHTS_PRICING, type RightsPricing } from "@/lib/rights";
 
 const PLATFORMS = ["youtube", "instagram", "tiktok", "facebook"] as const;
 const PLATFORM_LABEL: Record<string, string> = {
@@ -53,8 +54,6 @@ const OFFER_FIELDS = [
   "productCost",
   "productRetail",
   "minPaidFee",
-  "commissionPercent",
-  "commissionPerOrder",
   "discountPercent",
   "discountFixed",
 ];
@@ -70,6 +69,8 @@ interface NegotiationStyle {
   warnAtWalkawayPct: number;
   maxStepPct: number;
   concessionLadder: string[];
+  rightsGuidance?: string[];
+  rightsPricing?: RightsPricing;
   commissionTiers?: string[];
   nonNegotiables: string[];
 }
@@ -87,8 +88,18 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
   const [activePlatform, setActivePlatform] = useState<string>("youtube");
   const [isPending, startTransition] = useTransition();
   const [status, setStatus] = useState<"pristine" | "idle" | "saved" | "error">("pristine");
+  const [errorMessage, setErrorMessage] = useState("");
 
   const rules = platforms[activePlatform] ?? {};
+  const rightsPricing = { ...DEFAULT_RIGHTS_PRICING, ...(style.rightsPricing ?? {}) };
+  const commissionMode =
+    (econ.commissionPercent ?? 0) > 0 && (econ.commissionPerOrder ?? 0) > 0
+      ? "conflict"
+      : (econ.commissionPercent ?? 0) > 0
+        ? "percent"
+        : (econ.commissionPerOrder ?? 0) > 0
+          ? "per_order"
+          : "none";
 
   // Closing or refreshing with unsaved edits silently discarded the whole form.
   // (In-app navigation is still unguarded — the sticky save bar makes the dirty
@@ -115,6 +126,7 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
   };
 
   const save = () => {
+    setErrorMessage("");
     startTransition(async () => {
       const result = await savePlaybookAction({
         platforms,
@@ -123,8 +135,21 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
         unitEconomics: econ,
         negotiationStyle: style as unknown as Record<string, unknown>,
       });
+      setErrorMessage(result.error ?? "");
       setStatus(result.error ? "error" : "saved");
     });
+  };
+
+  const setCommissionMode = (mode: "none" | "percent" | "per_order") => {
+    setEcon((prev) => ({
+      ...prev,
+      commissionPercent:
+        mode === "percent" ? (prev.commissionPercent > 0 ? prev.commissionPercent : 10) : 0,
+      commissionPerOrder:
+        mode === "per_order" ? (prev.commissionPerOrder > 0 ? prev.commissionPerOrder : 20) : 0,
+    }));
+    setErrorMessage("");
+    setStatus("idle");
   };
 
   const NAV = [
@@ -160,7 +185,11 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
             <span className="text-xs font-medium text-amber-600">Unsaved changes</span>
           )}
           {status === "saved" && <span className="text-xs font-medium text-emerald-600">Saved ✓</span>}
-          {status === "error" && <span className="text-xs font-medium text-red-600">Save failed</span>}
+          {status === "error" && (
+            <span className="text-xs font-medium text-red-600" role="alert">
+              {errorMessage || "Save failed"}
+            </span>
+          )}
           <button
             onClick={save}
             disabled={isPending}
@@ -193,7 +222,7 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
           Used to sign drafts and name what you&apos;re gifting — creators reply to people, not
           to &quot;the partnerships team&quot;.
         </p>
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {Object.entries(brand)
             .filter(([key]) => key !== "productOffer")
             .map(([key, value]) => (
@@ -249,7 +278,7 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
         <p className="text-xs text-slate-500 mb-3">
           Set once — these apply to every platform.
         </p>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {Object.entries(globals).map(([key, value]) => (
             <div key={key}>
               <label className="block text-xs text-slate-600 mb-1">{RULE_LABELS[key] ?? key}</label>
@@ -271,7 +300,7 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
         {/* Economics targets */}
         <div id="pb-platform" className="scroll-mt-20 bg-white rounded-lg border border-slate-200 shadow-sm p-5">
           <h3 className="font-headline text-sm font-semibold text-slate-900 mb-3">
@@ -348,6 +377,84 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
                 />
               </div>
             ))}
+
+            <div className="py-3">
+              <div className="flex items-center justify-between gap-4">
+                <label htmlFor="default-commission-mode" className="text-sm text-slate-600">
+                  Default commission model
+                </label>
+                <select
+                  id="default-commission-mode"
+                  className="border border-slate-200 rounded-md bg-white px-2.5 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand"
+                  value={commissionMode}
+                  onChange={(e) =>
+                    setCommissionMode(e.target.value as "none" | "percent" | "per_order")
+                  }
+                >
+                  {commissionMode === "conflict" && (
+                    <option value="conflict" disabled>
+                      Choose one — both are set
+                    </option>
+                  )}
+                  <option value="none">No commission</option>
+                  <option value="percent">Percentage of revenue</option>
+                  <option value="per_order">Dollars per order</option>
+                </select>
+              </div>
+              {commissionMode === "conflict" && (
+                <p className="text-xs text-red-600 mt-2" role="alert">
+                  Both commission fields are populated. Choose the model this offer actually uses.
+                </p>
+              )}
+              {commissionMode === "percent" && (
+                <div className="flex items-center justify-between gap-4 mt-2">
+                  <label htmlFor="default-commission-percent" className="text-sm text-slate-600">
+                    Commission (% of revenue)
+                  </label>
+                  <input
+                    id="default-commission-percent"
+                    className={inputClass}
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={econ.commissionPercent}
+                    onChange={(e) => {
+                      setEcon((prev) => ({ ...prev, commissionPercent: Number(e.target.value) }));
+                      setStatus("idle");
+                    }}
+                  />
+                </div>
+              )}
+              {commissionMode === "per_order" && (
+                <div className="flex items-center justify-between gap-4 mt-2">
+                  <label htmlFor="default-commission-per-order" className="text-sm text-slate-600">
+                    Commission ($ per order)
+                  </label>
+                  <input
+                    id="default-commission-per-order"
+                    className={inputClass}
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={econ.commissionPerOrder}
+                    onChange={(e) => {
+                      setEcon((prev) => ({ ...prev, commissionPerOrder: Number(e.target.value) }));
+                      setStatus("idle");
+                    }}
+                  />
+                  <p className="sr-only">
+                    Volume tiers apply only to dollar-per-order commission.
+                  </p>
+                </div>
+              )}
+              {commissionMode !== "none" && commissionMode !== "conflict" && (
+                <p className="text-[11px] text-slate-500 mt-2">
+                  {commissionMode === "per_order"
+                    ? "Volume tiers can raise this dollar-per-order rate."
+                    : "Percentage commission stays at this rate; dollar-per-order volume tiers do not replace it."}
+                </p>
+              )}
+            </div>
           </div>
 
           <h3 id="pb-finance" className="scroll-mt-20 font-headline text-sm font-semibold text-slate-900 mt-5 mb-1">
@@ -465,6 +572,61 @@ export default function PlaybookEditor({ initial }: { initial: PlaybookPayload }
               setStyle((prev) => ({ ...prev, concessionLadder: e.target.value.split("\n").filter(Boolean) }))
             }
           />
+          <h3 className="font-headline text-sm font-semibold text-slate-900 mt-4 mb-1.5">Rights pricing</h3>
+          <p className="text-xs text-slate-500 mb-2">
+            What usage rights, whitelisting and exclusivity add to a base fee — one band per
+            line. Quoted verbatim to the engine whenever a deal has rights marked.
+          </p>
+          <textarea
+            rows={7}
+            className="w-full border border-slate-200 rounded-lg bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand resize-y"
+            value={(style.rightsGuidance ?? []).join("\n")}
+            onChange={(e) =>
+              setStyle((prev) => ({ ...prev, rightsGuidance: e.target.value.split("\n").filter(Boolean) }))
+            }
+          />
+          <p className="text-xs text-slate-500 mt-3 mb-2">
+            Percent of the base content fee added per 30 days. These fields—not the prose
+            above—feed anchor, target and walk-away.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+            {(
+              [
+                ["organicUsagePerMonthPct", "Organic usage / month"],
+                ["paidUsagePerMonthPct", "Paid usage / month"],
+                ["whitelistingPerMonthPct", "Whitelisting / month"],
+                ["categoryExclusivityPerMonthPct", "Category exclusivity / month"],
+                ["fullExclusivityPerMonthPct", "Full exclusivity / month"],
+                ["maxTotalPct", "Maximum total rights uplift"],
+              ] as [keyof RightsPricing, string][]
+            ).map(([key, label]) => (
+              <label key={key} className="flex items-center justify-between gap-4 py-1">
+                <span className="text-xs text-slate-600">{label}</span>
+                <span className="flex items-center gap-1">
+                  <input
+                    className={inputClass}
+                    type="number"
+                    min="0"
+                    max="1000"
+                    step="0.5"
+                    value={rightsPricing[key]}
+                    onChange={(e) => {
+                      setStyle((prev) => ({
+                        ...prev,
+                        rightsPricing: {
+                          ...DEFAULT_RIGHTS_PRICING,
+                          ...(prev.rightsPricing ?? {}),
+                          [key]: Number(e.target.value),
+                        },
+                      }));
+                      setStatus("idle");
+                    }}
+                  />
+                  <span className="text-xs text-slate-500">%</span>
+                </span>
+              </label>
+            ))}
+          </div>
           <h3 className="font-headline text-sm font-semibold text-slate-900 mt-4 mb-1.5">
             Commission volume tiers
           </h3>

@@ -20,6 +20,9 @@ import {
   parseTiers,
   describeTiers,
   resolveOffer,
+  returnOnAdSpend,
+  commissionModeError,
+  actualDealCost,
   expectedOrdersFrom,
   earningsForecast,
   marginAtZeroFee,
@@ -131,6 +134,84 @@ describe("trueDealCost", () => {
   });
 });
 
+describe("returnOnAdSpend", () => {
+  it("uses the supplied, explicitly named cost basis", () => {
+    expect(returnOnAdSpend(9600, 2900)).toBeCloseTo(3.31, 2);
+    expect(returnOnAdSpend(9600, 4438)).toBeCloseTo(2.16, 2);
+  });
+
+  it("keeps missing or zero costs unknown", () => {
+    expect(returnOnAdSpend(9600, 0)).toBeNull();
+    expect(returnOnAdSpend(0, 2900)).toBeNull();
+  });
+
+  it("separates the audited fixed-fee and true all-in cost bases", () => {
+    const cost = actualDealCost({
+      fee: 2900,
+      actualOrders: 120,
+      actualRevenue: 9600,
+      aov: 80,
+      commission: { type: "percent", value: 8 },
+      tiers: [
+        { minOrders: 0, amount: 20 },
+        { minOrders: 50, amount: 40 },
+      ],
+      productCost: 70,
+    });
+
+    expect(cost).toEqual({ fee: 2900, commission: 768, discount: 0, product: 70, total: 3738 });
+    expect(returnOnAdSpend(9600, cost.fee)).toBeCloseTo(3.31, 2);
+    expect(returnOnAdSpend(9600, cost.total)).toBeCloseTo(2.57, 2);
+  });
+
+  it("still applies dollar-per-order tiers to actual order volume", () => {
+    const cost = actualDealCost({
+      fee: 2900,
+      actualOrders: 120,
+      actualRevenue: 9600,
+      aov: 80,
+      commission: { type: "per_order", value: 20 },
+      tiers: [
+        { minOrders: 0, amount: 20 },
+        { minOrders: 50, amount: 40 },
+      ],
+    });
+
+    expect(cost.commission).toBe(4800);
+  });
+
+  it("uses attributed revenue for a percentage even if order count was not logged", () => {
+    const cost = actualDealCost({
+      fee: 2900,
+      actualOrders: 0,
+      actualRevenue: 9600,
+      aov: 80,
+      commission: { type: "percent", value: 8 },
+    });
+
+    expect(cost.commission).toBe(768);
+  });
+});
+
+describe("commissionModeError", () => {
+  it("rejects an ambiguous standard offer", () => {
+    expect(commissionModeError({ commissionPercent: 8, commissionPerOrder: 20 })).toMatch(
+      /Choose one default commission model/
+    );
+  });
+
+  it("accepts exactly one model or no commission", () => {
+    expect(commissionModeError({ commissionPercent: 8, commissionPerOrder: 0 })).toBeNull();
+    expect(commissionModeError({ commissionPercent: 0, commissionPerOrder: 20 })).toBeNull();
+    expect(commissionModeError({ commissionPercent: 0, commissionPerOrder: 0 })).toBeNull();
+  });
+
+  it("rejects invalid or negative rates", () => {
+    expect(commissionModeError({ commissionPercent: Number.NaN })).toMatch(/valid numbers/);
+    expect(commissionModeError({ commissionPerOrder: -1 })).toMatch(/valid numbers/);
+  });
+});
+
 describe("breakevenFee with gifted product", () => {
   it("takes the product cost out of what the fee can be", () => {
     // $3,600 margin − $600 commission − $140 product = $2,860.
@@ -203,14 +284,14 @@ describe("earningsForecast edge cases", () => {
     expect(f.total).toBe(36);
   });
 
-  it("pays the tier rate once the volume reaches a rung", () => {
+  it("keeps an explicitly percentage-based deal on that model at high volume", () => {
     const f = earningsForecast({
       expectedOrders: 31,
       commission: { type: "percent", value: 10 },
       aov: 120,
       tiers: ladder,
     });
-    expect(f.perOrder).toBe(40);
+    expect(f.perOrder).toBe(12);
   });
 
   it("rounds the per-sale rate to cents — it's quoted verbatim in drafts", () => {
@@ -492,7 +573,7 @@ describe("resolveOffer", () => {
     expect(commission).toEqual({ type: "per_order", value: 20 });
   });
 
-  it("prefers a per-order CPA over a percentage when both are configured", () => {
+  it("resolves legacy ambiguous settings deterministically until they are repaired", () => {
     const { commission } = resolveOffer({}, { ...econ, commissionPercent: 15 });
     expect(commission.type).toBe("per_order");
   });
@@ -572,5 +653,17 @@ describe("earningsForecast", () => {
     });
     expect(f.perOrder).toBe(25);
     expect(f.total).toBe(250);
+  });
+
+  it("never replaces an agreed percentage commission with per-order tiers", () => {
+    const f = earningsForecast({
+      expectedOrders: 120,
+      commission: { type: "percent", value: 8 },
+      aov: 80,
+      tiers,
+    });
+    expect(f.perOrder).toBe(6.4);
+    expect(f.total).toBe(768);
+    expect(f.reachableTiers).toEqual([]);
   });
 });

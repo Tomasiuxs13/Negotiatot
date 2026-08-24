@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { hasRights, parseRights, type DealRights } from "@/lib/rights";
+import { readReportFile } from "@/lib/report-upload";
 import { after } from "next/server";
 import { addMessage, getContractDraft, getDeal, getPartner, markContractDraftSigned, saveContractDraft, setJob, updateDeal, upsertPartnerChannel } from "@/lib/db";
 import { getContentItems, getPaymentItems } from "@/lib/fulfillment";
@@ -8,6 +10,7 @@ import { generateContractText } from "@/lib/contract-template";
 import { getSetting } from "@/lib/db";
 import { hasApiKey } from "@/lib/claude";
 import { performAnalysis, performRecommendation, platformsOf } from "@/lib/engine";
+import { recommendationGuardError } from "@/lib/recommendation-guard";
 
 const NO_KEY_ERROR =
   "No ANTHROPIC_API_KEY configured — add it to counterpart/.env.local and restart the dev server.";
@@ -15,6 +18,15 @@ const NO_KEY_ERROR =
 export async function markDraftAsSent(dealId: number, text: string, proposedOffer: number) {
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
+  if (deal.stage === "agreed" || deal.stage === "completed" || deal.stage === "declined") {
+    return { error: "Reopen this deal before sending another offer." };
+  }
+  const guardError = recommendationGuardError({
+    proposedOffer,
+    walkaway: deal.walkaway,
+    breakeven: deal.breakeven,
+  });
+  if (guardError) return { error: guardError };
   addMessage(dealId, "us", text, { offer: proposedOffer });
   updateDeal(dealId, {
     current_offer: proposedOffer,
@@ -34,6 +46,9 @@ export async function addTheirReply(dealId: number, text: string) {
   if (!trimmed) return { error: "Empty message" };
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
+  if (deal.stage === "agreed" || deal.stage === "completed" || deal.stage === "declined") {
+    return { error: "Reopen this deal before adding another negotiation reply." };
+  }
 
   addMessage(dealId, "them", trimmed);
   const round = deal.round + 1;
@@ -72,6 +87,9 @@ export async function addTheirReply(dealId: number, text: string) {
 export async function runRecommendation(dealId: number) {
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
+  if (deal.stage === "agreed" || deal.stage === "completed" || deal.stage === "declined") {
+    return { error: "Reopen this deal before generating another negotiation move." };
+  }
   if (!hasApiKey()) return { error: NO_KEY_ERROR };
 
   if (!setJob(dealId, "recommending")) {
@@ -174,6 +192,53 @@ export async function saveActuals(
   // Actual views are what turn a partner's committed spend into a real CPM, so the
   // partners table is reading the number this action just changed.
   revalidatePath("/partners");
+  return {};
+}
+
+/**
+ * Attach an analytics report after intake and re-price on it.
+ *
+ * The intake form was the only door a Modash/HypeAuditor document could enter through,
+ * so a deal created before the report arrived could never use it — the workaround was
+ * deleting the deal and starting over, losing the thread. This is the same machinery
+ * the intake feeds (extraction pass, provenance, raw-document fallback), reached from
+ * the deal page. The audience lock keeps its meaning: a hand-corrected figure still
+ * outranks whatever the report says.
+ */
+export async function attachReportAndAnalyze(dealId: number, formData: FormData) {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  if (!hasApiKey()) return { error: NO_KEY_ERROR };
+
+  const report = await readReportFile(formData.get("report"));
+  if (report.kind === "error") return { error: report.error };
+  if (report.kind === "none") return { error: "Choose a PDF report or a screenshot first." };
+
+  if (!setJob(dealId, "analyzing")) {
+    return { error: "The Copilot is already working on this deal — wait for it to finish." };
+  }
+  updateDeal(dealId, { status_label: "Analyzing report…", status_tone: "neutral" });
+  after(() =>
+    performAnalysis(dealId, {
+      reportPdfBase64: report.kind === "pdf" ? report.pdfBase64 : undefined,
+      reportImage: report.kind === "image" ? report.image : undefined,
+    })
+  );
+  revalidatePath(`/deals/${dealId}`);
+  revalidatePath("/");
+  revalidatePath("/pipeline");
+  return {};
+}
+
+export async function saveRightsAction(dealId: number, rights: DealRights) {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  // Round-trip through parseRights: whatever the client sent, only the normalised
+  // shape is stored — a disabled right keeps no duration, junk keeps nothing.
+  const normalised = parseRights(JSON.stringify(rights));
+  updateDeal(dealId, { rights: hasRights(normalised) ? JSON.stringify(normalised) : null });
+  revalidatePath(`/deals/${dealId}`);
+  revalidatePath("/pipeline");
   return {};
 }
 

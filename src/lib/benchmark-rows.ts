@@ -99,14 +99,25 @@ export function benchmarkRows(
     const price = deal.agreed_price ?? deal.current_offer;
     if (price == null) continue;
 
-    const items = contentItems.filter(
+    const platforms = dealPlatforms(deal);
+    const measuredItems = contentItems.filter(
       (c) => c.deal_id === deal.id && c.actual_views != null && c.actual_views > 0
+    );
+    // A missing or foreign platform on a mixed deal is unresolved data, not permission
+    // to credit the primary platform. Fulfillment exposes a repair control for it.
+    const hasUnattributedMeasuredItem =
+      platforms.length > 1 &&
+      measuredItems.some((c) => !isPlatform(c.platform) || !platforms.includes(c.platform));
+    const items = measuredItems.filter((c) =>
+      platforms.length === 1
+        ? !isPlatform(c.platform) || platforms.includes(c.platform)
+        : isPlatform(c.platform) && platforms.includes(c.platform)
     );
 
     // Group this deal's measured deliverables by platform.
     const byPlatform = new Map<Platform, ContentItem[]>();
     for (const item of items) {
-      const platform = isPlatform(item.platform) ? item.platform : dealPlatforms(deal)[0];
+      const platform = isPlatform(item.platform) ? item.platform : platforms[0];
       const list = byPlatform.get(platform);
       if (list) list.push(item);
       else byPlatform.set(platform, [item]);
@@ -121,7 +132,7 @@ export function benchmarkRows(
           c.deal_id === deal.id &&
           (c.status === "posted" || c.status === "verified") &&
           (c.actual_views == null || c.actual_views <= 0)
-      );
+      ) && !hasUnattributedMeasuredItem;
 
       const groups = [...byPlatform].map(([platform, group]) => ({
         platform,
@@ -168,11 +179,11 @@ export function benchmarkRows(
     rows.push({
       dealId: deal.id,
       creator: deal.creator,
-      platform: dealPlatforms(deal)[0],
+      platform: platforms[0],
       // Deal-level totals predate per-item measurement; take them at face value.
       isFinal: true,
       price,
-      label: dealPlatforms(deal).length > 1 ? "deal total" : null,
+      label: platforms.length > 1 ? "deal total" : null,
       predictedViews: deal.avg_views,
       actualViews: deal.actual_views,
       predictedCpm: deal.avg_views ? (price / deal.avg_views) * 1000 : null,

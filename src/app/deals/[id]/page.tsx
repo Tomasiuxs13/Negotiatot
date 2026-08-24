@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ensurePartnerPortalToken, getCampaign, getContractDraft, getDeal, getMessages, getNegotiationStyle, getPartner, getPartnerChannels, getPlaybook, getLastRunAt, getRemindersFor, getSetting, getUsageTotals } from "@/lib/db";
+import { ensurePartnerPortalToken, getCampaign, getContractDraft, getDeal, getMessages, getNegotiationStyle, getPartner, getPartnerChannels, getPlaybook, getLastRunAt, getRemindersFor, getSetting, getUnitEconomics, getUsageTotals } from "@/lib/db";
 import ContactStrip from "@/components/deal/ContactStrip";
+import RightsEditor from "@/components/deal/RightsEditor";
+import AttachReportBlock from "@/components/deal/AttachReportBlock";
+import { parseRights, rightsMismatch } from "@/lib/rights";
 import RemindersBlock from "@/components/RemindersBlock";
 import type { MeasurementWindows } from "@/lib/measurement";
 import { describeOverrides, parseOverrides } from "@/lib/campaigns";
-import { DECLINE_REASON_LABEL, PLATFORM_META, STAGE_LABELS, dealPlatforms, dealScope } from "@/lib/types";
+import { DECLINE_REASON_LABEL, PLATFORM_META, STAGE_LABELS, dealPlatforms, dealScope, type Deal, type Message } from "@/lib/types";
 import CockpitNumbers from "@/components/deal/CockpitNumbers";
 import AffordabilityPanel from "@/components/deal/AffordabilityPanel";
 import MetricBand from "@/components/deal/MetricBand";
@@ -15,6 +18,7 @@ import AudienceDataEditor from "@/components/deal/AudienceDataEditor";
 import { suspectAudienceData } from "@/lib/audience-sanity";
 import DeleteDealButton from "@/components/deal/DeleteDealButton";
 import CompleteDealButton from "@/components/deal/CompleteDealButton";
+import MarkAgreedButton from "@/components/deal/MarkAgreedButton";
 import DeclineDealButton from "@/components/deal/DeclineDealButton";
 import ReopenDealButton from "@/components/deal/ReopenDealButton";
 import ActualsPanel from "@/components/deal/ActualsPanel";
@@ -31,22 +35,57 @@ import {
   parseTerms,
 } from "@/lib/fulfillment";
 import { money } from "@/lib/format";
-import { dealCommission, describeCommission, earningsForecast, expectedOrdersFrom, parseTiers, resolveOffer, trueDealCost } from "@/lib/commission";
+import { actualDealCost, dealCommission, describeCommission, earningsForecast, expectedOrdersFrom, parseTiers, resolveOffer, trueDealCost } from "@/lib/commission";
 import { deliverableCount } from "@/lib/deliverables";
 import { ladderNotes } from "@/lib/ladder-notes";
 import AnalysisTab from "@/components/deal/AnalysisTab";
 import NegotiationTab from "@/components/deal/NegotiationTab";
 import DealNotes from "@/components/deal/DealNotes";
 import { DEAL_STAGE_TONE, TONE_CLASS_BORDERED } from "@/lib/status-tones";
-import { PAGE_WIDTH } from "@/lib/layout";
 import { usageCostUsd } from "@/lib/usage-cost";
 import { parseRequirements } from "@/lib/brief-requirements";
 import ContractDraftBlock from "@/components/deal/ContractDraftBlock";
 
 export const dynamic = "force-dynamic";
 
-
-
+function HistoryTab({ deal, messages }: { deal: Deal; messages: Message[] }) {
+  const usage = getUsageTotals(deal.id);
+  const estCost = usageCostUsd(usage);
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <div className="flex items-baseline justify-between mb-3">
+        <h3 className="font-headline text-sm font-semibold text-slate-900">Deal history</h3>
+        {usage.calls > 0 && (
+          <span className="text-xs text-slate-400 font-tabular">
+            Copilot usage: {usage.calls} calls · ≈ ${estCost.toFixed(2)}
+          </span>
+        )}
+      </div>
+      <div className="divide-y divide-slate-100">
+        <div className="flex gap-3 py-2.5 text-xs first:pt-0">
+          <span className="text-slate-400 w-14 shrink-0">
+            {new Date(deal.created_at + "Z").toLocaleDateString("en", { month: "short", day: "numeric" })}
+          </span>
+          <span className="text-slate-700">Deal created · {deal.campaign ?? "no campaign"}</span>
+        </div>
+        {messages.map((message) => (
+          <div key={message.id} className="flex gap-3 py-2.5 text-xs last:pb-0">
+            <span className="text-slate-400 w-14 shrink-0">
+              {new Date(message.created_at + "Z").toLocaleDateString("en", { month: "short", day: "numeric" })}
+            </span>
+            <span className="text-slate-700">
+              {message.sender === "them"
+                ? `Message received from ${deal.creator}`
+                : message.sender === "us"
+                  ? "Offer sent"
+                  : `Copilot recommendation · ${message.body}`}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 export default async function DealPage({
   params,
   searchParams,
@@ -75,7 +114,7 @@ export default async function DealPage({
   // commission (deal override or Playbook default), and the tier rate the forecast
   // volume earns. Using the deal row alone here showed $7,342 on screen while the
   // analysis said $8,764 for the same deal.
-  const econ = getSetting<Record<string, number>>("unit_economics") ?? {};
+  const econ = getUnitEconomics();
   const platformRules = Object.fromEntries(platforms.map((p) => [p, getPlaybook(p)]));
   const ladderPieces = Math.max(
     1,
@@ -106,19 +145,44 @@ export default async function DealPage({
     aov: Number(econ.aov ?? 0),
     commission: { type: "per_order", value: ladderRate },
     discount: offer.discount,
-    productCost: Number(econ.productCost ?? 0),
+    productCost: shipments.length > 0 ? Number(econ.productCost ?? 0) : 0,
   });
   // Affordability, computed here rather than read off the analysis so the panel is
   // right even before an analysis has ever run, and stays right after the Playbook
   // changes. Same inputs the ladder's cost note uses, so the two cannot disagree.
-  const dealCost = trueDealCost({
-    fee: deal.target ?? 0,
-    expectedOrders: ladderOrders,
-    aov: Number(econ.aov ?? 0),
-    commission: { type: "per_order", value: ladderRate },
-    discount: offer.discount,
-    productCost: Number(econ.productCost ?? 0),
-  });
+  const costOrders = closed && deal.actual_orders != null ? deal.actual_orders : ladderOrders;
+  const costFee = closed
+    ? (deal.agreed_price ?? deal.current_offer ?? deal.target ?? 0)
+    : (deal.target ?? 0);
+  const productCost = shipments.length > 0 ? Number(econ.productCost ?? 0) : 0;
+  const dealCost = closed
+    ? actualDealCost({
+        fee: costFee,
+        actualOrders: costOrders,
+        actualRevenue: deal.actual_revenue,
+        aov: Number(econ.aov ?? 0),
+        commission: offer.commission,
+        discount: offer.discount,
+        tiers: styleTiers,
+        productCost,
+      })
+    : (() => {
+        const costRate = earningsForecast({
+          expectedOrders: costOrders,
+          commission: offer.commission,
+          aov: Number(econ.aov ?? 0),
+          discount: offer.discount,
+          tiers: styleTiers,
+        }).perOrder;
+        return trueDealCost({
+          fee: costFee,
+          expectedOrders: costOrders,
+          aov: Number(econ.aov ?? 0),
+          commission: { type: "per_order", value: costRate },
+          discount: offer.discount,
+          productCost,
+        });
+      })();
   /** Widest cap among this deal's platforms — a crosspost isn't capped at the strictest. */
   const maxPerDeal = (() => {
     const caps = platforms
@@ -138,7 +202,7 @@ export default async function DealPage({
   })();
 
   const showFulfillment =
-    deal.stage === "agreed" ||
+    closed ||
     contract != null ||
     contentItems.length > 0 ||
     paymentItems.length > 0 ||
@@ -157,11 +221,15 @@ export default async function DealPage({
   const workDone = (() => {
     const unverified = contentItems.filter((c) => c.status !== "verified").length;
     const unpaid = paymentItems.filter((p) => p.status !== "paid").length;
+    const undelivered = shipments.filter((shipment) => shipment.status !== "delivered").length;
     const open: string[] = [];
     if (unverified > 0) open.push(`${unverified} content item${unverified === 1 ? "" : "s"} not verified`);
     if (unpaid > 0) open.push(`${unpaid} payment${unpaid === 1 ? "" : "s"} not paid`);
+    if (undelivered > 0) open.push(`${undelivered} shipment${undelivered === 1 ? "" : "s"} not delivered`);
     return {
-      ready: open.length === 0 && (contentItems.length > 0 || paymentItems.length > 0),
+      ready:
+        open.length === 0 &&
+        (contentItems.length > 0 || paymentItems.length > 0 || shipments.length > 0),
       openWork: open.length > 0 ? `Still open: ${open.join(", ")}.` : "Nothing tracked on this deal yet.",
     };
   })();
@@ -170,45 +238,15 @@ export default async function DealPage({
   const campaignOverrides = campaign ? describeOverrides(parseOverrides(campaign.overrides)) : [];
   /** The campaign brief's checkable obligations, for grading posted videos. */
   const briefReqs = parseRequirements(campaign?.brief_requirements);
-
-  function HistoryTab() {
-    const usage = getUsageTotals(deal.id);
-    const estCost = usageCostUsd(usage);
-    return (
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-        <div className="flex items-baseline justify-between mb-3">
-          <h3 className="font-headline text-sm font-semibold text-slate-900">Deal history</h3>
-          {usage.calls > 0 && (
-            <span className="text-xs text-slate-400 font-tabular">
-              Copilot usage: {usage.calls} calls · ≈ ${estCost.toFixed(2)}
-            </span>
-          )}
-        </div>
-        <div className="divide-y divide-slate-100">
-          <div className="flex gap-3 py-2.5 text-xs first:pt-0">
-            <span className="text-slate-400 w-14 shrink-0">
-              {new Date(deal.created_at + "Z").toLocaleDateString("en", { month: "short", day: "numeric" })}
-            </span>
-            <span className="text-slate-700">Deal created · {deal.campaign ?? "no campaign"}</span>
-          </div>
-          {messages.map((m) => (
-            <div key={m.id} className="flex gap-3 py-2.5 text-xs last:pb-0">
-              <span className="text-slate-400 w-14 shrink-0">
-                {new Date(m.created_at + "Z").toLocaleDateString("en", { month: "short", day: "numeric" })}
-              </span>
-              <span className="text-slate-700">
-                {m.sender === "them"
-                  ? `Message received from ${deal.creator}`
-                  : m.sender === "us"
-                    ? "Offer sent"
-                    : `Copilot recommendation · ${m.body}`}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const analyzedAt = getLastRunAt(deal.id, "analysis");
+  const playbookUpdatedAt = getSetting<string>("playbook_updated_at");
+  const hasMeasurableContent = contentItems.some(
+    (item) =>
+      item.status === "posted" ||
+      item.status === "verified" ||
+      item.posted_at != null ||
+      item.actual_views != null
+  );
 
   return (
     <main className="flex-1 overflow-y-auto">
@@ -255,6 +293,12 @@ export default async function DealPage({
                 dealId={deal.id}
                 ready={workDone.ready}
                 openWork={workDone.openWork}
+              />
+            )}
+            {!closed && deal.stage !== "declined" && (
+              <MarkAgreedButton
+                dealId={deal.id}
+                price={deal.current_offer ?? deal.current_ask}
               />
             )}
             {deal.stage === "declined" ? (
@@ -306,19 +350,10 @@ export default async function DealPage({
               contentItems={contentItems}
               paymentItems={paymentItems}
               aov={Number(econ.aov ?? 0)}
-              productCost={Number(econ.productCost ?? 0)}
-              // Resolved at the tier rate the REAL volume earned, not the base rate.
-              commission={{
-                type: "per_order",
-                value: earningsForecast({
-                  expectedOrders: deal.actual_orders ?? 0,
-                  commission: offer.commission,
-                  aov: Number(econ.aov ?? 0),
-                  discount: offer.discount,
-                  tiers: styleTiers,
-                }).perOrder,
-              }}
+              productCost={productCost}
+              commission={offer.commission}
               discount={offer.discount}
+              commissionTiers={styleTiers}
             />
           </section>
         ) : (
@@ -388,7 +423,7 @@ export default async function DealPage({
             <div className="lg:col-span-4 min-w-0">
               <AffordabilityPanel
                 totalCost={dealCost.total}
-                fee={deal.target}
+                fee={costFee}
                 maxPerDeal={maxPerDeal}
                 breakeven={deal.breakeven}
               />
@@ -413,6 +448,8 @@ export default async function DealPage({
               engagementRate={deal.engagement_rate}
               suspect={suspectAudienceData({ avgViews: deal.avg_views, followers })}
             />
+            <RightsEditor dealId={deal.id} rightsJson={deal.rights ?? null} />
+            <AttachReportBlock dealId={deal.id} />
             <DealNotes dealId={deal.id} initialNotes={deal.notes ?? ""} />
             <RemindersBlock
               reminders={getRemindersFor({ dealId: deal.id })}
@@ -423,12 +460,27 @@ export default async function DealPage({
         }
         tabs={[
           { name: "Analysis", node: (
-              <AnalysisTab deal={deal} analyzedAt={getLastRunAt(deal.id, "analysis")} />
+              <AnalysisTab
+                deal={deal}
+                analyzedAt={analyzedAt}
+                playbookUpdatedAt={playbookUpdatedAt}
+              />
             ) },
           { name: "Negotiation", node: <NegotiationTab deal={deal} messages={messages} /> },
           ...(showFulfillment
             ? [{ name: "Fulfillment", node: (
                 <div className="space-y-4 max-w-4xl">
+                  {!closed && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                      <p className="text-xs font-semibold text-amber-900">
+                        Fulfillment is locked because this deal is not Agreed
+                      </p>
+                      <p className="text-xs text-amber-800 mt-1">
+                        These records were created before the deal was won. Move the deal to Agreed
+                        to continue, or delete the records if they do not belong here.
+                      </p>
+                    </div>
+                  )}
                   {/* Who to talk to, above the work about them. Every attention item
                       that says "check in with the creator" lands on this tab, so their
                       email and portal link have to be here, not on the partner page. */}
@@ -446,7 +498,7 @@ export default async function DealPage({
                   })()}
                   {/* Fulfillment is a sequence, not a pile: finished phases fold to a
                       checkmark line so the current one is what the eye lands on. */}
-                  <details open={contract?.status !== "confirmed"} className="group">
+                  <details id="paperwork" open={contract?.status !== "confirmed"} className="group scroll-mt-28">
                     <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-semibold text-slate-700 py-1 select-none">
                       <span className="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
                       1 · Paperwork
@@ -455,6 +507,34 @@ export default async function DealPage({
                       )}
                     </summary>
                     <div className="space-y-4 mt-2">
+                      {/* The contract checked against what the deal was priced for. The
+                          parser has always extracted usage and exclusivity — but only
+                          after signing, which is exactly too late to affect the price.
+                          This is where the two ends finally meet. */}
+                      {(() => {
+                        const terms = parseTerms(contract?.parsed_terms);
+                        if (!terms) return null;
+                        const warnings = rightsMismatch(parseRights(deal.rights), terms);
+                        if (warnings.length === 0) return null;
+                        return (
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                            <p className="text-xs font-semibold text-amber-900 mb-1">
+                              Contract and pricing disagree about rights
+                            </p>
+                            <ul className="space-y-1">
+                              {warnings.map((w) => (
+                                <li key={w} className="text-xs text-amber-800">
+                                  {w}
+                                </li>
+                              ))}
+                            </ul>
+                            <p className="text-[11px] text-amber-700 mt-1.5">
+                              Fix the contract, or update Rights &amp; extras and re-analyze
+                              before confirming.
+                            </p>
+                          </div>
+                        );
+                      })()}
                       <ContractDraftBlock
                         dealId={deal.id}
                         initial={(() => {
@@ -477,7 +557,7 @@ export default async function DealPage({
                     const onboardingDone = onboarding.every((t) => t.status === "done");
                     const phaseDone = contentDone && shipDone && onboardingDone;
                     return (
-                      <details open={!phaseDone} className="group">
+                      <details id="setup-content" open={!phaseDone} className="group scroll-mt-28">
                         <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-semibold text-slate-700 py-1 select-none">
                           <span className="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
                           2 · Setup &amp; content
@@ -498,6 +578,7 @@ export default async function DealPage({
                                 ? `/portal/${ensurePartnerPortalToken(deal.partner_id)}`
                                 : null
                             }
+                            locked={!closed}
                           />
                           <ContentItemsBlock
                             dealId={deal.id}
@@ -509,13 +590,15 @@ export default async function DealPage({
                             senderName={(getSetting<Record<string, string>>("brand_profile")?.senderName ?? "")}
                             requirements={briefReqs.requirements}
                             minIntegrationSeconds={briefReqs.minIntegrationSeconds}
+                            platforms={platforms}
                             portalPath={
                               deal.partner_id != null
                                 ? `/portal/${ensurePartnerPortalToken(deal.partner_id)}`
                                 : null
                             }
+                            locked={!closed}
                           />
-                          <ShipmentsBlock dealId={deal.id} shipments={shipments} />
+                          <ShipmentsBlock dealId={deal.id} shipments={shipments} locked={!closed} />
                         </div>
                       </details>
                     );
@@ -530,23 +613,30 @@ export default async function DealPage({
                       )}
                     </summary>
                     <div className="mt-2">
-                      <PaymentItemsBlock dealId={deal.id} payments={paymentItems} />
+                      <PaymentItemsBlock dealId={deal.id} payments={paymentItems} locked={!closed} />
                     </div>
                   </details>
                 </div>
               ) }]
             : []),
-          ...(closed || deal.agreed_price != null
+          ...(closed || deal.agreed_price != null || hasMeasurableContent
             ? [{ name: "Actuals", node: (
                 <ActualsPanel
                   deal={deal}
                   contentItems={contentItems}
                   expectedReach={expectedReach}
                   windows={getSetting<MeasurementWindows>("measurement_windows") ?? {}}
+                  finance={{
+                    aov: Number(econ.aov ?? 0),
+                    commission: offer.commission,
+                    discount: offer.discount,
+                    commissionTiers: styleTiers,
+                    productCost: shipments.length > 0 ? Number(econ.productCost ?? 0) : 0,
+                  }}
                 />
               ) }]
             : []),
-          { name: "History", node: <HistoryTab /> },
+          { name: "History", node: <HistoryTab deal={deal} messages={messages} /> },
         ]}
       />
     </main>

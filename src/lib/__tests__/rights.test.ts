@@ -6,6 +6,7 @@ import {
   parseRights,
   rightsContractClause,
   rightsMismatch,
+  rightsPremiumFor,
   rightsSummary,
   type DealRights,
 } from "../rights";
@@ -13,6 +14,36 @@ import {
 const rights = (over: Partial<DealRights> = {}): DealRights => ({
   ...NO_RIGHTS,
   ...over,
+});
+
+describe("rightsPremiumFor", () => {
+  it("turns the configured monthly rates into one auditable uplift", () => {
+    const premium = rightsPremiumFor(
+      rights({
+        usage: { kind: "paid", months: 3 },
+        exclusivity: { kind: "category", months: 1, scope: "GlocalMe" },
+      }),
+      {
+        rightsPricing: {
+          organicUsagePerMonthPct: 20,
+          paidUsagePerMonthPct: 30,
+          whitelistingPerMonthPct: 25,
+          categoryExclusivityPerMonthPct: 20,
+          fullExclusivityPerMonthPct: 50,
+          maxTotalPct: 250,
+        },
+      }
+    );
+    expect(premium.percent).toBe(110);
+    expect(premium.lines).toContain("Paid usage: 3mo × 30% = +90%");
+    expect(premium.lines).toContain("Category exclusivity: 1mo × 20% = +20%");
+  });
+
+  it("never prices a selected right as free just because duration is missing", () => {
+    expect(
+      rightsPremiumFor(rights({ usage: { kind: "paid", months: 0 } }), null).percent
+    ).toBeGreaterThan(0);
+  });
 });
 
 describe("parseRights", () => {

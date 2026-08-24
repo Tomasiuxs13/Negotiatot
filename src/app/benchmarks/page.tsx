@@ -80,7 +80,7 @@ export default function BenchmarksPage() {
         ) : (
           <div className={`space-y-6 ${PAGE_WIDTH}`}>
             {/* Calibrated cards */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {calibrated.map((c) => (
                 <div key={c.platform} className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
                   <div className="flex items-center gap-2 mb-3">
@@ -111,7 +111,7 @@ export default function BenchmarksPage() {
                     )}
                     {c.avgRoas != null && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-slate-500">Avg ROAS</span>
+                        <span className="text-slate-500">Avg fee ROAS</span>
                         <span className="font-tabular font-semibold text-slate-900">{c.avgRoas.toFixed(2)}×</span>
                       </div>
                     )}
@@ -132,7 +132,12 @@ export default function BenchmarksPage() {
                     <th className="px-4 py-3 font-medium text-right">Actual views</th>
                     <th className="px-4 py-3 font-medium text-right">Pred. CPM</th>
                     <th className="px-4 py-3 font-medium text-right">Actual CPM</th>
-                    <th className="px-4 py-3 font-medium text-right">ROAS</th>
+                    <th
+                      className="px-4 py-3 font-medium text-right"
+                      title="Attributed revenue divided by the creator fee allocated to this platform"
+                    >
+                      Fee ROAS
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -190,7 +195,9 @@ export default function BenchmarksPage() {
             <p className="text-xs text-slate-500 max-w-[70ch]">
               Actual CPM in green means the deal delivered at or below what you predicted (you got
               equal or better reach per dollar); amber means it under-delivered. As this table grows,
-              the per-platform averages above become your calibrated fair-price baseline.
+              the per-platform averages above become your calibrated fair-price baseline. Fee ROAS
+              uses only the creator fee; open a deal&apos;s Actuals tab for all-in ROAS including
+              commission and gifted product cost.
               {rows.some((r) => !r.isFinal) && (
                 <>
                   {" "}

@@ -82,6 +82,21 @@ describe("nextAction", () => {
     );
     expect(
       nextAction(row({ status: "posted", posted_at: "2026-08-01", check_result: "{}" }), TODAY).kind
+    ).toBe("check");
+    expect(
+      nextAction(
+        row({
+          status: "posted",
+          posted_at: "2026-08-01",
+          check_result: JSON.stringify({
+            integrationStartSeconds: 0,
+            integrationEndSeconds: 60,
+            findings: [{ id: "brand", status: "met", evidence: null, atSeconds: 3, note: null }],
+            summary: "All met",
+          }),
+        }),
+        TODAY
+      ).kind
     ).toBe("measure");
   });
 

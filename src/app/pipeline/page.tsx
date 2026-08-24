@@ -215,7 +215,15 @@ export default async function PipelinePage({
             </div>
           )}
         </div>
-        {isList ? <DealsTable deals={listed} phases={phases} sort={sort} dir={dir as SortDir} hrefFor={query} /> : <PipelineBoard deals={deals} phases={phases} />}
+        {isList ? (
+          <DealsTable deals={listed} phases={phases} sort={sort} dir={dir as SortDir} hrefFor={query} />
+        ) : (
+          <PipelineBoard
+            key={deals.map((deal) => `${deal.id}:${deal.stage}:${deal.updated_at}`).join("|")}
+            deals={deals}
+            phases={phases}
+          />
+        )}
 
         {/* The board has no Declined column by design, but the deals must stay
             findable — "where did that deal go" should have a visible answer. */}

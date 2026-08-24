@@ -95,6 +95,8 @@ export interface Deal {
   audience_locked?: number;
   /** The manager's free-text notes — context for the Copilot, never instructions. */
   notes?: string | null;
+  /** Usage rights, whitelisting, exclusivity — JSON, parsed by rights.ts. */
+  rights?: string | null;
   status_label: string | null;
   status_tone: StatusTone;
   campaign: string | null;
@@ -152,6 +154,9 @@ export type Tone = "good" | "warn" | "crit" | "neutral";
 export interface DealAnalysis {
   verdict: "accept" | "negotiate" | "decline";
   verdictSummary: string;
+  /** Whether reach and pricing evidence is confirmed for every platform in the deal. */
+  evidenceConfidence?: "confirmed" | "mixed" | "insufficient";
+  evidenceNotes?: string;
   metrics: { label: string; value: string; note: string; tone: Tone }[];
   redFlags: { title: string; detail: string; severity: "good" | "warn" | "crit" }[];
   numbers: { label: string; value: number; explanation: string }[];

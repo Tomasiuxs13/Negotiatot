@@ -1,5 +1,12 @@
 import type { Deal } from "./types";
-import type { ContentItem, OnboardingTask, PaymentItem, Shipment, TaskOwner } from "./fulfillment-types";
+import type {
+  ContentItem,
+  Contract,
+  OnboardingTask,
+  PaymentItem,
+  Shipment,
+  TaskOwner,
+} from "./fulfillment-types";
 import { BLOCKING_KINDS, blockingLabel } from "./fulfillment-types";
 import { isOverdue } from "./fulfillment-rules";
 import { measurementState, type MeasurementWindows } from "./measurement";
@@ -47,12 +54,14 @@ const CLASSIFY: [prefix: string, group: AttentionGroup, owner: TaskOwner | null]
   ["reminder-", "followups", "us"],
   ["draft-request-", "content", "creator"],
   ["draft-review-", "content", "us"],
+  ["date-change-", "content", "us"],
   ["content-overdue-", "content", "creator"],
   ["content-soon-", "content", "creator"],
   ["measure-", "content", "us"],
   ["payment-", "money", "us"],
   ["shipment-prepare-", "delivery", "us"],
   ["shipment-stuck-", "delivery", null],
+  ["setup-gap-", "delivery", "us"],
   ["onboarding-", "delivery", "us"],
   ["silent-", "negotiation", "creator"],
   ["verdict-", "negotiation", "us"],
@@ -119,6 +128,7 @@ export interface AttentionInput {
   shipments: Shipment[];
   payments: PaymentItem[];
   onboarding?: OnboardingTask[];
+  contracts?: Contract[];
   /** The manager's own follow-ups — surfaced when their date arrives. */
   reminders?: Reminder[];
   /** Days before an item's publish date its draft is due. */
@@ -152,6 +162,7 @@ export function attentionItems({
   shipments,
   payments,
   onboarding = [],
+  contracts = [],
   reminders = [],
   draftLeadDays = DEFAULT_DRAFT_LEAD_DAYS,
   today = new Date().toISOString().slice(0, 10),
@@ -213,6 +224,21 @@ export function attentionItems({
       detail:
         `${c.title}${(c.revision_round ?? 0) > 1 ? ` · revision ${c.revision_round}` : ""}` +
         (days != null ? ` — publishes ${days === 0 ? "today" : days < 0 ? "overdue" : `in ${days} day${days === 1 ? "" : "s"}`}` : ""),
+      href: `/deals/${c.deal_id}?tab=fulfillment`,
+    });
+  }
+
+  // A creator's proposed date is not yet the real deadline. It remains here until the
+  // manager explicitly approves it or keeps the current date.
+  for (const c of contentItems) {
+    if (!c.requested_due_date) continue;
+    const deal = dealById.get(c.deal_id);
+    if (!deal || deal.stage !== "agreed") continue;
+    items.push({
+      id: `date-change-${c.id}`,
+      severity: "warning",
+      title: `Review ${deal.creator}'s date request`,
+      detail: `${c.title}: ${c.due_date ?? "no current date"} → ${c.requested_due_date}`,
       href: `/deals/${c.deal_id}?tab=fulfillment`,
     });
   }
@@ -349,6 +375,8 @@ export function attentionItems({
   // Content that has had time to settle and still has no final reading. Nobody
   // remembers that a video posted five weeks ago is now worth measuring.
   for (const c of contentItems) {
+    const deal = dealById.get(c.deal_id);
+    if (!deal || (deal.stage !== "agreed" && deal.stage !== "completed")) continue;
     const m = measurementState(c, windows, today);
     if (m.state !== "due" && m.state !== "provisional") continue;
     if (m.state === "provisional" && (m.daysUntilMature ?? 0) > 0) continue;
@@ -360,7 +388,7 @@ export function attentionItems({
         m.state === "provisional"
           ? `${c.title} has settled — replace the provisional number with final results`
           : `${c.title} passed its ${m.windowDays}-day window — log final results`,
-      href: `/deals/${c.deal_id}`,
+      href: `/deals/${c.deal_id}?tab=actuals`,
     });
   }
 
@@ -387,6 +415,33 @@ export function attentionItems({
         ? "Content is already in production — without this the results can't be tracked"
         : "Set this up before the content goes live",
       href: `/deals/${d.id}`,
+    });
+  }
+
+  // One exception per agreement, rather than three separate warnings. The manager can
+  // open Fulfillment once and finish the entire hand-off from negotiation to delivery.
+  for (const d of deals) {
+    if (d.stage !== "agreed") continue;
+    const missing: string[] = [];
+    if (!contracts.some((contract) => contract.deal_id === d.id && contract.status === "confirmed")) {
+      missing.push("confirmed signed contract");
+    }
+    if (!contentItems.some((content) => content.deal_id === d.id)) {
+      missing.push("content plan");
+    }
+    if (
+      (d.agreed_price ?? d.current_offer ?? 0) > 0 &&
+      !payments.some((payment) => payment.deal_id === d.id)
+    ) {
+      missing.push("payment schedule");
+    }
+    if (missing.length === 0) continue;
+    items.push({
+      id: `setup-gap-${d.id}`,
+      severity: "warning",
+      title: `${d.creator} — agreement setup incomplete`,
+      detail: `Missing ${missing.join(", ")}`,
+      href: `/deals/${d.id}?tab=fulfillment`,
     });
   }
 

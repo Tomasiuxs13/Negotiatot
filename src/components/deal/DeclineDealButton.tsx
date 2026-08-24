@@ -17,12 +17,15 @@ export default function DeclineDealButton({ dealId }: { dealId: number }) {
   const [note, setNote] = useState("");
   const [revisitOn, setRevisitOn] = useState(defaultRevisitDate);
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   const submit = () => {
     if (!reason) return;
     startTransition(async () => {
-      await declineDealAction(dealId, { reason, note, revisitOn });
-      setOpen(false);
+      setError(null);
+      const result = await declineDealAction(dealId, { reason, note, revisitOn });
+      if (result.error) setError(result.error);
+      else setOpen(false);
     });
   };
 
@@ -106,6 +109,7 @@ export default function DeclineDealButton({ dealId }: { dealId: number }) {
             {isPending ? "Saving…" : "Mark declined"}
           </button>
         </div>
+        {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
       </div>
     </div>
   );

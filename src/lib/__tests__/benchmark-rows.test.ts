@@ -152,6 +152,21 @@ describe("benchmarkRows", () => {
     );
     expect(rows[0].platform).toBe("instagram");
   });
+
+  it("does not silently credit an unattributed mixed-deal item to the primary platform", () => {
+    const rows = benchmarkRows(
+      [deal({ agreed_price: 1000, platforms: '["youtube","instagram"]' })],
+      [
+        item({ id: 1, platform: "youtube", actual_views: 25_000 }),
+        item({ id: 2, platform: null, actual_views: 25_000 }),
+      ]
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].platform).toBe("youtube");
+    expect(rows[0].isFinal).toBe(false);
+    expect(platformAverages(rows)).toEqual([]);
+  });
 });
 
 describe("platformAverages", () => {

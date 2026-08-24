@@ -63,7 +63,7 @@ export async function runIntegrationCheck(
 
   const campaign = deal.campaign_id != null ? getCampaign(deal.campaign_id) : null;
   const reqs = parseRequirements(campaign?.brief_requirements);
-  if (reqs.requirements.length === 0) {
+  if (reqs.requirements.length === 0 && reqs.minIntegrationSeconds == null) {
     return {
       error:
         "This deal's campaign has no video requirements yet — read them from the brief in the Playbook first.",

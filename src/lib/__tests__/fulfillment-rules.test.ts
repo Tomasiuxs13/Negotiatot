@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   addDays,
+  contentHasOperationalActivity,
   fulfillmentSummary,
   isOverdue,
   nextPaymentStatus,
   parseLinkedIds,
   paymentApprovable,
+  resolveConditionalDueDate,
+  shipmentTransitionError,
 } from "../fulfillment-rules";
 import { pendingReason } from "../fulfillment-types";
 
@@ -18,6 +21,97 @@ describe("addDays", () => {
     expect(addDays("2026-07-21", 14)).toBe("2026-08-04");
     expect(addDays("2026-12-28", 7)).toBe("2027-01-04");
     expect(addDays("2026-07-21 10:30:00", 1)).toBe("2026-07-22");
+  });
+});
+
+describe("conditional contract deadlines", () => {
+  it("moves a hybrid deadline to the later delivery-relative date", () => {
+    expect(
+      resolveConditionalDueDate({
+        deliveredAt: "2026-09-05",
+        anchorDate: "2026-09-15",
+        daysAfterDelivery: 14,
+        mode: "later_of",
+      })
+    ).toBe("2026-09-19");
+  });
+
+  it("keeps the fixed date when it is already later", () => {
+    expect(
+      resolveConditionalDueDate({
+        deliveredAt: "2026-08-20",
+        anchorDate: "2026-09-15",
+        daysAfterDelivery: 14,
+        mode: "later_of",
+      })
+    ).toBe("2026-09-15");
+  });
+
+  it("supports explicit relative-only and earlier-of clauses", () => {
+    expect(
+      resolveConditionalDueDate({ deliveredAt: "2026-09-05", daysAfterDelivery: 14 })
+    ).toBe("2026-09-19");
+    expect(
+      resolveConditionalDueDate({
+        deliveredAt: "2026-09-05",
+        anchorDate: "2026-09-15",
+        daysAfterDelivery: 14,
+        mode: "earlier_of",
+      })
+    ).toBe("2026-09-15");
+  });
+});
+
+describe("shipmentTransitionError", () => {
+  const shipment = {
+    status: "to_prepare" as const,
+    carrier: null,
+    tracking: null,
+    tracking_exception: null,
+  };
+
+  it("requires a carrier and tracking pair before shipping", () => {
+    expect(shipmentTransitionError(shipment, "shipped")).toMatch(/carrier and tracking/);
+    expect(
+      shipmentTransitionError(shipment, "shipped", {
+        carrier: "DHL",
+        tracking: "JD123",
+      })
+    ).toBeNull();
+  });
+
+  it("accepts a documented no-tracking exception", () => {
+    expect(
+      shipmentTransitionError(shipment, "shipped", {
+        trackingException: "Hand delivered by the local team",
+      })
+    ).toBeNull();
+  });
+
+  it("does not allow delivery to skip the shipped state", () => {
+    expect(shipmentTransitionError(shipment, "delivered")).toMatch(/Mark.*Shipped/);
+  });
+});
+
+describe("provisional content replacement", () => {
+  const planned = {
+    status: "planned",
+    draft_url: null,
+    posted_url: null,
+    notes: null,
+    video_path: null,
+    check_result: null,
+    actual_views: null,
+    actual_clicks: null,
+    actual_orders: null,
+    actual_revenue: null,
+  } as const;
+
+  it("allows only untouched provisional rows to be replaced by confirmed terms", () => {
+    expect(contentHasOperationalActivity(planned)).toBe(false);
+    expect(contentHasOperationalActivity({ ...planned, status: "in_production" })).toBe(true);
+    expect(contentHasOperationalActivity({ ...planned, draft_url: "https://draft.test/v1" })).toBe(true);
+    expect(contentHasOperationalActivity({ ...planned, notes: "Creator confirmed the hook" })).toBe(true);
   });
 });
 

@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import sharp from "sharp";
 import {
   addMessage,
   createDeal,
@@ -10,8 +9,6 @@ import {
   findPartnerByName,
   getCampaign,
   getPartner,
-  getPartnerChannels,
-  getPartnerDeals,
   setJob,
   updateDeal,
   updatePartner,
@@ -19,44 +16,24 @@ import {
 } from "@/lib/db";
 import { hasApiKey, type ImageMediaType } from "@/lib/claude";
 import { performAnalysis } from "@/lib/engine";
-import { priorDeals } from "@/lib/partners";
+import { partnerPrefillByName } from "@/lib/partner-prefill";
+import type { PartnerPrefill } from "@/lib/partners";
 import { parseDecimal } from "@/lib/format";
-
-const MAX_PDF_BYTES = 20 * 1024 * 1024;
-const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
-const IMAGE_TYPES: ImageMediaType[] = ["image/png", "image/jpeg", "image/webp", "image/gif"];
-// Claude's hard limit is 8000px per side; ~2500px is plenty for reading stats and much cheaper.
-const MAX_IMAGE_DIMENSION = 2500;
-
-async function prepareImage(
-  buffer: Buffer,
-  originalType: ImageMediaType
-): Promise<{ base64: string; mediaType: ImageMediaType }> {
-  const meta = await sharp(buffer).metadata();
-  const largest = Math.max(meta.width ?? 0, meta.height ?? 0);
-  if (largest > MAX_IMAGE_DIMENSION || buffer.length > 4 * 1024 * 1024) {
-    const resized = await sharp(buffer)
-      .resize({
-        width: MAX_IMAGE_DIMENSION,
-        height: MAX_IMAGE_DIMENSION,
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .jpeg({ quality: 88 })
-      .toBuffer();
-    return { base64: resized.toString("base64"), mediaType: "image/jpeg" };
-  }
-  return { base64: buffer.toString("base64"), mediaType: originalType };
-}
+import { readReportFile } from "@/lib/report-upload";
+import { hasRights, parseRights, type DealRights } from "@/lib/rights";
 
 export async function createDealAction(
   formData: FormData
 ): Promise<{ id?: number; error?: string; warning?: string }> {
   const creator = String(formData.get("creator") ?? "").trim();
-  const platforms = formData
+  const selectedPlatforms = formData
     .getAll("platforms")
     .map(String)
     .filter((p) => ["youtube", "instagram", "tiktok", "facebook"].includes(p));
+  const primaryPlatform = String(formData.get("primary_platform") ?? "").trim();
+  const platforms = selectedPlatforms.includes(primaryPlatform)
+    ? [primaryPlatform, ...selectedPlatforms.filter((p) => p !== primaryPlatform)]
+    : selectedPlatforms;
   const deliverables = String(formData.get("deliverables") ?? "").trim() || null;
   const campaignIdRaw = String(formData.get("campaign_id") ?? "").trim();
   const campaignId = campaignIdRaw ? Number(campaignIdRaw) : null;
@@ -87,6 +64,25 @@ export async function createDealAction(
       ? commissionTypeRaw
       : null;
 
+  // Rights & extras — stored as one JSON blob and parsed by rights.ts everywhere else,
+  // so the form's flat field names stop existing past this point.
+  const usageKind = String(formData.get("usage_kind") ?? "none");
+  const exclusivityKind = String(formData.get("exclusivity_kind") ?? "none");
+  const whitelistingOn = formData.get("whitelisting") === "1";
+  const rightsMonths = (name: string) => Math.max(0, Math.round(Number(formData.get(name)) || 0));
+  const rights: DealRights = {
+    usage: {
+      kind: usageKind === "organic" || usageKind === "paid" ? usageKind : "none",
+      months: rightsMonths("usage_months"),
+    },
+    whitelisting: { enabled: whitelistingOn, months: rightsMonths("whitelisting_months") },
+    exclusivity: {
+      kind: exclusivityKind === "category" || exclusivityKind === "full" ? exclusivityKind : "none",
+      months: rightsMonths("exclusivity_months"),
+      scope: String(formData.get("exclusivity_scope") ?? "").trim(),
+    },
+  };
+
   // The audience coupon: their benefit, our cost.
   const discountTypeRaw = String(formData.get("discount_type") ?? "none").trim();
   const discountValue = Number(formData.get("discount_value")) || 0;
@@ -109,26 +105,10 @@ export async function createDealAction(
 
   let pdfBase64: string | undefined;
   let reportImage: { base64: string; mediaType: ImageMediaType } | undefined;
-  const file = formData.get("report");
-  if (file instanceof File && file.size > 0) {
-    if (file.type.includes("pdf")) {
-      if (file.size > MAX_PDF_BYTES) return { error: "Report PDF is too large (max 20 MB)." };
-      pdfBase64 = Buffer.from(await file.arrayBuffer()).toString("base64");
-    } else if (IMAGE_TYPES.includes(file.type as ImageMediaType)) {
-      if (file.size > MAX_IMAGE_BYTES) return { error: "Screenshot is too large (max 30 MB)." };
-      try {
-        reportImage = await prepareImage(
-          Buffer.from(await file.arrayBuffer()),
-          file.type as ImageMediaType
-        );
-      } catch (err) {
-        console.error("prepareImage failed:", err);
-        return { error: "Couldn't read that image — is the file corrupted?" };
-      }
-    } else {
-      return { error: "Unsupported file type — upload a PDF report or a PNG/JPEG/WebP screenshot." };
-    }
-  }
+  const report = await readReportFile(formData.get("report"));
+  if (report.kind === "error") return { error: report.error };
+  if (report.kind === "pdf") pdfBase64 = report.pdfBase64;
+  if (report.kind === "image") reportImage = report.image;
 
   const id = createDeal({
     creator: partnerName,
@@ -147,6 +127,12 @@ export async function createDealAction(
   }
   if (discountType) {
     updateDeal(id, { discount_type: discountType, discount_value: discountValue });
+  }
+  // parseRights round-trip normalises: a switched-off right loses its months, an
+  // unchecked box its scope, so "none" always serialises to the same thing.
+  const normalisedRights = parseRights(JSON.stringify(rights));
+  if (hasRights(normalisedRights)) {
+    updateDeal(id, { rights: JSON.stringify(normalisedRights) });
   }
 
   // Keep the partner's channel list in step with the deal's platforms.
@@ -196,21 +182,6 @@ export async function createDealAction(
   return { id };
 }
 
-export interface PartnerPrefill {
-  partnerId: number;
-  name: string;
-  email: string | null;
-  platforms: string[];
-  channelUrl: string | null;
-  avgViews: number | null;
-  engagementRate: number | null;
-  dealCount: number;
-  lastAgreedPrice: number | null;
-  lastDealDate: string | null;
-  lastScope: string | null;
-  lastActualCpm: number | null;
-}
-
 /**
  * Everything already known about a returning creator. Retyping a partner's reach for
  * the third collaboration is both tedious and a chance to enter it wrong.
@@ -218,33 +189,5 @@ export interface PartnerPrefill {
 export async function lookupPartnerAction(name: string): Promise<PartnerPrefill | null> {
   const trimmed = name.trim();
   if (trimmed.length < 2) return null;
-
-  const partner = findPartnerByName(trimmed);
-  if (!partner) return null;
-
-  const channels = getPartnerChannels(partner.id);
-  const history = priorDeals(getPartnerDeals(partner.id));
-  const last = history[0] ?? null;
-  // A single "avg views" plus "engagement" pair has to describe one channel, or the
-  // two numbers contradict each other. The biggest channel is the one to describe.
-  const withViews = channels.filter((c) => c.avg_views != null);
-  const primary =
-    withViews.length > 0
-      ? withViews.reduce((best, c) => (c.avg_views! > best.avg_views! ? c : best))
-      : channels[0];
-
-  return {
-    partnerId: partner.id,
-    name: partner.name,
-    email: partner.email,
-    platforms: channels.map((c) => c.platform),
-    channelUrl: primary?.url ?? channels.find((c) => c.url)?.url ?? null,
-    avgViews: primary?.avg_views ?? null,
-    engagementRate: primary?.engagement_rate ?? null,
-    dealCount: history.length,
-    lastAgreedPrice: last?.agreedPrice ?? null,
-    lastDealDate: last?.date ?? null,
-    lastScope: last?.scope ?? null,
-    lastActualCpm: last?.actualCpm ?? null,
-  };
+  return partnerPrefillByName(trimmed);
 }

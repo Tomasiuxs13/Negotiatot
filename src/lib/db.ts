@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import path from "path";
 import fs from "fs";
 import type { Deal, Message } from "./types";
+import { usageCostUsd } from "./usage-cost";
 import { ALL_PLATFORMS, ALL_STAGES } from "./types";
 import {
   DEFAULT_BRAND_PROFILE,
@@ -81,12 +82,39 @@ CREATE TABLE IF NOT EXISTS usage_log (
   output_tokens INTEGER NOT NULL DEFAULT 0,
   cache_read_tokens INTEGER NOT NULL DEFAULT 0,
   cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+  -- Who the spend belongs to. Nullable, and null on every row today: this app is still
+  -- single-tenant, and the account/brand hierarchy is not settled. The columns exist
+  -- ahead of that decision because usage_log is the one table where the history cannot
+  -- be reconstructed later — once a second tenant's rows are interleaved with these,
+  -- there is no way to work out retrospectively whose spend was whose.
+  account_id INTEGER,
+  brand_id INTEGER,
+  -- Denormalised at write time, from usage-cost.ts. Prices change and models change;
+  -- what a call cost when it ran is a fact about that call, and recomputing it later
+  -- from today's price list would quietly restate last quarter's margin.
+  cost_cents INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 `);
 
 // Lightweight migrations for existing databases
 {
+  // Existing installs predate rule-version tracking. Mark the upgrade moment once so
+  // their stored analyses are honestly labelled stale until rerun; fresh analyses land
+  // after this timestamp and immediately become current.
+  db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run(
+    "playbook_updated_at",
+    JSON.stringify(new Date().toISOString())
+  );
+
+  const usageCols = (db.prepare("PRAGMA table_info(usage_log)").all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  if (!usageCols.includes("account_id")) db.exec("ALTER TABLE usage_log ADD COLUMN account_id INTEGER");
+  if (!usageCols.includes("brand_id")) db.exec("ALTER TABLE usage_log ADD COLUMN brand_id INTEGER");
+  if (!usageCols.includes("cost_cents"))
+    db.exec("ALTER TABLE usage_log ADD COLUMN cost_cents INTEGER NOT NULL DEFAULT 0");
+
   const cols = (db.prepare("PRAGMA table_info(deals)").all() as { name: string }[]).map(
     (c) => c.name
   );
@@ -130,6 +158,9 @@ CREATE TABLE IF NOT EXISTS usage_log (
   // Free-text notes on the deal — context only a human knows ("prefers email",
   // "agency negotiates for him"). Fed to the Copilot as background, never as rules.
   if (!cols.includes("notes")) db.exec("ALTER TABLE deals ADD COLUMN notes TEXT");
+  // Usage rights, whitelisting and exclusivity, marked at intake so they can shape the
+  // price — JSON, parsed by rights.ts. One column, not seven: the shape will evolve.
+  if (!cols.includes("rights")) db.exec("ALTER TABLE deals ADD COLUMN rights TEXT");
   if (!cols.includes("job_status")) db.exec("ALTER TABLE deals ADD COLUMN job_status TEXT");
   if (!cols.includes("job_error")) db.exec("ALTER TABLE deals ADD COLUMN job_error TEXT");
   if (!cols.includes("job_started_at")) db.exec("ALTER TABLE deals ADD COLUMN job_started_at TEXT");
@@ -178,6 +209,8 @@ CREATE TABLE IF NOT EXISTS usage_log (
     title TEXT NOT NULL,
     platform TEXT,
     due_date TEXT,
+    due_date_anchor TEXT,
+    due_date_mode TEXT,
     due_rule TEXT,
     due_days_after_delivery INTEGER,
     status TEXT NOT NULL DEFAULT 'planned',
@@ -298,6 +331,14 @@ CREATE TABLE IF NOT EXISTS usage_log (
     add("transcript_chunks", "transcript_chunks TEXT");
     add("check_result", "check_result TEXT");
     add("checked_at", "checked_at TEXT");
+    // Conditional contract dates keep their fixed anchor after due_date resolves from
+    // product delivery. Old rows are inferred safely by fulfillment.ts.
+    add("due_date_anchor", "due_date_anchor TEXT");
+    add("due_date_mode", "due_date_mode TEXT");
+    add("due_date_override", "due_date_override TEXT");
+    add("requested_due_date", "requested_due_date TEXT");
+    add("due_date_request_reason", "due_date_request_reason TEXT");
+    add("due_date_requested_at", "due_date_requested_at TEXT");
   }
   // The partner portal is addressed by an unguessable per-partner token, never an id.
   {
@@ -343,6 +384,13 @@ CREATE TABLE IF NOT EXISTS usage_log (
     if (!shipCols.includes("phone")) db.exec("ALTER TABLE shipments ADD COLUMN phone TEXT");
     if (!shipCols.includes("address_submitted_at"))
       db.exec("ALTER TABLE shipments ADD COLUMN address_submitted_at TEXT");
+    if (!shipCols.includes("tracking_exception")) {
+      try {
+        db.exec("ALTER TABLE shipments ADD COLUMN tracking_exception TEXT");
+      } catch {
+        /* added concurrently */
+      }
+    }
   }
   db.exec(`CREATE TABLE IF NOT EXISTS campaigns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1222,12 +1270,32 @@ export function logUsage(
    * recording it alone made the most expensive call in the product look free.
    */
   cacheCreationTokens = 0,
-  cacheReadTokens = 0
+  cacheReadTokens = 0,
+  /**
+   * Who to bill. Null throughout today — single tenant — but written by the same call
+   * that writes the tokens, so the day an account exists there is no backfill to guess at.
+   */
+  scope: { accountId?: number | null; brandId?: number | null } = {}
 ) {
+  const costCents = Math.round(
+    usageCostUsd({ inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens }) * 100
+  );
   db.prepare(
     `INSERT INTO usage_log (deal_id, kind, model, input_tokens, output_tokens,
-       cache_creation_tokens, cache_read_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(dealId, kind, model, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens);
+       cache_creation_tokens, cache_read_tokens, account_id, brand_id, cost_cents)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    dealId,
+    kind,
+    model,
+    inputTokens,
+    outputTokens,
+    cacheCreationTokens,
+    cacheReadTokens,
+    scope.accountId ?? null,
+    scope.brandId ?? null,
+    costCents
+  );
 }
 
 export interface UsageTotals {
@@ -1395,7 +1463,7 @@ export function updateDeal(dealId: number, fields: Record<string, unknown>) {
   const allowed = [
     "stage", "round", "your_move", "first_ask", "current_ask", "current_offer",
     "agreed_price", "agreed_at", "anchor", "target", "walkaway", "breakeven", "avg_views",
-    "engagement_rate", "audience_locked", "notes", "status_label", "status_tone", "campaign", "analysis", "channel_url",
+    "engagement_rate", "audience_locked", "notes", "rights", "status_label", "status_tone", "campaign", "analysis", "channel_url",
     "actual_views", "actual_clicks", "actual_orders", "actual_revenue", "actuals_logged_at",
     "job_status", "job_error", "job_started_at",
     "partner_id", "campaign_id", "deal_type",

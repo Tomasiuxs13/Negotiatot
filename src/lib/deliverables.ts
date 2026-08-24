@@ -17,6 +17,119 @@
 const PIECE_PATTERN =
   /(\d+)\s*(?:×|x)?\s*(?:youtube|instagram|tiktok|facebook|video|integration|short|reel|stor(?:y|ies)|post)/gi;
 
+const PLATFORM_ALIAS: Record<string, string> = {
+  youtube: "youtube|yt",
+  instagram: "instagram|insta(?:gram)?|ig",
+  tiktok: "tiktok|tik[ -]?tok",
+  facebook: "facebook|fb",
+};
+
+/** Regex source for a platform name and the abbreviations managers commonly type. */
+export function platformAliasPattern(platform: string): string {
+  return PLATFORM_ALIAS[platform.toLowerCase()] ?? platform.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Counts only deliverables explicitly attached to a platform.
+ *
+ * "1 YouTube integration + 2 IG reels" becomes {youtube: 1, instagram: 2}. An
+ * unqualified "1 story" is intentionally not guessed onto Instagram: an omitted piece
+ * is visible and fixable, while attributing it to the wrong channel corrupts pricing.
+ */
+export function deliverableCountsByPlatform(
+  text: string | null | undefined,
+  platforms: string[]
+): Record<string, number> {
+  const result: Record<string, number> = {};
+  const chunks = (text ?? "")
+    .split(/\s*(?:\+|,|;|\b(?:and|plus)\b)\s*/i)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  for (const chunk of chunks) {
+    const platform = platforms.find((candidate) =>
+      new RegExp(`\\b(?:${platformAliasPattern(candidate)})\\b`, "i").test(chunk)
+    );
+    if (!platform) continue;
+    const count = Number(chunk.match(/(?:^|\s)(\d+)\s*(?:×|x)?/i)?.[1] ?? 1);
+    if (!Number.isFinite(count) || count <= 0) continue;
+    result[platform] = (result[platform] ?? 0) + count;
+  }
+  return result;
+}
+
+export interface ProvisionalDeliverable {
+  title: string;
+  platform: string;
+}
+
+/**
+ * Turns the manager's scope line into a safe provisional work plan.
+ *
+ * This deliberately returns nothing when a mixed-platform scope is ambiguous. An empty
+ * plan creates a visible setup exception; a guessed plan creates the wrong obligations.
+ * The signed contract remains the source of truth and replaces these provisional rows.
+ */
+export function provisionalDeliverables(
+  text: string | null | undefined,
+  platforms: string[]
+): { items: ProvisionalDeliverable[]; reason: string | null } {
+  const scope = text?.trim();
+  if (!scope) return { items: [], reason: "Add the deliverables before creating the content plan." };
+  if (platforms.length === 0) return { items: [], reason: "Choose a platform first." };
+  if (platforms.length > 1 && isCrosspostText(scope)) {
+    return {
+      items: [],
+      reason: "Cross-posted scope needs a manager to confirm which platform URLs are tracked separately.",
+    };
+  }
+
+  const chunks = scope
+    .split(/\s*(?:\+|,|;|\b(?:and|plus)\b)\s*/i)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (chunks.length === 0) return { items: [], reason: "Add the deliverables first." };
+
+  const planned: ProvisionalDeliverable[] = [];
+  for (const chunk of chunks) {
+    const platform =
+      platforms.find((candidate) =>
+        new RegExp(`\\b(?:${platformAliasPattern(candidate)})\\b`, "i").test(chunk)
+      ) ?? (platforms.length === 1 ? platforms[0] : null);
+    if (!platform) {
+      return {
+        items: [],
+        reason: `Name a platform for “${chunk}” before creating the mixed-platform content plan.`,
+      };
+    }
+
+    const quantity = Math.max(
+      1,
+      Math.round(Number(chunk.match(/(?:^|\s)(\d+)\s*(?:×|x)?/i)?.[1] ?? 1))
+    );
+    const label = chunk.replace(/^\s*\d+\s*(?:×|x)?\s*/i, "").trim() || "Content item";
+    for (let index = 0; index < quantity; index += 1) {
+      planned.push({
+        title: quantity > 1 ? `${label} (${index + 1}/${quantity})` : label,
+        platform,
+      });
+    }
+  }
+
+  return { items: planned, reason: null };
+}
+
+/**
+ * True when the deliverables describe one production distributed to several platforms.
+ *
+ * Lives here rather than beside the prompt that first needed it because pricing needs the
+ * same answer: a crosspost sums reach but is only paid for once, so the two must agree or
+ * the number shown and the number charged describe different deals.
+ */
+export function isCrosspostText(text: string | null | undefined): boolean {
+  return /cross.?post|same\s+(?:video|content|short)|repost/i.test(text ?? "");
+}
+
 export function deliverableCount(params: {
   /** The deal's deliverables or format text, if the manager wrote one. */
   text?: string | null;

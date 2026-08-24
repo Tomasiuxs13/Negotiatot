@@ -7,8 +7,8 @@ import { money } from "@/lib/format";
 /**
  * Two groups, because these are two kinds of thing wearing the same clothes.
  *
- * The first four are where the work happens — opened many times a day, in roughly the
- * order a deal moves through them. The last three change how the first four behave and
+ * The first six are where the work happens — opened many times a day, in roughly the
+ * order a deal moves through them. The last three change how the first six behave and
  * are visited occasionally: the Playbook sets the rules the engine negotiates by,
  * Benchmarks calibrates those rules against what actually closed, and Settings is the
  * system itself. Presented as one undifferentiated list, "Playbook" reads like another
@@ -23,6 +23,7 @@ import { money } from "@/lib/format";
  */
 const WORK_NAV = [
   { href: "/", label: "Dashboard", icon: "space_dashboard" },
+  { href: "/approvals", label: "Approvals", icon: "approval" },
   { href: "/pipeline", label: "Pipeline", icon: "account_tree" },
   { href: "/content", label: "Content", icon: "movie" },
   { href: "/partners", label: "Partners", icon: "group" },
@@ -79,7 +80,40 @@ export default function Sidebar({
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   return (
-    <aside className="bg-sidebar h-screen w-[220px] fixed left-0 top-0 border-r border-white/10 flex flex-col z-20">
+    <>
+      <div className="md:hidden fixed inset-x-0 top-0 z-40 h-14 bg-sidebar border-b border-white/10 px-4 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2 text-white font-headline font-bold">
+          <span className="w-7 h-7 rounded bg-brand flex items-center justify-center">
+            <span className="material-symbols-outlined text-white" style={{ fontSize: 16 }}>
+              handshake
+            </span>
+          </span>
+          Counterpart
+        </Link>
+        <details className="relative group">
+          <summary className="list-none cursor-pointer rounded-md border border-white/15 px-3 py-1.5 text-xs font-semibold text-white flex items-center gap-1.5">
+            <span className="material-symbols-outlined" style={{ fontSize: 17 }}>menu</span>
+            Menu
+          </summary>
+          <nav className="absolute right-0 top-10 w-56 rounded-xl border border-slate-700 bg-sidebar p-2 shadow-2xl">
+            <Link
+              href="/new"
+              className="mb-2 flex items-center justify-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>add</span>
+              New Deal
+            </Link>
+            {[...WORK_NAV, ...SETUP_NAV].map((item) => (
+              <NavItem key={item.href} item={item} active={isActive(item.href)} />
+            ))}
+            <div className="border-t border-white/10 px-3 pt-2 mt-2 text-[11px] text-slate-400 font-tabular">
+              {money(committed)} of {money(cap)} · {month}
+            </div>
+          </nav>
+        </details>
+      </div>
+
+    <aside className="hidden md:flex bg-sidebar h-screen w-[220px] fixed left-0 top-0 border-r border-white/10 flex-col z-20">
       {/* Brand */}
       <div className="flex items-center gap-3 mb-6 p-6 pb-0">
         <div className="w-8 h-8 rounded bg-brand flex items-center justify-center">
@@ -139,5 +173,6 @@ export default function Sidebar({
         </div>
       </div>
     </aside>
+    </>
   );
 }

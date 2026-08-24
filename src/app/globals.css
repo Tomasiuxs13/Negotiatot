@@ -47,3 +47,11 @@ h6 {
   font-size: 20px;
   line-height: 1;
 }
+
+/* The desktop pages use generous working-room padding; preserve that while keeping
+   every form and board usable on a phone-sized manager viewport. */
+@media (max-width: 767px) {
+  .app-shell-content main[class*="p-8"] {
+    padding: 1rem;
+  }
+}

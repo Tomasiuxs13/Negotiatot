@@ -1,5 +1,6 @@
 import type { Deal, Platform } from "./types";
 import { dealPlatforms } from "./types";
+import type { ContentItem } from "./fulfillment-types";
 
 export interface Partner {
   legal_name?: string | null;
@@ -54,6 +55,34 @@ export interface PartnerStats {
   actualCpm: number | null;
   savedVsAsk: number;
   lastDealAt: string | null;
+}
+
+export interface PartnerOperationalStats {
+  promisedContent: number;
+  deliveredContent: number;
+  verifiedContent: number;
+  onTimeRate: number | null;
+  averageRevisionRounds: number | null;
+}
+
+export interface PartnerPrefill {
+  partnerId: number;
+  name: string;
+  email: string | null;
+  platforms: string[];
+  primaryPlatform: string | null;
+  channelUrl: string | null;
+  avgViews: number | null;
+  engagementRate: number | null;
+  dealCount: number;
+  lastAgreedPrice: number | null;
+  lastDealDate: string | null;
+  lastScope: string | null;
+  lastActualCpm: number | null;
+  promisedContent: number;
+  deliveredContent: number;
+  onTimeRate: number | null;
+  averageRevisionRounds: number | null;
 }
 
 export type PartnerStatus = "prospect" | "negotiating" | "delivering" | "past" | "lapsed";
@@ -154,5 +183,34 @@ export function partnerStats(deals: Deal[]): PartnerStats {
       0
     ),
     lastDealAt: deals.map((d) => d.updated_at).sort().at(-1) ?? null,
+  };
+}
+
+/** Operational history used for repeat-deal planning; no subjective creator score. */
+export function partnerOperationalStats(
+  deals: Deal[],
+  contentItems: ContentItem[]
+): PartnerOperationalStats {
+  const dealIds = new Set(deals.map((deal) => deal.id));
+  const items = contentItems.filter((item) => dealIds.has(item.deal_id));
+  const delivered = items.filter(
+    (item) => item.status === "posted" || item.status === "verified"
+  );
+  const dated = delivered.filter((item) => item.due_date && item.posted_at);
+  const revised = items.filter((item) => (item.revision_round ?? 0) > 0);
+
+  return {
+    promisedContent: items.length,
+    deliveredContent: delivered.length,
+    verifiedContent: items.filter((item) => item.status === "verified").length,
+    onTimeRate:
+      dated.length > 0
+        ? dated.filter((item) => item.posted_at!.slice(0, 10) <= item.due_date!).length /
+          dated.length
+        : null,
+    averageRevisionRounds:
+      revised.length > 0
+        ? revised.reduce((sum, item) => sum + (item.revision_round ?? 0), 0) / revised.length
+        : null,
   };
 }

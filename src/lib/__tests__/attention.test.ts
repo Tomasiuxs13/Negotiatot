@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { attentionItems, classifyAttention, groupAttention } from "../attention";
 import type { Deal } from "../types";
-import type { ContentItem, OnboardingTask, PaymentItem, Shipment } from "../fulfillment-types";
+import type {
+  ContentItem,
+  Contract,
+  OnboardingTask,
+  PaymentItem,
+  Shipment,
+} from "../fulfillment-types";
 
 const TODAY = "2026-07-22";
 
@@ -37,6 +43,9 @@ const payment = (over: Partial<PaymentItem>): PaymentItem =>
 
 const shipment = (over: Partial<Shipment>): Shipment =>
   ({ id: 1, deal_id: 1, product: "Headset", status: "to_prepare", shipped_at: null, ...over }) as Shipment;
+
+const contract = (over: Partial<Contract>): Contract =>
+  ({ id: 1, deal_id: 1, status: "confirmed", ...over }) as Contract;
 
 const base = { deals: [deal({})], contentItems: [], shipments: [], payments: [], today: TODAY };
 
@@ -184,13 +193,59 @@ describe("attentionItems", () => {
   });
 });
 
+describe("agreement setup exceptions", () => {
+  const agreed = deal({ stage: "agreed", agreed_price: 2000 });
+
+  it("combines missing contract, content and payment setup into one decision item", () => {
+    const items = attentionItems({ ...base, deals: [agreed] });
+    const gap = items.find((item) => item.id === "setup-gap-1")!;
+    expect(gap.title).toContain("agreement setup incomplete");
+    expect(gap.detail).toContain("confirmed signed contract");
+    expect(gap.detail).toContain("content plan");
+    expect(gap.detail).toContain("payment schedule");
+    expect(gap.owner).toBe("us");
+  });
+
+  it("clears once the confirmed source and operational plan exist", () => {
+    const items = attentionItems({
+      ...base,
+      deals: [agreed],
+      contracts: [contract({})],
+      contentItems: [content({})],
+      payments: [payment({})],
+    });
+    expect(items.some((item) => item.id.startsWith("setup-gap-"))).toBe(false);
+  });
+});
+
+describe("creator date requests", () => {
+  it("puts a pending proposal in the manager's content queue without changing the real date", () => {
+    const items = attentionItems({
+      ...base,
+      deals: [deal({ stage: "agreed" })],
+      contentItems: [
+        content({
+          due_date: "2026-08-01",
+          requested_due_date: "2026-08-08",
+          due_date_request_reason: "The product arrived late",
+        }),
+      ],
+    });
+    const request = items.find((item) => item.id === "date-change-1")!;
+    expect(request.detail).toContain("2026-08-01 → 2026-08-08");
+    expect(request.group).toBe("content");
+    expect(request.owner).toBe("us");
+  });
+});
+
 describe("measurement nudges", () => {
+  const measurementBase = { ...base, deals: [deal({ stage: "agreed" })] };
   const posted = (over: Partial<ContentItem>) =>
     content({ status: "verified", due_date: null, ...over });
 
   it("stays quiet while a platform's views are still settling", () => {
     const items = attentionItems({
-      ...base,
+      ...measurementBase,
       // YouTube needs 30 days; this went live 10 days ago.
       contentItems: [posted({ platform: "youtube", posted_at: "2026-07-12" })],
     });
@@ -199,7 +254,7 @@ describe("measurement nudges", () => {
 
   it("asks for results once the window closes", () => {
     const items = attentionItems({
-      ...base,
+      ...measurementBase,
       contentItems: [posted({ platform: "youtube", posted_at: "2026-06-01" })],
     });
     const nudge = items.find((i) => i.title.includes("ready to measure"))!;
@@ -208,7 +263,7 @@ describe("measurement nudges", () => {
 
   it("asks again when only a provisional number was logged", () => {
     const items = attentionItems({
-      ...base,
+      ...measurementBase,
       contentItems: [
         posted({
           platform: "youtube",
@@ -224,7 +279,7 @@ describe("measurement nudges", () => {
 
   it("leaves a settled reading alone", () => {
     const items = attentionItems({
-      ...base,
+      ...measurementBase,
       contentItems: [
         posted({
           platform: "youtube",
@@ -239,7 +294,7 @@ describe("measurement nudges", () => {
 
   it("honours a configured window", () => {
     const args = {
-      ...base,
+      ...measurementBase,
       contentItems: [posted({ platform: "youtube", posted_at: "2026-06-15" })], // 37 days ago
     };
     expect(attentionItems(args).some((i) => i.title.includes("ready to measure"))).toBe(true);

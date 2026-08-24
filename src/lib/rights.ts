@@ -23,6 +23,107 @@ export interface DealRights {
   exclusivity: { kind: ExclusivityKind; months: number; scope: string };
 }
 
+/**
+ * Deterministic percentage uplifts applied to the content fee for each 30 days granted.
+ *
+ * The prose guidance in the Playbook is still useful negotiation context, but prose is
+ * not a safe source for the four hard guardrails. These numbers are the machine-readable
+ * counterpart: editable by the manager and consumed by pricing.ts.
+ */
+export interface RightsPricing {
+  organicUsagePerMonthPct: number;
+  paidUsagePerMonthPct: number;
+  whitelistingPerMonthPct: number;
+  categoryExclusivityPerMonthPct: number;
+  fullExclusivityPerMonthPct: number;
+  maxTotalPct: number;
+}
+
+export const DEFAULT_RIGHTS_PRICING: RightsPricing = {
+  organicUsagePerMonthPct: 25,
+  paidUsagePerMonthPct: 37.5,
+  whitelistingPerMonthPct: 37.5,
+  categoryExclusivityPerMonthPct: 25,
+  fullExclusivityPerMonthPct: 60,
+  maxTotalPct: 250,
+};
+
+function boundedPct(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.min(n, 1000) : fallback;
+}
+
+export function parseRightsPricing(style: Record<string, unknown> | null | undefined): RightsPricing {
+  const raw =
+    style?.rightsPricing && typeof style.rightsPricing === "object"
+      ? (style.rightsPricing as Partial<RightsPricing>)
+      : {};
+  return {
+    organicUsagePerMonthPct: boundedPct(
+      raw.organicUsagePerMonthPct,
+      DEFAULT_RIGHTS_PRICING.organicUsagePerMonthPct
+    ),
+    paidUsagePerMonthPct: boundedPct(
+      raw.paidUsagePerMonthPct,
+      DEFAULT_RIGHTS_PRICING.paidUsagePerMonthPct
+    ),
+    whitelistingPerMonthPct: boundedPct(
+      raw.whitelistingPerMonthPct,
+      DEFAULT_RIGHTS_PRICING.whitelistingPerMonthPct
+    ),
+    categoryExclusivityPerMonthPct: boundedPct(
+      raw.categoryExclusivityPerMonthPct,
+      DEFAULT_RIGHTS_PRICING.categoryExclusivityPerMonthPct
+    ),
+    fullExclusivityPerMonthPct: boundedPct(
+      raw.fullExclusivityPerMonthPct,
+      DEFAULT_RIGHTS_PRICING.fullExclusivityPerMonthPct
+    ),
+    maxTotalPct: boundedPct(raw.maxTotalPct, DEFAULT_RIGHTS_PRICING.maxTotalPct),
+  };
+}
+
+export interface RightsPremium {
+  percent: number;
+  lines: string[];
+}
+
+/** The exact rights uplift used by pricing, with an auditable line per grant. */
+export function rightsPremiumFor(
+  rights: DealRights,
+  style: Record<string, unknown> | null | undefined
+): RightsPremium {
+  const pricing = parseRightsPricing(style);
+  const lines: string[] = [];
+  let percent = 0;
+  const add = (label: string, months: number, monthlyPct: number) => {
+    // A selected right with no duration is incomplete, but pricing it as free is the
+    // dangerous outcome. Reserve one month and keep the missing duration visible in UI.
+    const pricedMonths = Math.max(1, months);
+    const amount = pricedMonths * monthlyPct;
+    percent += amount;
+    lines.push(`${label}: ${pricedMonths}mo × ${monthlyPct}% = +${amount}%`);
+  };
+
+  if (rights.usage.kind === "organic") {
+    add("Organic usage", rights.usage.months, pricing.organicUsagePerMonthPct);
+  } else if (rights.usage.kind === "paid") {
+    add("Paid usage", rights.usage.months, pricing.paidUsagePerMonthPct);
+  }
+  if (rights.whitelisting.enabled) {
+    add("Whitelisting", rights.whitelisting.months, pricing.whitelistingPerMonthPct);
+  }
+  if (rights.exclusivity.kind === "category") {
+    add("Category exclusivity", rights.exclusivity.months, pricing.categoryExclusivityPerMonthPct);
+  } else if (rights.exclusivity.kind === "full") {
+    add("Full exclusivity", rights.exclusivity.months, pricing.fullExclusivityPerMonthPct);
+  }
+
+  const capped = Math.min(percent, pricing.maxTotalPct);
+  if (capped < percent) lines.push(`Rights premium capped at +${pricing.maxTotalPct}%`);
+  return { percent: capped, lines };
+}
+
 export const NO_RIGHTS: DealRights = {
   usage: { kind: "none", months: 0 },
   whitelisting: { enabled: false, months: 0 },

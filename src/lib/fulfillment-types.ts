@@ -15,6 +15,7 @@ export type ContentStatus =
 export type PaymentTrigger = "on_signing" | "on_delivery" | "on_verification" | "date";
 export type PaymentStatus = "pending" | "approvable" | "approved" | "paid";
 export type ShipmentStatus = "to_prepare" | "shipped" | "delivered";
+export type DueDateMode = "fixed" | "after_delivery" | "later_of" | "earlier_of";
 
 export interface Contract {
   id: number;
@@ -35,6 +36,15 @@ export interface ContentItem {
   title: string;
   platform: string | null;
   due_date: string | null;
+  /** Original absolute date retained after due_date becomes the resolved operational date. */
+  due_date_anchor?: string | null;
+  due_date_mode?: DueDateMode | null;
+  /** Manager-approved exception that takes precedence over the original contract rule. */
+  due_date_override?: string | null;
+  /** Creator proposal; it never changes due_date until a manager approves it. */
+  requested_due_date?: string | null;
+  due_date_request_reason?: string | null;
+  due_date_requested_at?: string | null;
   due_rule: string | null;
   due_days_after_delivery: number | null;
   status: ContentStatus;
@@ -205,6 +215,8 @@ export interface Shipment {
   address: string | null;
   carrier: string | null;
   tracking: string | null;
+  /** Why a shipment legitimately has no normal carrier/tracking pair. */
+  tracking_exception?: string | null;
   status: ShipmentStatus;
   shipped_at: string | null;
   delivered_at: string | null;
@@ -225,6 +237,7 @@ export interface ParsedTerms {
     quantity: number;
     dueDate: string | null;
     dueDaysAfterDelivery: number | null;
+    dueDateMode?: DueDateMode | null;
     dueRule: string | null;
   }[];
   payments: {

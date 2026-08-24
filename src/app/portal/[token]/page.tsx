@@ -6,6 +6,7 @@ import { money } from "@/lib/format";
 import LiveUrlForm from "@/components/portal/LiveUrlForm";
 import DraftForm from "@/components/portal/DraftForm";
 import LegalDetailsForm from "@/components/portal/LegalDetailsForm";
+import DueDateRequestForm from "@/components/portal/DueDateRequestForm";
 
 export const dynamic = "force-dynamic";
 
@@ -113,6 +114,15 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
                         )}
                         {(c.status === "approved" || c.status === "posted") && (
                           <LiveUrlForm token={token} contentItemId={c.id} initialUrl={c.posted_url ?? ""} />
+                        )}
+                        {deal.stage === "agreed" && c.status !== "posted" && c.status !== "verified" && (
+                          <DueDateRequestForm
+                            token={token}
+                            contentItemId={c.id}
+                            currentDate={c.due_date}
+                            requestedDate={c.requested_due_date ?? null}
+                            requestedReason={c.due_date_request_reason ?? null}
+                          />
                         )}
                       </div>
                     ))}

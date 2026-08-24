@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { getPartnerByToken, getPartnerDeals, savePartnerLegalDetails } from "@/lib/db";
-import { getContentItems, submitDraft, updateContentItem } from "@/lib/fulfillment";
+import {
+  getContentItems,
+  requestContentDueDate,
+  submitDraft,
+  updateContentItem,
+} from "@/lib/fulfillment";
+import { canManageFulfillment } from "@/lib/lifecycle";
 
 /**
  * A creator's write lands on every screen that reads content status, not just the deal
@@ -12,6 +18,7 @@ import { getContentItems, submitDraft, updateContentItem } from "@/lib/fulfillme
  */
 function refreshContentSurfaces(dealId: number) {
   revalidatePath(`/deals/${dealId}`);
+  revalidatePath("/approvals");
   revalidatePath("/content");
   revalidatePath("/pipeline");
   revalidatePath("/");
@@ -29,10 +36,16 @@ export async function submitLiveUrlAction(token: string, contentItemId: number, 
   const trimmed = url.trim();
   if (!/^https?:\/\/.{4,500}$/.test(trimmed)) return { error: "That doesn't look like a link." };
 
-  const item = getPartnerDeals(partner.id)
-    .flatMap((d) => getContentItems(d.id))
-    .find((c) => c.id === contentItemId);
+  const partnerDeals = getPartnerDeals(partner.id);
+  const owningDeal = partnerDeals.find((deal) =>
+    getContentItems(deal.id).some((item) => item.id === contentItemId)
+  );
+  const item = owningDeal
+    ? getContentItems(owningDeal.id).find((content) => content.id === contentItemId)
+    : undefined;
   if (!item) return { error: "This content item isn't yours to update." };
+  const access = canManageFulfillment(owningDeal!.stage);
+  if (!access.ok) return { error: "This collaboration is not open for fulfillment changes." };
   if (item.status === "verified") return { error: "This item is already verified — contact us to change it." };
 
   updateContentItem(contentItemId, {
@@ -51,14 +64,69 @@ export async function submitDraftAction(token: string, contentItemId: number, ur
   if (!partner) return { error: "This link is no longer valid." };
   const trimmed = url.trim();
   if (!/^https?:\/\/.{4,500}$/.test(trimmed)) return { error: "That doesn't look like a link." };
-  const item = getPartnerDeals(partner.id)
-    .flatMap((d) => getContentItems(d.id))
-    .find((c) => c.id === contentItemId);
+  const partnerDeals = getPartnerDeals(partner.id);
+  const owningDeal = partnerDeals.find((deal) =>
+    getContentItems(deal.id).some((item) => item.id === contentItemId)
+  );
+  const item = owningDeal
+    ? getContentItems(owningDeal.id).find((content) => content.id === contentItemId)
+    : undefined;
   if (!item) return { error: "This content item isn't yours to update." };
+  const access = canManageFulfillment(owningDeal!.stage);
+  if (!access.ok) return { error: "This collaboration is not open for fulfillment changes." };
   if (!submitDraft(contentItemId, trimmed)) {
     return { error: "This item is past the draft stage — contact us to change it." };
   }
   refreshContentSurfaces(item.deal_id);
+  return {};
+}
+
+/**
+ * A creator can propose a different publication date, but cannot change the operational
+ * calendar directly. The proposal becomes a manager-owned exception on the dashboard.
+ */
+export async function requestDueDateAction(
+  token: string,
+  contentItemId: number,
+  fields: { dueDate: string; reason: string }
+): Promise<{ error?: string }> {
+  const partner = getPartnerByToken(token);
+  if (!partner) return { error: "This link is no longer valid." };
+
+  const dueDate = fields.dueDate.trim();
+  const reason = fields.reason.trim();
+  const parsed = new Date(`${dueDate}T00:00:00Z`);
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(dueDate) ||
+    Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== dueDate
+  ) {
+    return { error: "Choose a valid proposed date." };
+  }
+  if (dueDate < new Date().toISOString().slice(0, 10)) {
+    return { error: "The proposed date cannot be in the past." };
+  }
+  if (!reason) return { error: "Please tell us why you need a different date." };
+  if (reason.length > 1000) return { error: "Please keep the reason under 1,000 characters." };
+
+  const partnerDeals = getPartnerDeals(partner.id);
+  const owningDeal = partnerDeals.find((deal) =>
+    getContentItems(deal.id).some((item) => item.id === contentItemId)
+  );
+  if (!owningDeal) return { error: "This content item isn't yours to update." };
+  if (owningDeal.stage !== "agreed") {
+    return { error: "This collaboration is not open for deadline changes." };
+  }
+  const item = getContentItems(owningDeal.id).find((content) => content.id === contentItemId);
+  if (!item) return { error: "This content item isn't yours to update." };
+  if (item.status === "posted" || item.status === "verified") {
+    return { error: "This content is already live — contact us directly if its date is wrong." };
+  }
+  if (!requestContentDueDate(contentItemId, dueDate, reason)) {
+    return { error: "That date request could not be saved. Refresh the page and try again." };
+  }
+  refreshContentSurfaces(owningDeal.id);
+  revalidatePath(`/portal/${token}`);
   return {};
 }
 

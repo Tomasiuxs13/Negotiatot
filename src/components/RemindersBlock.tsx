@@ -113,22 +113,28 @@ export default function RemindersBlock({
       )}
 
       {adding && (
-        <div className="flex items-center gap-2 mt-3">
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Reach out again — they asked for 3 months"
-            className="flex-1 border border-slate-200 rounded-md px-2.5 py-1.5 text-sm text-slate-800"
-            autoFocus
-          />
-          <input
-            type="date"
-            value={dueOn}
-            min={today}
-            onChange={(e) => setDueOn(e.target.value)}
-            className="border border-slate-200 rounded-md px-2 py-1.5 text-xs text-slate-700"
-          />
+        <div className="flex flex-wrap items-end gap-2 mt-3">
+          <label className="flex-1 min-w-56">
+            <span className="block text-xs font-semibold text-slate-600 mb-1">Reminder</span>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Reach out again — they asked for 3 months"
+              className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-sm text-slate-800"
+              autoFocus
+            />
+          </label>
+          <label>
+            <span className="block text-xs font-semibold text-slate-600 mb-1">Due date</span>
+            <input
+              type="date"
+              value={dueOn}
+              min={today}
+              onChange={(e) => setDueOn(e.target.value)}
+              className="border border-slate-200 rounded-md px-2 py-1.5 text-xs text-slate-700"
+            />
+          </label>
           <button
             onClick={() => run(() => addReminderAction({ title, dueOn, dealId, partnerId }))}
             disabled={isPending}

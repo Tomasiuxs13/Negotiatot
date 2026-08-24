@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { deliverableCount } from "../deliverables";
+import {
+  deliverableCount,
+  deliverableCountsByPlatform,
+  provisionalDeliverables,
+} from "../deliverables";
 
 const rules = {
   youtube: { minIntegrations: 3 },
@@ -55,5 +59,65 @@ describe("deliverableCount", () => {
   it("is one piece when there is nothing to go on", () => {
     expect(deliverableCount({})).toBe(1);
     expect(deliverableCount({ text: "", platforms: ["youtube"] })).toBe(1);
+  });
+});
+
+describe("provisionalDeliverables", () => {
+  it("expands an unambiguous platform-qualified scope", () => {
+    expect(
+      provisionalDeliverables(
+        "1 YouTube integration + 2 Instagram reels",
+        ["youtube", "instagram"]
+      )
+    ).toEqual({
+      items: [
+        { title: "YouTube integration", platform: "youtube" },
+        { title: "Instagram reels (1/2)", platform: "instagram" },
+        { title: "Instagram reels (2/2)", platform: "instagram" },
+      ],
+      reason: null,
+    });
+  });
+
+  it("inherits the only platform when the scope is unqualified", () => {
+    expect(provisionalDeliverables("2 reels", ["instagram"]).items).toEqual([
+      { title: "reels (1/2)", platform: "instagram" },
+      { title: "reels (2/2)", platform: "instagram" },
+    ]);
+  });
+
+  it("refuses to guess an unqualified mixed-platform item", () => {
+    const result = provisionalDeliverables(
+      "1 YouTube integration + 1 story",
+      ["youtube", "instagram"]
+    );
+    expect(result.items).toEqual([]);
+    expect(result.reason).toContain("Name a platform");
+  });
+
+  it("leaves a mixed-platform crosspost for manager confirmation", () => {
+    const result = provisionalDeliverables(
+      "1 short cross-posted to YouTube and Instagram",
+      ["youtube", "instagram"]
+    );
+    expect(result.items).toEqual([]);
+    expect(result.reason).toContain("Cross-posted");
+  });
+});
+
+describe("deliverableCountsByPlatform", () => {
+  it("keeps each platform's quantity separate", () => {
+    expect(
+      deliverableCountsByPlatform(
+        "1 YouTube integration + 2 IG reels + 1 TikTok short",
+        ["youtube", "instagram", "tiktok"]
+      )
+    ).toEqual({ youtube: 1, instagram: 2, tiktok: 1 });
+  });
+
+  it("does not guess an unqualified item onto a selected platform", () => {
+    expect(
+      deliverableCountsByPlatform("1 YouTube integration + 1 story", ["youtube", "instagram"])
+    ).toEqual({ youtube: 1 });
   });
 });

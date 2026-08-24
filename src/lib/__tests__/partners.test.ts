@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { parseTags, partnerStats, partnerStatus, priorDeals } from "../partners";
+import {
+  parseTags,
+  partnerOperationalStats,
+  partnerStats,
+  partnerStatus,
+  priorDeals,
+} from "../partners";
 import type { Deal } from "../types";
+import type { ContentItem } from "../fulfillment-types";
 
 const deal = (over: Partial<Deal>): Deal =>
   ({
@@ -114,5 +121,48 @@ describe("priorDeals", () => {
 
   it("is empty for a creator you have never closed with", () => {
     expect(priorDeals([deal({ stage: "negotiating", agreed_price: null })])).toEqual([]);
+  });
+});
+
+describe("partnerOperationalStats", () => {
+  const content = (over: Partial<ContentItem>): ContentItem =>
+    ({
+      id: 1,
+      deal_id: 1,
+      status: "planned",
+      due_date: null,
+      posted_at: null,
+      revision_round: 0,
+      ...over,
+    }) as ContentItem;
+
+  it("summarises delivery, punctuality and revision history", () => {
+    const stats = partnerOperationalStats(
+      [deal({ id: 1 }), deal({ id: 2 })],
+      [
+        content({ id: 1, deal_id: 1, status: "verified", due_date: "2026-07-10", posted_at: "2026-07-09", revision_round: 1 }),
+        content({ id: 2, deal_id: 1, status: "posted", due_date: "2026-07-10", posted_at: "2026-07-12", revision_round: 3 }),
+        content({ id: 3, deal_id: 2, status: "planned" }),
+        content({ id: 4, deal_id: 99, status: "verified" }),
+      ]
+    );
+
+    expect(stats).toEqual({
+      promisedContent: 3,
+      deliveredContent: 2,
+      verifiedContent: 1,
+      onTimeRate: 0.5,
+      averageRevisionRounds: 2,
+    });
+  });
+
+  it("keeps unknown reliability visibly unknown", () => {
+    expect(partnerOperationalStats([deal({ id: 1 })], [])).toEqual({
+      promisedContent: 0,
+      deliveredContent: 0,
+      verifiedContent: 0,
+      onTimeRate: null,
+      averageRevisionRounds: null,
+    });
   });
 });

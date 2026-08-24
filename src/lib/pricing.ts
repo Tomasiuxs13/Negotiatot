@@ -30,6 +30,8 @@ import {
   type Commission,
   type Discount,
 } from "./commission";
+import { NO_RIGHTS, rightsPremiumFor, type DealRights } from "./rights";
+import { platformAliasPattern } from "./deliverables";
 
 /** A platform's contribution to fair value: what its audience is worth at playbook rates. */
 export interface PlatformRate {
@@ -39,7 +41,10 @@ export interface PlatformRate {
   /** The playbook's max CPM for the format being bought on this platform. */
   cpm: number;
   format: ContentFormat;
+  quantity: number;
   /** views / 1000 × cpm, rounded. What one piece on this platform is worth. */
+  unitValue: number;
+  /** unitValue × quantity. This platform's full contribution to the bundle. */
   value: number;
 }
 
@@ -56,17 +61,21 @@ export interface PricingInputs {
   platforms: string[];
   /** Per-platform reach from the partner's channel records, where known. */
   reachByPlatform?: Record<string, number>;
-  /** The deal's single blended figure, used for any platform with no record of its own. */
+  /** The deal's single audience figure. It belongs only to blendedViewsPlatform. */
   blendedViews?: number | null;
+  blendedViewsPlatform?: string | null;
   /** Deliverables or format text — decides integration vs short, and piece count. */
   deliverablesText?: string | null;
   pieces: number;
+  /** Explicit quantities parsed for platform-qualified deliverables. */
+  piecesByPlatform?: Record<string, number>;
   /** One production distributed to several platforms: effort priced once, reach summed. */
   crosspost?: boolean;
   /** Expected orders across the bundle, for breakeven. Zero when the channel is unsized. */
   expectedOrders?: number;
   commission?: Commission;
   discount?: Discount;
+  rights?: DealRights;
   /**
    * How far below fair value quality issues push the target, 0–100. The model's one input.
    * Clamped: see `clampDiscountPct`.
@@ -81,7 +90,13 @@ export interface ComputedNumbers {
   breakeven: number;
   /** Undiscounted sum of what the reach is worth at playbook CPMs. */
   fairValue: number;
+  /** Content value before rights and exclusivity premiums. */
+  baseFairValue: number;
+  rightsPremium: number;
+  rightsPremiumPct: number;
   perPlatform: PlatformRate[];
+  /** Selected platforms omitted because they had no confirmed reach or usable CPM. */
+  missingPlatforms: string[];
   /** True when maxPerDeal, not the CPM ceiling, is what bounds the walk-away. */
   capApplied: boolean;
   /** The discount actually used, after clamping. */
@@ -113,7 +128,7 @@ export function formatFor(deliverablesText: string | null | undefined, platform:
   const text = deliverablesText ?? "";
   // Platform-qualified mentions win: "1 YouTube integration + 2 IG reels" prices the
   // YouTube piece as an integration even though the string also contains "reels".
-  const scoped = new RegExp(`${platform}[^.,;+]*`, "i").exec(text)?.[0];
+  const scoped = new RegExp(`(?:${platformAliasPattern(platform)})[^.,;+]*`, "i").exec(text)?.[0];
   if (scoped) return SHORT_FORMAT.test(scoped) ? "short" : "integration";
   if (SHORT_FORMAT.test(text)) return "short";
   // TikTok has no long form to sell, so an unqualified TikTok deliverable is a short.
@@ -147,7 +162,14 @@ export function rateFor(
   inputs: PricingInputs,
   rules: PricingRules
 ): PlatformRate | null {
-  const views = inputs.reachByPlatform?.[platform] ?? inputs.blendedViews ?? 0;
+  // A report/intake figure belongs to one named platform. Falling it through to every
+  // selected platform is the exact cross-platform pricing failure this boundary avoids.
+  const blendedPlatform =
+    inputs.blendedViewsPlatform ?? (inputs.platforms.length === 1 ? inputs.platforms[0] : null);
+  const views =
+    blendedPlatform === platform && (inputs.blendedViews ?? 0) > 0
+      ? inputs.blendedViews!
+      : (inputs.reachByPlatform?.[platform] ?? 0);
   if (!Number.isFinite(views) || views <= 0) return null;
 
   const format = formatFor(inputs.deliverablesText, platform);
@@ -157,7 +179,16 @@ export function rateFor(
   );
   if (cpm <= 0) return null;
 
-  return { platform, views, cpm, format, value: Math.round((views / 1000) * cpm) };
+  const scoped = inputs.piecesByPlatform ?? {};
+  const hasScopedQuantities = Object.keys(scoped).length > 0;
+  const quantity = inputs.crosspost
+    ? 1
+    : (scoped[platform] ??
+      (hasScopedQuantities ? 0 : inputs.platforms.length === 1 ? inputs.pieces : 1));
+  if (!Number.isFinite(quantity) || quantity <= 0) return null;
+
+  const unitValue = Math.round((views / 1000) * cpm);
+  return { platform, views, cpm, format, quantity, unitValue, value: unitValue * quantity };
 }
 
 /**
@@ -178,11 +209,11 @@ export function computeNumbers(inputs: PricingInputs, rules: PricingRules): Comp
     .map((p) => rateFor(p, inputs, rules))
     .filter((r): r is PlatformRate => r !== null);
 
-  const perRound = perPlatform.reduce((sum, r) => sum + r.value, 0);
-  // A crosspost is one production reaching several audiences: the reach sums, the effort
-  // is paid for once, so the bundle multiplier does not apply on top of it.
-  const bundle = inputs.crosspost ? 1 : Math.max(1, inputs.pieces);
-  const fairValue = Math.round(perRound * bundle);
+  const missingPlatforms = inputs.platforms.filter((p) => !perPlatform.some((r) => r.platform === p));
+  const baseFairValue = Math.round(perPlatform.reduce((sum, r) => sum + r.value, 0));
+  const rights = rightsPremiumFor(inputs.rights ?? NO_RIGHTS, rules.negotiationStyle);
+  const rightsPremium = Math.round(baseFairValue * (rights.percent / 100));
+  const fairValue = baseFairValue + rightsPremium;
 
   const cap = effectiveMaxPerDeal(inputs.platforms, rules);
   const capApplied = cap != null && fairValue > cap;
@@ -215,13 +246,21 @@ export function computeNumbers(inputs: PricingInputs, rules: PricingRules): Comp
     walkaway,
     breakeven,
     fairValue,
+    baseFairValue,
+    rightsPremium,
+    rightsPremiumPct: rights.percent,
     perPlatform,
+    missingPlatforms,
     capApplied,
     qualityDiscountPct,
     workings: describeWorkings({
       perPlatform,
-      bundle,
       crosspost: inputs.crosspost ?? false,
+      missingPlatforms,
+      baseFairValue,
+      rightsPremium,
+      rightsPremiumPct: rights.percent,
+      rightsLines: rights.lines,
       fairValue,
       cap,
       capApplied,
@@ -248,8 +287,12 @@ export function anchorBelowTargetPct(style: Record<string, unknown> | null | und
 
 function describeWorkings(p: {
   perPlatform: PlatformRate[];
-  bundle: number;
   crosspost: boolean;
+  missingPlatforms: string[];
+  baseFairValue: number;
+  rightsPremium: number;
+  rightsPremiumPct: number;
+  rightsLines: string[];
   fairValue: number;
   cap: number | null;
   capApplied: boolean;
@@ -270,13 +313,22 @@ function describeWorkings(p: {
   }
   for (const r of p.perPlatform) {
     lines.push(
-      `${r.platform}: ${r.views.toLocaleString("en-US")} views × $${r.cpm} CPM (${r.format}) = ${money(r.value)}`
+      `${r.platform}: ${r.views.toLocaleString("en-US")} views × $${r.cpm} CPM (${r.format})` +
+        `${r.quantity > 1 ? ` × ${r.quantity} pieces` : ""} = ${money(r.value)}`
     );
   }
-  if (p.bundle > 1) {
-    lines.push(`× ${p.bundle} pieces = ${money(p.fairValue)} fair value`);
-  } else if (p.crosspost && p.perPlatform.length > 1) {
-    lines.push(`One production, combined reach = ${money(p.fairValue)} fair value`);
+  for (const platform of p.missingPlatforms) {
+    lines.push(`${platform}: excluded — no confirmed platform-specific reach or usable CPM`);
+  }
+  if (p.crosspost && p.perPlatform.length > 1) {
+    lines.push(`One production, combined platform reach = ${money(p.baseFairValue)} content value`);
+  }
+  if (p.rightsPremium > 0) {
+    lines.push(...p.rightsLines);
+    lines.push(
+      `Rights uplift +${p.rightsPremiumPct}% of ${money(p.baseFairValue)} = ${money(p.rightsPremium)}`
+    );
+    lines.push(`Content + rights = ${money(p.fairValue)} fair value`);
   }
   lines.push(
     p.capApplied

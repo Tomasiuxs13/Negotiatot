@@ -2,7 +2,14 @@ import type { Deal } from "@/lib/types";
 import type { ContentItem, PaymentItem } from "@/lib/fulfillment-types";
 import { fulfillmentSummary } from "@/lib/fulfillment-rules";
 import { money } from "@/lib/format";
-import { NO_COMMISSION, NO_DISCOUNT, trueDealCost, type Commission, type Discount } from "@/lib/commission";
+import {
+  actualDealCost,
+  NO_COMMISSION,
+  NO_DISCOUNT,
+  type Commission,
+  type CommissionTier,
+  type Discount,
+} from "@/lib/commission";
 
 /**
  * What a signed deal is actually about: the fee, how much of the work has landed,
@@ -17,6 +24,7 @@ export default function DealProgress({
   productCost = 0,
   commission = NO_COMMISSION,
   discount = NO_DISCOUNT,
+  commissionTiers = [],
 }: {
   deal: Deal;
   contentItems: ContentItem[];
@@ -32,23 +40,24 @@ export default function DealProgress({
    */
   commission?: Commission;
   discount?: Discount;
+  commissionTiers?: CommissionTier[];
 }) {
   const s = fulfillmentSummary(contentItems, paymentItems);
   const paid = paymentItems.filter((p) => p.status === "paid").reduce((n, p) => n + p.amount, 0);
   const fee = deal.agreed_price ?? paymentItems.reduce((n, p) => n + p.amount, 0);
   const pct = s.totalContent > 0 ? Math.round((s.verified / s.totalContent) * 100) : 0;
-  const hasPerOrderCost =
-    (commission.type !== "none" || discount.type !== "none") &&
-    Boolean(deal.actual_orders) &&
-    aov > 0;
+  const hasPerformanceCost =
+    (commission.type !== "none" || discount.type !== "none") && Boolean(deal.actual_orders);
   const cost =
-    hasPerOrderCost || productCost > 0
-      ? trueDealCost({
+    hasPerformanceCost || productCost > 0
+      ? actualDealCost({
           fee,
-          expectedOrders: deal.actual_orders ?? 0,
+          actualOrders: deal.actual_orders ?? 0,
+          actualRevenue: deal.actual_revenue,
           aov,
           commission,
           discount,
+          tiers: commissionTiers,
           productCost,
         })
       : null;

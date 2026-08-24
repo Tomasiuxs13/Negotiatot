@@ -2,7 +2,8 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createDealAction, lookupPartnerAction, type PartnerPrefill } from "@/app/new/actions";
+import { createDealAction, lookupPartnerAction } from "@/app/new/actions";
+import type { PartnerPrefill } from "@/lib/partners";
 import { money, moneyCpm } from "@/lib/format";
 
 const inputClass =
@@ -21,15 +22,17 @@ export default function NewDealForm({
   presetPartner,
   stage,
   defaultCommission = 0,
+  defaultCommissionType = "none",
   defaultDiscount = 0,
   defaultDiscountType = "none",
 }: {
   campaigns?: { id: number; name: string }[];
   partners?: { id: number; name: string }[];
-  presetPartner?: { id: number; name: string };
+  presetPartner?: PartnerPrefill;
   stage?: string;
   /** Your standard affiliate rate, from the Playbook. */
   defaultCommission?: number;
+  defaultCommissionType?: string;
   /** Your standard audience coupon, from the Playbook. */
   defaultDiscount?: number;
   defaultDiscountType?: string;
@@ -41,8 +44,15 @@ export default function NewDealForm({
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string[]>(["youtube"]);
-  const [known, setKnown] = useState<PartnerPrefill | null>(null);
+  const initialPlatforms =
+    presetPartner && presetPartner.platforms.length > 0
+      ? presetPartner.platforms
+      : ["youtube"];
+  const [selected, setSelected] = useState<string[]>(initialPlatforms);
+  const [primaryPlatform, setPrimaryPlatform] = useState(
+    presetPartner?.primaryPlatform ?? initialPlatforms[0]
+  );
+  const [known, setKnown] = useState<PartnerPrefill | null>(presetPartner ?? null);
 
   /**
    * Recognises a returning creator and fills in what we already hold on them, so the
@@ -53,7 +63,10 @@ export default function NewDealForm({
       const found = await lookupPartnerAction(name);
       setKnown(found);
       if (found) {
-        if (found.platforms.length > 0) setSelected(found.platforms);
+        if (found.platforms.length > 0) {
+          setSelected(found.platforms);
+          setPrimaryPlatform(found.primaryPlatform ?? found.platforms[0]);
+        }
         const form = formRef.current;
         if (form) {
           const fill = (field: string, value: string | number | null) => {
@@ -70,9 +83,13 @@ export default function NewDealForm({
   };
 
   const togglePlatform = (value: string) => {
-    setSelected((prev) =>
-      prev.includes(value) ? prev.filter((p) => p !== value) : [...prev, value]
-    );
+    const next = selected.includes(value)
+      ? selected.filter((p) => p !== value)
+      : [...selected, value];
+    setSelected(next);
+    if (next.length > 0 && (!next.includes(primaryPlatform) || selected.length === 0)) {
+      setPrimaryPlatform(next[0]);
+    }
   };
 
   const submit = (e: React.FormEvent) => {
@@ -124,9 +141,21 @@ export default function NewDealForm({
               "Their channels and known stats have been filled in below."
             )}
           </p>
+          {known.promisedContent > 0 && (
+            <p className="text-xs text-slate-600 mt-1 ml-6">
+              Delivery record: {known.deliveredContent}/{known.promisedContent} items published
+              {known.onTimeRate != null
+                ? ` · ${Math.round(known.onTimeRate * 100)}% on time`
+                : ""}
+              {known.averageRevisionRounds != null
+                ? ` · ${known.averageRevisionRounds.toFixed(1)} draft rounds on average`
+                : ""}
+              .
+            </p>
+          )}
         </div>
       )}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1.5">
             Creator name *{" "}
@@ -134,7 +163,7 @@ export default function NewDealForm({
               <span className="font-normal text-slate-500">— existing partners autocomplete</span>
             )}
           </label>
-          {presetPartner && <input type="hidden" name="partner_id" value={presetPartner.id} />}
+          {presetPartner && <input type="hidden" name="partner_id" value={presetPartner.partnerId} />}
           <input
             name="creator"
             list="partner-names"
@@ -158,7 +187,7 @@ export default function NewDealForm({
           <label className="block text-xs font-semibold text-slate-700 mb-1.5">
             Platforms * <span className="font-normal text-slate-500">— pick all this deal covers</span>
           </label>
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2 pt-1 flex-wrap">
             {PLATFORMS.map((p) => (
               <button
                 key={p.value}
@@ -174,6 +203,29 @@ export default function NewDealForm({
               </button>
             ))}
           </div>
+          {selected.length > 1 && (
+            <label className="block mt-3">
+              <span className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Report and audience stats belong to
+              </span>
+              <select
+                name="primary_platform"
+                value={primaryPlatform}
+                onChange={(e) => setPrimaryPlatform(e.target.value)}
+                className={inputClass}
+              >
+                {selected.map((value) => (
+                  <option key={value} value={value}>
+                    {PLATFORMS.find((p) => p.value === value)?.label ?? value}
+                  </option>
+                ))}
+              </select>
+              <span className="block text-xs font-normal text-slate-500 mt-1">
+                The channel URL, known views, engagement and uploaded report are never reused
+                for the other selected platforms.
+              </span>
+            </label>
+          )}
         </div>
       </div>
 
@@ -194,6 +246,7 @@ export default function NewDealForm({
         <input
           name="email"
           type="email"
+          defaultValue={presetPartner?.email ?? ""}
           placeholder="creator@example.com"
           className={inputClass}
         />
@@ -209,7 +262,7 @@ export default function NewDealForm({
         <div className="flex gap-2">
           <select
             name="commission_type"
-            defaultValue={defaultCommission > 0 ? "percent" : "none"}
+            defaultValue={defaultCommissionType}
             className={`${inputClass} w-40`}
           >
             <option value="none">No commission</option>
@@ -256,6 +309,65 @@ export default function NewDealForm({
           />
         </div>
       </div>
+        </div>
+      </details>
+
+      {/* Marked at intake so the price can include them — the analysis prices each as a
+          separate line item on top of the base fee, using the Playbook's uplift bands. */}
+      <details className="group border border-slate-200 rounded-lg bg-slate-50/60 px-4 py-3">
+        <summary className="cursor-pointer list-none text-xs font-semibold text-slate-700 select-none flex items-center gap-2">
+          <span className="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
+          Rights &amp; extras
+          <span className="font-normal text-slate-500">— usage, whitelisting, exclusivity; each is priced on top of the base fee</span>
+        </summary>
+        <div className="mt-3 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="block">
+              <span className="block text-xs font-semibold text-slate-700 mb-1.5">Usage rights</span>
+              <select name="usage_kind" defaultValue="none" className={inputClass}>
+                <option value="none">None — their channel only</option>
+                <option value="organic">Organic — we may repost it</option>
+                <option value="paid">Paid — we may run it as ads</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="block text-xs font-semibold text-slate-700 mb-1.5">Usage duration (months)</span>
+              <input name="usage_months" type="number" min="1" max="24" placeholder="e.g. 3" className={inputClass} />
+            </label>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 py-2">
+              <input name="whitelisting" type="checkbox" value="1" className="w-4 h-4 accent-[var(--brand,#0d7a5f)]" />
+              Whitelisting — ads through their account
+            </label>
+            <label className="block">
+              <span className="block text-xs font-semibold text-slate-700 mb-1.5">Whitelisting duration (months)</span>
+              <input name="whitelisting_months" type="number" min="1" max="24" placeholder="e.g. 2" className={inputClass} />
+            </label>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="block">
+              <span className="block text-xs font-semibold text-slate-700 mb-1.5">Exclusivity</span>
+              <select name="exclusivity_kind" defaultValue="none" className={inputClass}>
+                <option value="none">None</option>
+                <option value="category">Category — no competing brands</option>
+                <option value="full">Full — no other sponsors</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="block text-xs font-semibold text-slate-700 mb-1.5">Exclusivity duration (months)</span>
+              <input name="exclusivity_months" type="number" min="1" max="24" placeholder="e.g. 3" className={inputClass} />
+            </label>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Named competitors{" "}
+              <span className="font-normal text-slate-500">
+                — a named list is cheaper and clearer than &quot;no competing brands&quot;
+              </span>
+            </label>
+            <input name="exclusivity_scope" type="text" placeholder="e.g. GlocalMe, TravelWifi, Solis" className={inputClass} />
+          </div>
         </div>
       </details>
 
@@ -339,18 +451,31 @@ export default function NewDealForm({
         </div>
       </details>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1.5">
             Channel URL <span className="font-normal text-slate-500">— enables web research</span>
           </label>
-          <input name="channel_url" type="url" placeholder="https://youtube.com/@channel" className={inputClass} />
+          <input
+            name="channel_url"
+            type="url"
+            defaultValue={presetPartner?.channelUrl ?? ""}
+            placeholder="https://youtube.com/@channel"
+            className={inputClass}
+          />
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1.5">
             Known avg views <span className="font-normal text-slate-500">(optional)</span>
           </label>
-          <input name="known_avg_views" type="number" min="0" placeholder="e.g. 60000" className={inputClass} />
+          <input
+            name="known_avg_views"
+            type="number"
+            min="0"
+            defaultValue={presetPartner?.avgViews ?? ""}
+            placeholder="e.g. 60000"
+            className={inputClass}
+          />
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -358,7 +483,14 @@ export default function NewDealForm({
           </label>
           {/* Text, not number: a number input rejects the comma half of Europe types as
               the decimal mark, and step validation rejects two decimals outright. */}
-          <input name="known_engagement" type="text" inputMode="decimal" placeholder="e.g. 11.45" className={inputClass} />
+          <input
+            name="known_engagement"
+            type="text"
+            inputMode="decimal"
+            defaultValue={presetPartner?.engagementRate ?? ""}
+            placeholder="e.g. 11.45"
+            className={inputClass}
+          />
         </div>
       </div>
 

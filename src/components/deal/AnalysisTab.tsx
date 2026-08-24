@@ -21,10 +21,13 @@ const FLAG_ICON: Record<string, { icon: string; className: string }> = {
 export default function AnalysisTab({
   deal,
   analyzedAt,
+  playbookUpdatedAt,
 }: {
   deal: Deal;
   /** When this stored analysis was produced — null if it predates usage logging. */
   analyzedAt?: string | null;
+  /** Last rule edit; a newer Playbook makes this stored verdict historical. */
+  playbookUpdatedAt?: string | null;
 }) {
   if (!deal.analysis && deal.job_status === "analyzing") {
     return <AnalyzingProgress startedAt={deal.job_started_at} />;
@@ -45,10 +48,26 @@ export default function AnalysisTab({
 
   const analysis = JSON.parse(deal.analysis) as DealAnalysis;
   const v = VERDICT_PILL[analysis.verdict];
+  const stale = Boolean(
+    analyzedAt &&
+      playbookUpdatedAt &&
+      new Date(playbookUpdatedAt).getTime() > new Date(analyzedAt.replace(" ", "T") + "Z").getTime()
+  );
   const flagged = analysis.metrics.filter((m) => m.tone === "crit" || m.tone === "warn").slice(0, 4);
 
   return (
     <div className="@container flex flex-col gap-6">
+      {stale && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-sm font-semibold text-amber-900">This analysis uses an older Playbook</p>
+            <p className="text-xs text-amber-800 mt-0.5">
+              Your pricing or qualification rules changed after this verdict was produced.
+            </p>
+          </div>
+          <RunAnalysisButton dealId={deal.id} compact />
+        </div>
+      )}
       <div className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
           <h3 className="font-headline font-semibold text-lg text-slate-900">Why this verdict</h3>

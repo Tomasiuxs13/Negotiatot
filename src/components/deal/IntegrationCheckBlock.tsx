@@ -37,7 +37,6 @@ export default function IntegrationCheckBlock({
   checkedAt,
   requirements,
   minIntegrationSeconds,
-  senderName,
 }: {
   contentItemId: number;
   dealId: number;
@@ -45,7 +44,6 @@ export default function IntegrationCheckBlock({
   checkedAt: string | null;
   requirements: BriefRequirement[];
   minIntegrationSeconds: number | null;
-  senderName?: string;
 }) {
   const [mediaUrl, setMediaUrl] = useState("");
   const [error, setError] = useState<string | null>(null);

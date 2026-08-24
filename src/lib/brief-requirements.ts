@@ -96,6 +96,31 @@ export function integrationSeconds(check: IntegrationCheck): number | null {
   return a != null && b != null && b > a ? b - a : null;
 }
 
+/** A successful machine check is necessary evidence before a manager can verify. */
+export function verificationBlocker(
+  check: IntegrationCheck | null,
+  requirements: BriefRequirement[],
+  minIntegrationSeconds: number | null
+): string | null {
+  if (requirements.length === 0 && minIntegrationSeconds == null) return null;
+  if (!check) return "Run the brief check before marking this content verified.";
+
+  const relevant = new Map(check.findings.map((finding) => [finding.id, finding.status]));
+  const unresolved = requirements.filter((requirement) => relevant.get(requirement.id) !== "met");
+  if (unresolved.length > 0) {
+    return `${unresolved.length} brief requirement${unresolved.length === 1 ? " is" : "s are"} missed or unclear.`;
+  }
+
+  if (minIntegrationSeconds != null) {
+    const measured = integrationSeconds(check);
+    if (measured == null) return "The integration length was not confirmed by the check.";
+    if (measured < minIntegrationSeconds) {
+      return `The integration is ${formatDuration(measured)}; the brief requires ${formatDuration(minIntegrationSeconds)}.`;
+    }
+  }
+  return null;
+}
+
 /**
  * What would go in a change-request email — the misses only.
  *

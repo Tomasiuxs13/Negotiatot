@@ -11,12 +11,22 @@ import {
   getGlobalRules,
   getNegotiationStyle,
   getPlaybook,
-  getSetting,
+
   getUnitEconomics,
   logUsage,
   updateDeal,
 } from "./db";
 import { applyCampaignOverrides, parseOverrides } from "./campaigns";
+import { deliverableCount, deliverableCountsByPlatform, isCrosspostText } from "./deliverables";
+import { expectedOrdersFrom, resolveOffer } from "./commission";
+import { parseRights } from "./rights";
+import { recommendationReadyLabel } from "./recommendation-guard";
+import {
+  computeNumbers,
+  type ComputedNumbers,
+  type PricingInputs,
+  type PricingRules,
+} from "./pricing";
 import {
   analyzeDeal,
   extractReportData,
@@ -90,6 +100,98 @@ export function playbookContext(
   };
 }
 
+type Ctx = ReturnType<typeof playbookContext>;
+
+/** The brand's rules, in the shape the pricing module wants them. */
+export function pricingRulesFor(ctx: Ctx): PricingRules {
+  return {
+    rulesByPlatform: ctx.rulesByPlatform,
+    negotiationStyle: ctx.negotiationStyle,
+    globalRules: ctx.globalRules,
+    unitEconomics: ctx.unitEconomics as Record<string, number> | null,
+  };
+}
+
+/**
+ * Everything the four numbers are computed from, gathered in one place.
+ *
+ * Reach precedence: the extraction pass first (it read this creator's own report for this
+ * deal), then whatever intake captured. Per-platform channel records override the blended
+ * figure inside `computeNumbers`, which matters on any multi-platform deal — one blended
+ * average prices a 500k-view YouTube integration and a 4k-view Reel identically.
+ */
+export function pricingInputsFor(deal: Deal, ctx: Ctx, extracted?: ExtractedReport): PricingInputs {
+  const econ = (ctx.unitEconomics ?? {}) as Record<string, number>;
+  const platforms = platformsOf(deal);
+  const text = deal.deliverables ?? deal.format;
+  const pieces = Math.max(
+    1,
+    deliverableCount({ text, platforms, rulesByPlatform: ctx.rulesByPlatform })
+  );
+  const blendedViews = extracted?.avgViews ?? deal.avg_views ?? null;
+  const piecesByPlatform = deliverableCountsByPlatform(text, platforms);
+  const reachByPlatform = { ...ctx.channelReach };
+  // avg_views and an uploaded report are facts for the deal's primary/report platform,
+  // never a blended fact that can be copied onto every selected channel.
+  if (blendedViews != null && blendedViews > 0) reachByPlatform[deal.platform] = blendedViews;
+  const { commission, discount } = resolveOffer(deal, econ);
+
+  const hasScopedQuantities = Object.keys(piecesByPlatform).length > 0;
+  const forecastViews = platforms.reduce((sum, platform) => {
+    const views = reachByPlatform[platform] ?? 0;
+    const quantity = isCrosspostText(text)
+      ? 1
+      : (piecesByPlatform[platform] ??
+        (hasScopedQuantities ? 0 : platforms.length === 1 ? pieces : 1));
+    return sum + views * quantity;
+  }, 0);
+  const expectedOrders = expectedOrdersFrom({
+    views: forecastViews,
+    linkCtrPct: Number(econ.linkCtr ?? 0),
+    orderConversionPct: Number(econ.orderConversion ?? 0),
+  });
+
+  return {
+    platforms,
+    reachByPlatform,
+    blendedViews,
+    blendedViewsPlatform: deal.platform,
+    deliverablesText: text,
+    pieces,
+    piecesByPlatform,
+    crosspost: isCrosspostText(text),
+    expectedOrders,
+    commission,
+    discount,
+    rights: parseRights(deal.rights),
+  };
+}
+
+/** The four rows the deal workspace renders, values and arithmetic both from code. */
+export function displayNumbers(n: ComputedNumbers, qualityRationale: string) {
+  const workings = n.workings.join("; ");
+  const quality = n.qualityDiscountPct > 0 && qualityRationale ? ` ${qualityRationale}` : "";
+  return [
+    { label: "Anchor", value: n.anchor, explanation: workings },
+    {
+      label: "Target",
+      value: n.target,
+      explanation:
+        n.qualityDiscountPct > 0
+          ? `Content and rights value $${n.fairValue.toLocaleString("en-US")} less a ${n.qualityDiscountPct}% quality discount.${quality}`
+          : `Content at the playbook's ceiling CPMs plus $${n.rightsPremium.toLocaleString("en-US")} for rights, with no quality discount.${quality}`,
+    },
+    {
+      label: "Walk-away",
+      value: n.walkaway,
+      explanation: n.capApplied
+        ? `Capped by maxPerDeal. Content and rights would otherwise support $${n.fairValue.toLocaleString("en-US")}.`
+        : `The playbook's ceiling CPMs plus priced rights. Never adjusted for quality — this is what the deal can bear, not what it should cost.`,
+    },
+    { label: "Breakeven", value: n.breakeven, explanation: workings },
+  ];
+}
+
 /**
  * Runs the full deal analysis and stores the result. Called from `after()` —
  * the response has already been sent; the UI polls the deal's job_status.
@@ -142,9 +244,26 @@ export async function performAnalysis(
       }
     }
 
+    const ctx = playbookContext(platformsOf(deal), deal.campaign_id, deal.partner_id);
+
+    // The four numbers are computed twice, and the order is the point.
+    //
+    // Before the call, from whatever reach is already known — the extraction pass, the
+    // deal record, the partner's channels — so the model is *given* the numbers and
+    // grades against them instead of proposing them. Walk-away in particular is a budget
+    // ceiling that decides whether the copilot may draft an offer at all; it has no
+    // business being an output of a call that reads a stranger's PDF.
+    //
+    // After the call, again, because the model may have researched better views than we
+    // started with, and because the quality discount it judged is an input to Target.
+    // What gets stored is always this second computation, never anything the model wrote.
+    const pricingInputs = pricingInputsFor(deal, ctx, extracted);
+    const precomputed = computeNumbers(pricingInputs, pricingRulesFor(ctx));
+
     const result = await analyzeDeal({
       deal,
-      playbook: playbookContext(platformsOf(deal), deal.campaign_id, deal.partner_id),
+      playbook: ctx,
+      computed: precomputed,
       // Both are still passed: analyzeDeal attaches the document only when there is no
       // usable extraction, so the fallback needs no separate call path.
       reportPdfBase64: inputs.reportPdfBase64,
@@ -154,6 +273,21 @@ export async function performAnalysis(
       channelUrl: inputs.channelUrl || deal.channel_url || undefined,
       history: dealHistory(deal),
     });
+
+    // Views precedence mirrors the updateDeal call below, so the numbers are computed on
+    // exactly the figure that ends up stored — a mismatch here would price the deal on
+    // one number and display another.
+    const resolvedViews =
+      inputs.knownAvgViews ??
+      (deal.audience_locked ? deal.avg_views : (result.estimatedAvgViews ?? deal.avg_views));
+    const numbers = computeNumbers(
+      {
+        ...pricingInputs,
+        blendedViews: resolvedViews ?? pricingInputs.blendedViews,
+        qualityDiscountPct: result.qualityDiscountPct,
+      },
+      pricingRulesFor(ctx)
+    );
 
     logUsage(
       dealId,
@@ -167,11 +301,20 @@ export async function performAnalysis(
 
     updateDeal(dealId, {
       channel_url: inputs.channelUrl || deal.channel_url || result.extractedChannelUrl,
-      analysis: JSON.stringify(result.analysis),
-      anchor: result.numbers.anchor ?? deal.anchor,
-      target: result.numbers.target ?? deal.target,
-      walkaway: result.numbers.walkaway ?? deal.walkaway,
-      breakeven: result.numbers.breakeven ?? deal.breakeven,
+      analysis: JSON.stringify({
+        ...result.analysis,
+        // The display rows are built here, from the computed values and the workings the
+        // pricing module wrote. Letting the model narrate numbers it no longer produces
+        // is how the explanation drifts from the figure it claims to explain.
+        numbers: displayNumbers(numbers, result.qualityRationale),
+      }),
+      // A computed zero is a real answer ("no reach on record", "no fee is affordable"),
+      // but it is not a reason to erase a number a human already corrected — so an
+      // unpriceable deal keeps what it had rather than silently resetting to $0.
+      anchor: numbers.fairValue > 0 ? numbers.anchor : deal.anchor,
+      target: numbers.fairValue > 0 ? numbers.target : deal.target,
+      walkaway: numbers.fairValue > 0 ? numbers.walkaway : deal.walkaway,
+      breakeven: numbers.breakeven || deal.breakeven,
       // Precedence: a number typed for THIS run, then a hand-corrected stored value,
       // then the researched estimate, then whatever intake captured. The researched
       // estimate outranks a stale intake figure (often a Shorts-diluted blend the
@@ -243,17 +386,20 @@ export async function performRecommendation(dealId: number) {
       drafts: reco.drafts,
     });
 
-    const fields: Record<string, unknown> = {};
+    const fields: Record<string, unknown> = {
+      // addTheirReply marks the row as drafting before this background job starts.
+      // Every successful path must replace that transient label, not only openings.
+      status_label: recommendationReadyLabel(deal.round, isOpening),
+      status_tone: "good",
+    };
     if (reco.theirCurrentPosition != null) {
       fields.current_ask = Math.round(reco.theirCurrentPosition);
     }
     if (isOpening) {
       fields.round = Math.max(deal.round, 1);
       fields.your_move = 1;
-      fields.status_label = "Opening offer ready";
-      fields.status_tone = "good";
     }
-    if (Object.keys(fields).length > 0) updateDeal(dealId, fields);
+    updateDeal(dealId, fields);
     clearJob(dealId);
   } catch (err) {
     console.error("performRecommendation failed:", err);

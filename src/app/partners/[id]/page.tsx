@@ -4,8 +4,8 @@ import PartnerProfile from "@/components/partners/PartnerProfile";
 import { ensurePartnerPortalToken, getPartner, getPartnerChannels, getPartnerDeals, getRemindersFor } from "@/lib/db";
 import RemindersBlock from "@/components/RemindersBlock";
 import ContactStrip from "@/components/deal/ContactStrip";
-import { getPartnerOnboarding } from "@/lib/fulfillment";
-import { partnerStats, partnerStatus } from "@/lib/partners";
+import { getContentItems, getPartnerOnboarding } from "@/lib/fulfillment";
+import { partnerOperationalStats, partnerStats, partnerStatus } from "@/lib/partners";
 import PartnerStatusPill from "@/components/partners/PartnerStatusPill";
 import { dealPlatforms, PLATFORM_META, STAGE_LABELS } from "@/lib/types";
 import { money, moneyCpm } from "@/lib/format";
@@ -22,6 +22,10 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
   const channels = getPartnerChannels(partner.id);
   const deals = getPartnerDeals(partner.id);
   const stats = partnerStats(deals);
+  const operations = partnerOperationalStats(
+    deals,
+    deals.flatMap((deal) => getContentItems(deal.id))
+  );
   const onboarding = getPartnerOnboarding(partner.id);
 
   const kpis = [
@@ -39,6 +43,30 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
       value: stats.savedVsAsk > 0 ? money(stats.savedVsAsk) : "—",
       sub: "negotiated down",
       good: true,
+    },
+    {
+      label: "Published",
+      value:
+        operations.promisedContent > 0
+          ? `${operations.deliveredContent}/${operations.promisedContent}`
+          : "—",
+      sub: "tracked deliverables",
+    },
+    {
+      label: "On time",
+      value:
+        operations.onTimeRate != null
+          ? `${Math.round(operations.onTimeRate * 100)}%`
+          : "—",
+      sub: operations.onTimeRate != null ? "of dated posts" : "no dated posts",
+    },
+    {
+      label: "Draft rounds",
+      value:
+        operations.averageRevisionRounds != null
+          ? operations.averageRevisionRounds.toFixed(1)
+          : "—",
+      sub: "average submitted versions",
     },
   ];
 
@@ -68,7 +96,7 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
           portalPath={`/portal/${ensurePartnerPortalToken(partner.id)}`}
         />
 
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
           {kpis.map((k) => (
             <div key={k.label} className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
               <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">

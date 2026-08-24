@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import type { Deal, Stage } from "@/lib/types";
 import type { DealPhase } from "@/lib/deal-phase";
 import { STAGES } from "@/lib/types";
@@ -20,12 +20,8 @@ export default function PipelineBoard({
   const [items, setItems] = useState(deals);
   const [dragId, setDragId] = useState<number | null>(null);
   const [overStage, setOverStage] = useState<Stage | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
-
-  // Resync when the server sends fresh data (create/delete/navigation).
-  useEffect(() => {
-    setItems(deals);
-  }, [deals]);
 
   const onDrop = (stage: Stage) => {
     setOverStage(null);
@@ -34,15 +30,26 @@ export default function PipelineBoard({
     if (id == null) return;
     const deal = items.find((d) => d.id === id);
     if (!deal || deal.stage === stage) return;
+    setError(null);
     setItems((prev) => prev.map((d) => (d.id === id ? { ...d, stage } : d)));
     startTransition(async () => {
-      await moveDealStage(id, stage);
+      const result = await moveDealStage(id, stage);
+      if (result.error) {
+        setItems(deals);
+        setError(`${deal.creator}: ${result.error}`);
+      }
     });
   };
 
   return (
-    // Full height minus the sticky header and page padding — the board is the page now.
-    <div className="flex gap-4 h-[calc(100vh-160px)] pb-4">
+    <div>
+      {error && (
+        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {error}
+        </div>
+      )}
+      {/* Full height minus the sticky header and page padding — the board is the page now. */}
+      <div className="flex gap-4 h-[calc(100vh-160px)] pb-4">
       {STAGES.map((stage) => {
         const stageDeals = items.filter((d) => d.stage === stage.key);
         const isOver = overStage === stage.key;
@@ -74,13 +81,15 @@ export default function PipelineBoard({
                   {stageDeals.length}
                 </span>
               </div>
-              <a
-                href={`/new?stage=${stage.key}`}
-                className="text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded p-1 transition-colors"
-                aria-label={`Add deal to ${stage.label}`}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
-              </a>
+              {(["lead", "contacted", "analyzing"] as Stage[]).includes(stage.key) && (
+                <a
+                  href={`/new?stage=${stage.key}`}
+                  className="text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded p-1 transition-colors"
+                  aria-label={`Add deal to ${stage.label}`}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
+                </a>
+              )}
             </div>
             <div className="flex-1 overflow-y-auto space-y-3 px-1 pt-3 custom-scrollbar">
               {visible.map((deal) => (
@@ -114,6 +123,7 @@ export default function PipelineBoard({
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

@@ -13,7 +13,7 @@ import {
   REVIEW_SLA_DAYS,
   type ContentRow,
 } from "@/lib/content-queue";
-import { setContentDueDateAction, setContentStatusAction } from "@/app/content/actions";
+import { setContentDueDateAction } from "@/app/content/actions";
 
 /** Who is holding the item up, said plainly. The colour is the whole message. */
 const OWNER_STYLE: Record<"us" | "creator", string> = {
@@ -184,13 +184,12 @@ export default function ContentCard({
               {/* Offered whenever the item is approved, including when something else is
                   blocking it: if it does go live, you must still be able to say so. */}
               {item.status === "approved" && (
-                <button
-                  onClick={() => run(() => setContentStatusAction(item.id, row.dealId, "posted"))}
-                  disabled={isPending}
-                  className="text-[11px] font-semibold text-brand-dark hover:underline disabled:opacity-40"
+                <Link
+                  href={dealHref}
+                  className="text-[11px] font-semibold text-brand-dark hover:underline"
                 >
-                  Mark posted
-                </button>
+                  Add live URL →
+                </Link>
               )}
               {action.kind === "chase_draft" ? (
                 <Link href={dealHref} className="text-[11px] font-semibold text-amber-700 hover:underline">

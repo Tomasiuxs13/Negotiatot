@@ -4,6 +4,17 @@ import { revalidatePath } from "next/cache";
 import { getDeal, updateDeal } from "@/lib/db";
 import type { Stage } from "@/lib/types";
 import { ALL_STAGES, DECLINE_REASONS, DECLINE_REASON_LABEL, type DeclineReason } from "@/lib/types";
+import {
+  getContentItems,
+  getContract,
+  getPaymentItems,
+  getShipments,
+} from "@/lib/fulfillment";
+import { canCompleteDeal, canLeaveWonStage } from "@/lib/lifecycle";
+import {
+  agreementPreparationSummary,
+  prepareAgreedDeal,
+} from "@/lib/operations-autopilot";
 
 const STAGE_STATUS: Record<Stage, { label: string; tone: "good" | "warn" | "neutral" }> = {
   lead: { label: "New lead", tone: "neutral" },
@@ -22,6 +33,32 @@ export async function moveDealStage(dealId: number, stage: Stage) {
   if (!deal) return { error: "Deal not found" };
   if (deal.stage === stage) return {};
 
+  const content = getContentItems(dealId);
+  const payments = getPaymentItems(dealId);
+  const shipments = getShipments(dealId);
+  const contract = getContract(dealId);
+  if (deal.stage === "completed" && stage !== "agreed") {
+    return { error: "Move a completed deal back to Agreed before changing any other stage." };
+  }
+  if (stage === "completed") {
+    const completion = canCompleteDeal({
+      currentStage: deal.stage,
+      content,
+      payments,
+      shipments,
+    });
+    if (!completion.ok) return { error: completion.reason };
+  }
+  const leaving = canLeaveWonStage({
+    currentStage: deal.stage,
+    nextStage: stage,
+    hasConfirmedContract: contract?.status === "confirmed",
+    contentCount: content.length,
+    paymentCount: payments.length,
+    shipmentCount: shipments.length,
+  });
+  if (!leaving.ok) return { error: leaving.reason };
+
   const fields: Record<string, unknown> = {
     stage,
     status_label: STAGE_STATUS[stage].label,
@@ -38,10 +75,25 @@ export async function moveDealStage(dealId: number, stage: Stage) {
     fields.agreed_at = new Date().toISOString().slice(0, 19).replace("T", " ");
   }
   updateDeal(dealId, fields);
+  let setup: string | undefined;
+  let warning: string | undefined;
+  if (stage === "agreed") {
+    try {
+      const prepared = prepareAgreedDeal(dealId);
+      setup = agreementPreparationSummary(prepared);
+      warning = prepared.warning ?? undefined;
+    } catch (error) {
+      console.error("prepareAgreedDeal failed:", error);
+      warning = "The deal is agreed, but its setup could not be prepared. Open Fulfillment to finish it.";
+    }
+  }
   revalidatePath("/");
+  revalidatePath("/approvals");
   revalidatePath("/pipeline");
   revalidatePath(`/deals/${dealId}`);
-  return {};
+  revalidatePath("/content");
+  revalidatePath("/partners");
+  return { setup, warning };
 }
 
 /**
@@ -57,6 +109,15 @@ export async function declineDealAction(
   if (!DECLINE_REASONS.some((r) => r.key === input.reason)) {
     return { error: "Unknown reason" };
   }
+  const leaving = canLeaveWonStage({
+    currentStage: deal.stage,
+    nextStage: "declined",
+    hasConfirmedContract: getContract(dealId)?.status === "confirmed",
+    contentCount: getContentItems(dealId).length,
+    paymentCount: getPaymentItems(dealId).length,
+    shipmentCount: getShipments(dealId).length,
+  });
+  if (!leaving.ok) return { error: leaving.reason };
 
   updateDeal(dealId, {
     stage: "declined",
@@ -79,6 +140,10 @@ export async function declineDealAction(
 export async function reopenDealAction(dealId: number, stage: Stage = "negotiating") {
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
+  if (deal.stage !== "declined") return { error: "Only a declined deal can be reopened." };
+  if (!(["lead", "contacted", "analyzing", "offer_sent", "negotiating"] as Stage[]).includes(stage)) {
+    return { error: "Choose an active negotiation stage when reopening this deal." };
+  }
   updateDeal(dealId, {
     stage,
     decline_reason: null,

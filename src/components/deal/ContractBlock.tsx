@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import type { Contract, ParsedTerms, PaymentTrigger } from "@/lib/fulfillment-types";
+import type { Contract, DueDateMode, ParsedTerms, PaymentTrigger } from "@/lib/fulfillment-types";
 import { PAYMENT_TRIGGER_LABEL } from "@/lib/fulfillment-types";
 import { money } from "@/lib/format";
 import { confirmContractAction, uploadContractAction } from "@/app/deals/[id]/fulfillment-actions";
@@ -10,6 +10,12 @@ const inputClass =
   "border border-slate-200 rounded-md bg-white px-2.5 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand";
 
 const TRIGGERS: PaymentTrigger[] = ["on_signing", "on_delivery", "on_verification", "date"];
+const DUE_DATE_MODES: { value: DueDateMode; label: string }[] = [
+  { value: "fixed", label: "Fixed date" },
+  { value: "after_delivery", label: "After delivery" },
+  { value: "later_of", label: "Later of both" },
+  { value: "earlier_of", label: "Earlier of both" },
+];
 
 const emptyTerms = (): ParsedTerms => ({
   deliverables: [],
@@ -152,7 +158,7 @@ export default function ContractBlock({
                   ...draft,
                   deliverables: [
                     ...draft.deliverables,
-                    { description: "", platform: null, quantity: 1, dueDate: null, dueDaysAfterDelivery: null, dueRule: null },
+                    { description: "", platform: null, quantity: 1, dueDate: null, dueDaysAfterDelivery: null, dueDateMode: "fixed", dueRule: null },
                   ],
                 })
               }
@@ -163,7 +169,7 @@ export default function ContractBlock({
           </div>
           <div className="space-y-1.5">
             {draft.deliverables.map((d, i) => (
-              <div key={i} className="flex items-center gap-2">
+              <div key={i} className="flex flex-wrap items-center gap-2">
                 <input
                   className={`${inputClass} flex-1`}
                   value={d.description}
@@ -193,7 +199,18 @@ export default function ContractBlock({
                   title="Due date"
                   onChange={(e) => {
                     const next = [...draft.deliverables];
-                    next[i] = { ...d, dueDate: e.target.value || null };
+                    const dueDate = e.target.value || null;
+                    next[i] = {
+                      ...d,
+                      dueDate,
+                      dueDateMode:
+                        d.dueDateMode ??
+                        (d.dueDaysAfterDelivery != null
+                          ? dueDate
+                            ? "later_of"
+                            : "after_delivery"
+                          : "fixed"),
+                    };
                     setDraft({ ...draft, deliverables: next });
                   }}
                 />
@@ -205,10 +222,43 @@ export default function ContractBlock({
                   value={d.dueDaysAfterDelivery ?? ""}
                   onChange={(e) => {
                     const next = [...draft.deliverables];
-                    next[i] = { ...d, dueDaysAfterDelivery: e.target.value ? Number(e.target.value) : null };
+                    const dueDaysAfterDelivery = e.target.value ? Number(e.target.value) : null;
+                    next[i] = {
+                      ...d,
+                      dueDaysAfterDelivery,
+                      dueDateMode:
+                        dueDaysAfterDelivery != null
+                          ? d.dueDate
+                            ? "later_of"
+                            : "after_delivery"
+                          : "fixed",
+                    };
                     setDraft({ ...draft, deliverables: next });
                   }}
                 />
+                <select
+                  className={`${inputClass} w-36`}
+                  title="How the fixed and delivery-relative dates combine"
+                  value={
+                    d.dueDateMode ??
+                    (d.dueDaysAfterDelivery != null
+                      ? d.dueDate
+                        ? "later_of"
+                        : "after_delivery"
+                      : "fixed")
+                  }
+                  onChange={(e) => {
+                    const next = [...draft.deliverables];
+                    next[i] = { ...d, dueDateMode: e.target.value as DueDateMode };
+                    setDraft({ ...draft, deliverables: next });
+                  }}
+                >
+                  {DUE_DATE_MODES.map((mode) => (
+                    <option key={mode.value} value={mode.value}>
+                      {mode.label}
+                    </option>
+                  ))}
+                </select>
                 <button
                   onClick={() =>
                     setDraft({ ...draft, deliverables: draft.deliverables.filter((_, j) => j !== i) })

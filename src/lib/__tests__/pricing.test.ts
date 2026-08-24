@@ -90,6 +90,82 @@ describe("computeNumbers", () => {
     expect(n.fairValue).toBe(1600);
   });
 
+  it("does not reuse one platform's report reach for another selected platform", () => {
+    const n = computeNumbers(
+      {
+        platforms: ["youtube", "instagram"],
+        blendedViews: 128_400,
+        blendedViewsPlatform: "youtube",
+        pieces: 2,
+        piecesByPlatform: { youtube: 1, instagram: 1 },
+        deliverablesText: "1 YouTube integration + 1 Instagram Reel",
+      },
+      RULES
+    );
+    expect(n.perPlatform.map((p) => p.platform)).toEqual(["youtube"]);
+    expect(n.missingPlatforms).toEqual(["instagram"]);
+    expect(n.fairValue).toBe(Math.round((128_400 / 1000) * 28));
+    expect(n.workings.join(" ")).toContain("instagram: excluded");
+  });
+
+  it("prices platform-qualified quantities once on their own reach and CPM", () => {
+    const n = computeNumbers(
+      {
+        platforms: ["youtube", "instagram"],
+        reachByPlatform: { youtube: 100_000, instagram: 50_000 },
+        pieces: 3,
+        piecesByPlatform: { youtube: 1, instagram: 2 },
+        deliverablesText: "1 YouTube integration + 2 IG reels",
+      },
+      { ...RULES, rulesByPlatform: {
+        ...RULES.rulesByPlatform,
+        youtube: { ...RULES.rulesByPlatform.youtube, maxPerDeal: 20_000 },
+        instagram: { ...RULES.rulesByPlatform.instagram, maxPerDeal: 20_000 },
+      } }
+    );
+    // YouTube: $2,800. Instagram: 50k × $8 × two Reels = $800.
+    expect(n.baseFairValue).toBe(3600);
+    expect(n.perPlatform.find((p) => p.platform === "instagram")?.quantity).toBe(2);
+  });
+
+  it("adds paid usage and exclusivity to every guardrail", () => {
+    const n = computeNumbers(
+      {
+        platforms: ["youtube"],
+        blendedViews: 100_000,
+        pieces: 1,
+        deliverablesText: "1 YouTube integration",
+        rights: {
+          usage: { kind: "paid", months: 3 },
+          whitelisting: { enabled: false, months: 0 },
+          exclusivity: { kind: "category", months: 1, scope: "GlocalMe" },
+        },
+      },
+      {
+        ...RULES,
+        rulesByPlatform: { youtube: { ...RULES.rulesByPlatform.youtube, maxPerDeal: 20_000 } },
+        negotiationStyle: {
+          ...RULES.negotiationStyle,
+          rightsPricing: {
+            organicUsagePerMonthPct: 20,
+            paidUsagePerMonthPct: 30,
+            whitelistingPerMonthPct: 25,
+            categoryExclusivityPerMonthPct: 20,
+            fullExclusivityPerMonthPct: 50,
+            maxTotalPct: 250,
+          },
+        },
+      }
+    );
+    expect(n.baseFairValue).toBe(2800);
+    expect(n.rightsPremiumPct).toBe(110);
+    expect(n.rightsPremium).toBe(3080);
+    expect(n.fairValue).toBe(5880);
+    expect(n.walkaway).toBe(5880);
+    expect(n.target).toBe(5880);
+    expect(n.anchor).toBe(Math.round(5880 * 0.865));
+  });
+
   it("caps the walk-away at maxPerDeal without touching fair value", () => {
     const n = computeNumbers(
       { platforms: ["youtube"], blendedViews: 1_000_000, pieces: 1, deliverablesText: "1 video" },

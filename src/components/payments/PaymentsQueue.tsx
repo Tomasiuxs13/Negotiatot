@@ -7,7 +7,7 @@ import { PAYMENT_STATUS_LABEL, PAYMENT_TRIGGER_LABEL, pendingReason } from "@/li
 import { money } from "@/lib/format";
 import { PAYMENT_TONE, TONE_CLASS } from "@/lib/status-tones";
 import { SortHeader } from "@/components/FilterBar";
-import { nextDir, type SortDir } from "@/lib/table-sort";
+import type { SortDir } from "@/lib/table-sort";
 import { setPaymentStatusAction } from "@/app/deals/[id]/fulfillment-actions";
 import { PAGE_WIDTH } from "@/lib/layout";
 

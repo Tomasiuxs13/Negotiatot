@@ -16,6 +16,7 @@ import {
   type ContentRow,
 } from "@/lib/content-queue";
 import { DEFAULT_MIN_GAP_DAYS } from "@/lib/content-calendar";
+import { parseRequirements } from "@/lib/brief-requirements";
 import { buildQuery, sortBy, type SortDir } from "@/lib/table-sort";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +65,8 @@ export default async function ContentPage({
   // which campaign it serves is unusable — so the deal is joined in here rather than
   // being fetched per card.
   const dealById = new Map(getDeals().map((d) => [d.id, d]));
+  const campaigns = getCampaigns();
+  const campaignById = new Map(campaigns.map((item) => [item.id, item]));
   // The setup checklist is joined in here for the same reason: the affiliate link and
   // coupon code are what make a result measurable, and an item whose tracking doesn't
   // exist yet is not really on schedule however good its dates look.
@@ -74,7 +77,10 @@ export default async function ContentPage({
   const allRows: ContentRow[] = [];
   for (const item of getAllContentItems()) {
     const deal = dealById.get(item.deal_id);
-    if (!deal) continue;
+    if (!deal || (deal.stage !== "agreed" && deal.stage !== "completed")) continue;
+    const brief = parseRequirements(
+      deal.campaign_id != null ? campaignById.get(deal.campaign_id)?.brief_requirements : null
+    );
     allRows.push({
       item,
       dealId: deal.id,
@@ -83,6 +89,7 @@ export default async function ContentPage({
       platform: resolvePlatform(item, dealPlatforms(deal)),
       blockedBy: blockingSetup(onboarding, deal.id, deal.partner_id),
       awaitingProduct: awaitingShipment(shipments, deal.id),
+      requiresCheck: brief.requirements.length > 0 || brief.minIntegrationSeconds != null,
     });
   }
 
@@ -118,7 +125,7 @@ export default async function ContentPage({
   const campaignNames = [
     ...new Set([
       ...allRows.map((r) => r.campaign).filter((n): n is string => Boolean(n)),
-      ...getCampaigns().map((c) => c.name),
+      ...campaigns.map((c) => c.name),
     ]),
   ].sort((a, b) => a.localeCompare(b));
 
@@ -216,11 +223,11 @@ export default async function ContentPage({
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
               priority_high
             </span>
-            {attentionCount} need attention
+            {attentionCount} schedule risks
           </Link>
 
           <span className="text-xs text-slate-500 font-tabular">
-            {yoursCount} waiting on you · {allRows.length} item
+            {yoursCount} actions for you · {allRows.length} item
             {allRows.length === 1 ? "" : "s"} total
           </span>
 

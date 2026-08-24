@@ -6,6 +6,7 @@ import type { MeasurementWindows } from "@/lib/measurement";
 import { attentionItems } from "@/lib/attention";
 import {
   getAllContentItems,
+  getAllContracts,
   getAllOnboardingTasks,
   getAllPaymentItems,
   getAllShipments,
@@ -27,6 +28,7 @@ export default function DashboardPage() {
     shipments: getAllShipments(),
     payments,
     onboarding: getAllOnboardingTasks(),
+    contracts: getAllContracts(),
     reminders: getOpenReminders(),
     draftLeadDays: Number(getSetting<Record<string, number>>("workflow")?.draftLeadDays ?? 10),
     windows: getSetting<MeasurementWindows>("measurement_windows") ?? {},

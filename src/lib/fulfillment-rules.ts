@@ -1,10 +1,103 @@
-import type { ContentItem, PaymentItem, PaymentStatus } from "./fulfillment-types";
+import type {
+  ContentItem,
+  DueDateMode,
+  PaymentItem,
+  PaymentStatus,
+  Shipment,
+  ShipmentStatus,
+} from "./fulfillment-types";
 
 /** Adds days to a date, returning YYYY-MM-DD. */
 export function addDays(from: string | Date, days: number): string {
   const base = typeof from === "string" ? new Date(from.replace(" ", "T") + "Z") : from;
   const result = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
   return result.toISOString().slice(0, 10);
+}
+
+/** Resolves a contract deadline without discarding either side of a conditional rule. */
+export function resolveConditionalDueDate(input: {
+  deliveredAt: string;
+  anchorDate?: string | null;
+  daysAfterDelivery: number;
+  mode?: DueDateMode | null;
+}): string {
+  const relative = addDays(input.deliveredAt, input.daysAfterDelivery);
+  const anchor = input.anchorDate ?? null;
+  const mode = input.mode ?? (anchor ? "later_of" : "after_delivery");
+  if (!anchor || mode === "after_delivery") return relative;
+  if (mode === "fixed") return anchor;
+  if (mode === "earlier_of") return anchor < relative ? anchor : relative;
+  return anchor > relative ? anchor : relative;
+}
+
+/** Runtime guard for shipment progression; client-side button order is not a boundary. */
+export function shipmentTransitionError(
+  current: Pick<Shipment, "status" | "carrier" | "tracking" | "tracking_exception">,
+  nextStatus: ShipmentStatus,
+  next: {
+    carrier?: string | null;
+    tracking?: string | null;
+    trackingException?: string | null;
+  } = {}
+): string | null {
+  const allowed: Record<ShipmentStatus, ShipmentStatus[]> = {
+    to_prepare: ["to_prepare", "shipped"],
+    shipped: ["shipped", "delivered"],
+    delivered: ["delivered"],
+  };
+  if (!allowed[current.status].includes(nextStatus)) {
+    return current.status === "to_prepare" && nextStatus === "delivered"
+      ? "Mark the shipment Shipped before marking it Delivered."
+      : "That shipment status change is not allowed.";
+  }
+  if (current.status === "to_prepare" && nextStatus === "shipped") {
+    const carrier = (next.carrier !== undefined ? next.carrier : current.carrier)?.trim();
+    const tracking = (next.tracking !== undefined ? next.tracking : current.tracking)?.trim();
+    const exception = (
+      next.trackingException !== undefined
+        ? next.trackingException
+        : current.tracking_exception
+    )?.trim();
+    if (!(carrier && tracking) && !exception) {
+      return "Add the carrier and tracking number, or record why tracking is unavailable.";
+    }
+  }
+  return null;
+}
+
+/**
+ * Contract confirmation may replace untouched provisional rows, never work that has
+ * already entered production or collected manager/creator evidence.
+ */
+export function contentHasOperationalActivity(
+  item: Pick<
+    ContentItem,
+    | "status"
+    | "draft_url"
+    | "posted_url"
+    | "notes"
+    | "video_path"
+    | "check_result"
+    | "actual_views"
+    | "actual_clicks"
+    | "actual_orders"
+    | "actual_revenue"
+  >
+): boolean {
+  return (
+    item.status !== "planned" ||
+    Boolean(
+      item.draft_url ||
+        item.posted_url ||
+        item.notes ||
+        item.video_path ||
+        item.check_result
+    ) ||
+    item.actual_views != null ||
+    item.actual_clicks != null ||
+    item.actual_orders != null ||
+    item.actual_revenue != null
+  );
 }
 
 export function parseLinkedIds(raw: string | null | undefined): number[] {

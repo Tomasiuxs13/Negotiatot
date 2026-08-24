@@ -29,12 +29,12 @@ function OwnerChip({ owner }: { owner: TaskOwner }) {
 function TaskRow({
   task,
   dealId,
-  creator,
+  locked,
   onGenerateEmail,
 }: {
   task: OnboardingTask;
   dealId: number;
-  creator: string;
+  locked: boolean;
   /** Set only on the welcome-email step — the one task whose output is a message. */
   onGenerateEmail?: () => void;
 }) {
@@ -60,7 +60,7 @@ function TaskRow({
     <div className="flex items-center gap-2.5 py-2 border-b border-slate-100 last:border-0">
       <button
         onClick={toggle}
-        disabled={isPending}
+        disabled={isPending || locked}
         aria-label={done ? "Mark not done" : "Mark done"}
         className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
           done ? "bg-brand border-brand text-white" : "border-slate-300 hover:border-slate-500"
@@ -109,18 +109,18 @@ function TaskRow({
               <code className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 truncate max-w-72">
                 {task.value}
               </code>
-              <button
+              {!locked && <button
                 onClick={() => setEditing(true)}
                 className="text-xs text-slate-400 hover:text-slate-700"
               >
                 edit
-              </button>
+              </button>}
             </div>
           )
         )}
       </div>
 
-      {wantsValue && !task.value && !editing && (
+      {!locked && wantsValue && !task.value && !editing && (
         <button
           onClick={() => setEditing(true)}
           className="text-xs font-medium text-brand-dark hover:underline shrink-0"
@@ -174,6 +174,7 @@ export default function OnboardingBlock({
   senderName = "",
   brandName = "",
   portalPath = null,
+  locked = false,
 }: {
   dealId: number;
   creator: string;
@@ -183,6 +184,7 @@ export default function OnboardingBlock({
   senderName?: string;
   brandName?: string;
   portalPath?: string | null;
+  locked?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
@@ -222,7 +224,7 @@ export default function OnboardingBlock({
         </p>
         <button
           onClick={() => startTransition(async () => void (await startOnboardingAction(dealId)))}
-          disabled={isPending || !hasPartner}
+          disabled={isPending || !hasPartner || locked}
           className="bg-brand hover:bg-brand-dark text-white rounded-md py-1.5 px-4 text-sm font-medium transition-colors disabled:opacity-50"
         >
           {isPending ? "Setting up…" : "Start onboarding"}
@@ -248,7 +250,7 @@ export default function OnboardingBlock({
         <div className="flex items-center gap-3">
           {/* A returning partner's inherited steps fill the list, so this deal's own
               steps would otherwise never be laid down. Seeding is idempotent. */}
-          {dealTasks.length === 0 && (
+          {!locked && dealTasks.length === 0 && (
             <button
               onClick={() =>
                 startTransition(async () => void (await startOnboardingAction(dealId)))
@@ -259,12 +261,12 @@ export default function OnboardingBlock({
               Apply campaign steps
             </button>
           )}
-          <button
+          {!locked && <button
             onClick={() => setAdding((v) => !v)}
             className="text-xs font-medium text-brand-dark hover:underline"
           >
             + Add step
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -274,7 +276,7 @@ export default function OnboardingBlock({
             {creator} — one-time setup
           </div>
           {partnerTasks.map((t) => (
-            <TaskRow key={t.id} task={t} dealId={dealId} creator={creator} {...emailProp(t)} />
+            <TaskRow key={t.id} task={t} dealId={dealId} locked={locked} {...emailProp(t)} />
           ))}
         </div>
       )}
@@ -285,7 +287,7 @@ export default function OnboardingBlock({
             This collaboration
           </div>
           {dealTasks.map((t) => (
-            <TaskRow key={t.id} task={t} dealId={dealId} creator={creator} {...emailProp(t)} />
+            <TaskRow key={t.id} task={t} dealId={dealId} locked={locked} {...emailProp(t)} />
           ))}
         </div>
       )}
@@ -315,7 +317,7 @@ export default function OnboardingBlock({
         </div>
       )}
 
-      {adding && (
+      {!locked && adding && (
         <div className="flex items-center gap-2 mt-3">
           <input
             autoFocus

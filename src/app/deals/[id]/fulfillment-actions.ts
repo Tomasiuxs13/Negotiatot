@@ -3,12 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import sharp from "sharp";
-import { getDeal, getSetting, logUsage, updateDeal } from "@/lib/db";
+import { getCampaign, getDeal, getSetting, logUsage, updateDeal } from "@/lib/db";
 import { hasApiKey, parseContract, MODEL, type ImageMediaType } from "@/lib/claude";
 import { money } from "@/lib/format";
 import { canTransition, isPaymentStatus } from "@/lib/payment-transitions";
+import { contentHasOperationalActivity, shipmentTransitionError } from "@/lib/fulfillment-rules";
 import { resolvePlatform } from "@/lib/content-queue";
 import { dealPlatforms } from "@/lib/types";
+import { canAdvanceContent, canManageFulfillment, isHttpUrl } from "@/lib/lifecycle";
+import { parseCheck, parseRequirements, verificationBlocker } from "@/lib/brief-requirements";
 import { saveFile, deleteFile } from "@/lib/files";
 import {
   confirmContract,
@@ -25,6 +28,7 @@ import {
   getPaymentItem,
   getPaymentItems,
   getShipments,
+  getOnboardingForDeal,
   parseTerms,
   refreshPaymentStatuses,
   resolveDueDatesAfterDelivery,
@@ -32,6 +36,8 @@ import {
   createOnboardingTask,
   ensureShipmentShareToken,
   requestChanges,
+  resolveContentDueDateRequest,
+  submitDraft,
   deleteOnboardingTask,
   seedOnboarding,
   setContentActuals,
@@ -57,6 +63,7 @@ const IMAGE_TYPES: ImageMediaType[] = ["image/png", "image/jpeg", "image/webp", 
 
 function refresh(dealId: number) {
   revalidatePath(`/deals/${dealId}`);
+  revalidatePath("/approvals");
   revalidatePath("/payments");
   revalidatePath("/");
   revalidatePath("/pipeline");
@@ -152,6 +159,9 @@ export async function confirmContractAction(
   if (!contract) return { error: "Contract not found" };
   const deal = getDeal(contract.deal_id);
   if (!deal) return { error: "Deal not found" };
+  if (deal.stage === "completed") {
+    return { error: "Move this deal back to Agreed before replacing its contract or delivery plan." };
+  }
 
   const dealId = contract.deal_id;
 
@@ -171,20 +181,26 @@ export async function confirmContractAction(
         `adjust the payment items by hand instead of re-confirming.`,
     };
   }
-  const measured = getContentItems(dealId).filter(
-    (c) =>
-      c.actual_views != null ||
-      c.actual_clicks != null ||
-      c.actual_orders != null ||
-      c.actual_revenue != null ||
-      c.posted_url != null
-  );
-  if (measured.length > 0) {
+  const progressed = getContentItems(dealId).filter(contentHasOperationalActivity);
+  if (progressed.length > 0) {
     return {
       error:
-        `${measured.length} content item${measured.length === 1 ? " has" : "s have"} posted ` +
-        `links or logged results. Re-confirming would delete them and their numbers. ` +
+        `${progressed.length} content item${progressed.length === 1 ? " has" : "s have"} production ` +
+        `progress, notes, drafts, links, checks, or results. Re-confirming would delete that work. ` +
         `Edit the content and payment items by hand instead.`,
+    };
+  }
+
+  const dealPlatformList = dealPlatforms(deal);
+  const missingPlatform = (terms.deliverables ?? []).find(
+    (deliverable) =>
+      resolvePlatform({ platform: deliverable.platform }, dealPlatformList) == null
+  );
+  if (dealPlatformList.length > 1 && missingPlatform) {
+    return {
+      error:
+        `Choose a platform for “${missingPlatform.description}” before confirming. ` +
+        `A multi-platform item cannot be filtered or benchmarked safely without one.`,
     };
   }
 
@@ -204,8 +220,9 @@ export async function confirmContractAction(
           // A contract often names the deliverable without naming the channel. Inheriting
           // the deal's platform costs nothing when the deal has only one, and an item
           // with no platform is invisible to every platform filter downstream.
-          platform: resolvePlatform({ platform: deliverable.platform }, dealPlatforms(deal)),
+          platform: resolvePlatform({ platform: deliverable.platform }, dealPlatformList),
           dueDate: deliverable.dueDate,
+          dueDateMode: deliverable.dueDateMode,
           dueRule: deliverable.dueRule,
           dueDaysAfterDelivery: deliverable.dueDaysAfterDelivery,
         })
@@ -254,9 +271,8 @@ export async function confirmContractAction(
 
   confirmContract(contractId, terms, signedAt);
   updateDeal(dealId, {
-    // Re-confirming a finished deal must not reopen it — "completed" is an outcome,
-    // not a workflow position.
-    stage: deal.stage === "completed" ? "completed" : "agreed",
+    // Completed deals were rejected above; confirming an active contract records the win.
+    stage: "agreed",
     // A confirmed contract IS the win; keep the first win date on re-confirmation.
     agreed_at: deal.agreed_at ?? new Date().toISOString().slice(0, 19).replace("T", " "),
     deal_type: terms.product ? (paymentCount > 0 ? "gifted_plus_paid" : "gifted") : "paid",
@@ -279,12 +295,58 @@ export async function setContentStatusAction(
   dealId: number,
   status: ContentStatus,
   postedUrl?: string
-) {
+): Promise<{ error?: string }> {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
+  const item = getContentItems(dealId).find((content) => content.id === itemId);
+  if (!item) return { error: "Content item not found — it may have been deleted." };
+
+  const transition = canAdvanceContent(item.status, status);
+  if (!transition.ok) return { error: transition.reason };
+
+  const liveUrl = postedUrl?.trim() || item.posted_url || "";
+  if (status === "posted" && !isHttpUrl(liveUrl)) {
+    return { error: "Add a valid live http(s) URL before marking this content posted." };
+  }
+  if (status === "verified") {
+    if (!isHttpUrl(liveUrl)) return { error: "A valid live URL is required before verification." };
+    const campaign = deal.campaign_id != null ? getCampaign(deal.campaign_id) : null;
+    const requirements = parseRequirements(campaign?.brief_requirements);
+    const blocker = verificationBlocker(
+      parseCheck(item.check_result),
+      requirements.requirements,
+      requirements.minIntegrationSeconds
+    );
+    if (blocker) return { error: blocker };
+  }
   updateContentItem(itemId, {
     status,
-    ...(postedUrl !== undefined ? { postedUrl: postedUrl || null } : {}),
+    ...((status === "posted" || postedUrl !== undefined) ? { postedUrl: liveUrl || null } : {}),
   });
   refreshPaymentStatuses(dealId);
+  refresh(dealId);
+  return {};
+}
+
+/** Records a draft supplied to the manager outside the creator portal. */
+export async function submitDraftFromDealAction(
+  contentItemId: number,
+  dealId: number,
+  url: string
+): Promise<{ error?: string }> {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
+  const item = getContentItems(dealId).find((content) => content.id === contentItemId);
+  if (!item) return { error: "Content item not found — it may have been deleted." };
+  const trimmed = url.trim();
+  if (!isHttpUrl(trimmed)) return { error: "Paste a valid http(s) draft link." };
+  if (!submitDraft(contentItemId, trimmed)) {
+    return { error: "Only planned or in-production content can be submitted for review." };
+  }
   refresh(dealId);
   return {};
 }
@@ -292,14 +354,75 @@ export async function setContentStatusAction(
 export async function updateContentItemAction(
   itemId: number,
   dealId: number,
-  fields: { dueDate?: string | null; postedUrl?: string | null; notes?: string | null }
+  fields: {
+    dueDate?: string | null;
+    postedUrl?: string | null;
+    notes?: string | null;
+    platform?: string | null;
+  }
 ): Promise<{ error?: string }> {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
   // A blur-save from a stale tab can reference a deleted row; affecting 0 rows must
   // not read as success.
-  if (!getContentItems(dealId).some((c) => c.id === itemId)) {
+  const item = getContentItems(dealId).find((content) => content.id === itemId);
+  if (!item) {
     return { error: "Content item not found — it may have been deleted." };
   }
-  updateContentItem(itemId, fields);
+  const nextFields = { ...fields };
+  if (fields.platform !== undefined) {
+    const platforms = dealPlatforms(deal);
+    const platform = resolvePlatform({ platform: fields.platform }, platforms);
+    if (fields.platform && !platforms.some((candidate) => candidate === fields.platform)) {
+      return { error: "Choose a platform that belongs to this deal." };
+    }
+    if (platforms.length > 1 && !platform) {
+      return { error: "A multi-platform deliverable must keep a platform." };
+    }
+    nextFields.platform = platform;
+  }
+  if (fields.postedUrl !== undefined) {
+    const normalizedUrl = fields.postedUrl?.trim() || null;
+    if (normalizedUrl && !isHttpUrl(normalizedUrl)) {
+      return { error: "Use a valid http(s) URL for the published content." };
+    }
+    if ((item.status === "posted" || item.status === "verified") && !normalizedUrl) {
+      return { error: "Posted or verified content must keep its live URL." };
+    }
+    nextFields.postedUrl = normalizedUrl;
+  }
+  updateContentItem(itemId, nextFields);
+  refresh(dealId);
+  return {};
+}
+
+/** Manager decision for a creator-proposed publication date. */
+export async function resolveDueDateRequestAction(
+  itemId: number,
+  dealId: number,
+  decision: "approve" | "reject"
+): Promise<{ error?: string }> {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
+  if (decision !== "approve" && decision !== "reject") {
+    return { error: "Choose whether to approve the request or keep the current date." };
+  }
+  const item = getContentItems(dealId).find((content) => content.id === itemId);
+  if (!item) return { error: "Content item not found — it may have been deleted." };
+  if (!item.requested_due_date) return { error: "This date request has already been resolved." };
+  if (
+    decision === "approve" &&
+    item.requested_due_date < new Date().toISOString().slice(0, 10)
+  ) {
+    return { error: "The proposed date has passed. Ask the creator for a new date." };
+  }
+  if (!resolveContentDueDateRequest(itemId, decision === "approve")) {
+    return { error: "This date request has already been resolved." };
+  }
   refresh(dealId);
   return {};
 }
@@ -310,12 +433,22 @@ export async function addContentItemAction(
 ) {
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
   if (!fields.title.trim()) return { error: "Give the content item a name." };
+  const platforms = dealPlatforms(deal);
+  const platform = resolvePlatform({ platform: fields.platform ?? null }, platforms);
+  if (fields.platform && !platforms.some((candidate) => candidate === fields.platform)) {
+    return { error: "Choose a platform that belongs to this deal." };
+  }
+  if (platforms.length > 1 && !platform) {
+    return { error: "Choose which platform this deliverable belongs to." };
+  }
   createContentItem({
     dealId,
     ...fields,
     title: fields.title.trim(),
-    platform: resolvePlatform({ platform: fields.platform ?? null }, dealPlatforms(deal)),
+    platform,
   });
   refreshPaymentStatuses(dealId);
   refresh(dealId);
@@ -323,6 +456,9 @@ export async function addContentItemAction(
 }
 
 export async function deleteContentItemAction(itemId: number, dealId: number) {
+  if (!getContentItems(dealId).some((item) => item.id === itemId)) {
+    return { error: "Content item belongs to a different deal or was already deleted." };
+  }
   deleteContentItem(itemId);
   refreshPaymentStatuses(dealId);
   refresh(dealId);
@@ -342,6 +478,10 @@ export async function setPaymentStatusAction(
   const item = getPaymentItem(itemId);
   if (!item) return { error: "Payment not found — it may have been deleted." };
   if (item.deal_id !== dealId) return { error: "Payment belongs to a different deal." };
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
   if (!isPaymentStatus(status)) return { error: "Not a valid payment status." };
 
   const allowed = canTransition(item.status, status);
@@ -364,6 +504,8 @@ export async function addPaymentItemAction(
 ) {
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
   if (!fields.description.trim()) return { error: "Describe the payment." };
   if (!fields.amount || fields.amount <= 0) return { error: "Enter an amount." };
   const linked =
@@ -406,7 +548,13 @@ export async function deletePaymentItemAction(itemId: number, dealId: number) {
 
 /** Approve the submitted draft — freezes the version the approval refers to. */
 export async function approveDraftAction(contentItemId: number, dealId: number) {
-  if (!getDeal(dealId)) return { error: "Deal not found" };
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
+  if (!getContentItems(dealId).some((item) => item.id === contentItemId)) {
+    return { error: "Content item belongs to a different deal or was deleted." };
+  }
   if (!approveDraft(contentItemId)) {
     return { error: "No submitted draft to approve on this item." };
   }
@@ -420,7 +568,13 @@ export async function requestChangesAction(
   dealId: number,
   emailText: string
 ) {
-  if (!getDeal(dealId)) return { error: "Deal not found" };
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
+  if (!getContentItems(dealId).some((item) => item.id === contentItemId)) {
+    return { error: "Content item belongs to a different deal or was deleted." };
+  }
   if (!emailText.trim()) return { error: "Write (or keep) the change-request email first." };
   if (emailText.length > 10000) return { error: "That email is too long." };
   if (!requestChanges(contentItemId, emailText.trim())) {
@@ -438,6 +592,10 @@ export async function requestChangesAction(
  * wrong, and the manager retypes them anyway.
  */
 export async function shareShipmentFormAction(shipmentId: number, dealId: number) {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
   const shipment = getShipments(dealId).find((s) => s.id === shipmentId);
   if (!shipment) return { error: "Shipment not found — it may have been deleted." };
   const token = ensureShipmentShareToken(shipmentId);
@@ -452,6 +610,8 @@ export async function addShipmentAction(
 ) {
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
   if (!fields.product.trim()) return { error: "Describe the product." };
   createShipment({ dealId, ...fields, product: fields.product.trim() });
   refresh(dealId);
@@ -467,13 +627,39 @@ export async function updateShipmentAction(
     address?: string | null;
     carrier?: string | null;
     tracking?: string | null;
+    trackingException?: string | null;
     status?: ShipmentStatus;
   }
 ): Promise<{ error?: string; resolvedDueDates?: number }> {
-  if (!getShipments(dealId).some((x) => x.id === shipmentId)) {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
+  const shipment = getShipments(dealId).find((x) => x.id === shipmentId);
+  if (!shipment) {
     return { error: "Shipment not found — it may have been deleted." };
   }
-  updateShipment(shipmentId, fields);
+  if (
+    fields.status !== undefined &&
+    !(["to_prepare", "shipped", "delivered"] as string[]).includes(fields.status)
+  ) {
+    return { error: "Not a valid shipment status." };
+  }
+  const normalized = {
+    ...fields,
+    ...(fields.product !== undefined ? { product: fields.product.trim() } : {}),
+    ...(fields.address !== undefined ? { address: fields.address?.trim() || null } : {}),
+    ...(fields.carrier !== undefined ? { carrier: fields.carrier?.trim() || null } : {}),
+    ...(fields.tracking !== undefined ? { tracking: fields.tracking?.trim() || null } : {}),
+    ...(fields.trackingException !== undefined
+      ? { trackingException: fields.trackingException?.trim() || null }
+      : {}),
+  };
+  if (fields.status !== undefined) {
+    const transitionError = shipmentTransitionError(shipment, fields.status, normalized);
+    if (transitionError) return { error: transitionError };
+  }
+  updateShipment(shipmentId, normalized);
 
   // Delivery starts the content clock and can unlock delivery-triggered money.
   if (fields.status === "delivered") {
@@ -488,6 +674,9 @@ export async function updateShipmentAction(
 }
 
 export async function deleteShipmentAction(shipmentId: number, dealId: number) {
+  if (!getShipments(dealId).some((shipment) => shipment.id === shipmentId)) {
+    return { error: "Shipment belongs to a different deal or was already deleted." };
+  }
   deleteShipment(shipmentId);
   refreshPaymentStatuses(dealId);
   refresh(dealId);
@@ -512,6 +701,16 @@ export async function saveContentActualsAction(
   dealId: number,
   actuals: ContentActuals
 ) {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  if (deal.stage !== "agreed" && deal.stage !== "completed") {
+    return { error: "Mark the deal Agreed before logging campaign results." };
+  }
+  const item = getContentItems(dealId).find((content) => content.id === itemId);
+  if (!item) return { error: "Content item belongs to a different deal or was deleted." };
+  if (item.status !== "posted" && item.status !== "verified") {
+    return { error: "Results can only be logged after content is posted." };
+  }
   setContentActuals(itemId, actuals);
   refresh(dealId);
   revalidatePath("/benchmarks");
@@ -525,6 +724,13 @@ export async function setOnboardingStatusAction(
   dealId: number,
   status: OnboardingStatus
 ) {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
+  if (!getOnboardingForDeal(dealId, deal.partner_id).some((task) => task.id === taskId)) {
+    return { error: "Onboarding task belongs to a different collaboration." };
+  }
   updateOnboardingTask(taskId, { status });
   refresh(dealId);
   revalidatePath("/partners", "layout");
@@ -536,6 +742,13 @@ export async function setOnboardingValueAction(
   dealId: number,
   value: string
 ) {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
+  if (!getOnboardingForDeal(dealId, deal.partner_id).some((task) => task.id === taskId)) {
+    return { error: "Onboarding task belongs to a different collaboration." };
+  }
   const trimmed = value.trim();
   // Capturing the link or code is the task — record it and tick it in one move.
   updateOnboardingTask(taskId, {
@@ -553,6 +766,8 @@ export async function addOnboardingTaskAction(
 ) {
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
   if (deal.partner_id == null) return { error: "This deal has no partner yet" };
   if (!fields.label.trim()) return { error: "Give the step a name" };
 
@@ -568,6 +783,11 @@ export async function addOnboardingTaskAction(
 }
 
 export async function deleteOnboardingTaskAction(taskId: number, dealId: number) {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  if (!getOnboardingForDeal(dealId, deal.partner_id).some((task) => task.id === taskId)) {
+    return { error: "Onboarding task belongs to a different collaboration." };
+  }
   deleteOnboardingTask(taskId);
   refresh(dealId);
   return {};
@@ -577,6 +797,8 @@ export async function deleteOnboardingTaskAction(taskId: number, dealId: number)
 export async function startOnboardingAction(dealId: number) {
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
   if (deal.partner_id == null) return { error: "This deal has no partner yet" };
 
   const template =

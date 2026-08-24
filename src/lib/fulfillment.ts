@@ -1,10 +1,11 @@
 import { randomBytes } from "crypto";
 import db from "./db";
-import { addDays, nextPaymentStatus } from "./fulfillment-rules";
+import { nextPaymentStatus, resolveConditionalDueDate } from "./fulfillment-rules";
 import type {
   ContentItem,
   ContentStatus,
   Contract,
+  DueDateMode,
   ParsedTerms,
   PaymentItem,
   PaymentStatus,
@@ -27,6 +28,10 @@ export function getContract(dealId: number): Contract | undefined {
   return db
     .prepare("SELECT * FROM contracts WHERE deal_id = ? ORDER BY id DESC LIMIT 1")
     .get(dealId) as Contract | undefined;
+}
+
+export function getAllContracts(): Contract[] {
+  return db.prepare("SELECT * FROM contracts ORDER BY id").all() as Contract[];
 }
 
 export function getContractById(id: number): Contract | undefined {
@@ -95,19 +100,29 @@ export function createContentItem(fields: {
   title: string;
   platform?: string | null;
   dueDate?: string | null;
+  dueDateMode?: DueDateMode | null;
   dueRule?: string | null;
   dueDaysAfterDelivery?: number | null;
 }): number {
   const info = db
     .prepare(
-      `INSERT INTO content_items (deal_id, title, platform, due_date, due_rule, due_days_after_delivery)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO content_items
+         (deal_id, title, platform, due_date, due_date_anchor, due_date_mode,
+          due_rule, due_days_after_delivery)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       fields.dealId,
       fields.title,
       fields.platform ?? null,
       fields.dueDate ?? null,
+      fields.dueDaysAfterDelivery != null ? (fields.dueDate ?? null) : null,
+      fields.dueDateMode ??
+        (fields.dueDaysAfterDelivery != null
+          ? fields.dueDate
+            ? "later_of"
+            : "after_delivery"
+          : "fixed"),
       fields.dueRule ?? null,
       fields.dueDaysAfterDelivery ?? null
     );
@@ -218,6 +233,42 @@ export function updateContentItem(
   db.prepare(
     `UPDATE content_items SET ${sets.join(", ")}, updated_at = datetime('now') WHERE id = ?`
   ).run(...params, id);
+}
+
+/** Creator proposal only; the operational deadline remains unchanged until approval. */
+export function requestContentDueDate(id: number, dueDate: string, reason: string): boolean {
+  const result = db
+    .prepare(
+      `UPDATE content_items
+       SET requested_due_date = ?, due_date_request_reason = ?,
+           due_date_requested_at = datetime('now'), updated_at = datetime('now')
+       WHERE id = ? AND status NOT IN ('posted', 'verified')`
+    )
+    .run(dueDate, reason, id);
+  return result.changes > 0;
+}
+
+/** Approves or rejects a pending creator date request and clears the decision queue. */
+export function resolveContentDueDateRequest(id: number, approve: boolean): boolean {
+  const result = approve
+    ? db
+        .prepare(
+          `UPDATE content_items
+           SET due_date = requested_due_date, due_date_override = requested_due_date,
+               requested_due_date = NULL, due_date_request_reason = NULL,
+               due_date_requested_at = NULL, updated_at = datetime('now')
+           WHERE id = ? AND requested_due_date IS NOT NULL`
+        )
+        .run(id)
+    : db
+        .prepare(
+          `UPDATE content_items
+           SET requested_due_date = NULL, due_date_request_reason = NULL,
+               due_date_requested_at = NULL, updated_at = datetime('now')
+           WHERE id = ? AND requested_due_date IS NOT NULL`
+        )
+        .run(id);
+  return result.changes > 0;
 }
 
 /** The creator's draft, via the portal. Resubmitting after changes bumps the round. */
@@ -421,6 +472,7 @@ export function updateShipment(
     address?: string | null;
     carrier?: string | null;
     tracking?: string | null;
+    trackingException?: string | null;
     status?: ShipmentStatus;
   }
 ) {
@@ -435,6 +487,9 @@ export function updateShipment(
   if (fields.address !== undefined) push("address", fields.address);
   if (fields.carrier !== undefined) push("carrier", fields.carrier);
   if (fields.tracking !== undefined) push("tracking", fields.tracking);
+  if (fields.trackingException !== undefined) {
+    push("tracking_exception", fields.trackingException);
+  }
   if (fields.status !== undefined) {
     push("status", fields.status);
     if (fields.status === "shipped") sets.push("shipped_at = datetime('now')");
@@ -457,16 +512,35 @@ export function deleteShipment(id: number) {
 export function resolveDueDatesAfterDelivery(dealId: number, deliveredAt: string) {
   const items = db
     .prepare(
-      `SELECT id, due_days_after_delivery FROM content_items
-       WHERE deal_id = ? AND due_date IS NULL AND due_days_after_delivery IS NOT NULL`
+      `SELECT id, due_date, due_date_anchor, due_date_mode, due_days_after_delivery
+       FROM content_items
+       WHERE deal_id = ? AND due_days_after_delivery IS NOT NULL
+         AND due_date_override IS NULL`
     )
-    .all(dealId) as { id: number; due_days_after_delivery: number }[];
+    .all(dealId) as {
+      id: number;
+      due_date: string | null;
+      due_date_anchor: string | null;
+      due_date_mode: DueDateMode | null;
+      due_days_after_delivery: number;
+    }[];
 
   const update = db.prepare(
-    "UPDATE content_items SET due_date = ?, updated_at = datetime('now') WHERE id = ?"
+    `UPDATE content_items
+     SET due_date = ?, due_date_anchor = COALESCE(due_date_anchor, due_date),
+         updated_at = datetime('now')
+     WHERE id = ?`
   );
   for (const item of items) {
-    update.run(addDays(deliveredAt, item.due_days_after_delivery), item.id);
+    update.run(
+      resolveConditionalDueDate({
+        deliveredAt,
+        anchorDate: item.due_date_anchor ?? item.due_date,
+        daysAfterDelivery: item.due_days_after_delivery,
+        mode: item.due_date_mode,
+      }),
+      item.id
+    );
   }
   return items.length;
 }

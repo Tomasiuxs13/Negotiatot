@@ -1,4 +1,13 @@
-import type { UsageTotals } from "./db";
+/**
+ * Structural, rather than importing UsageTotals from db.ts, so that db.ts can price a
+ * row as it writes it without the two modules importing each other.
+ */
+export interface TokenCounts {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens?: number;
+  cacheReadTokens?: number;
+}
 
 /**
  * Opus-tier list prices, USD per million tokens. Identical for claude-opus-5 and
@@ -18,7 +27,7 @@ const CACHE_READ_MULTIPLIER = 0.1;
  * logged 2 — while the tokens themselves moved into the cache counters. Pricing on
  * input_tokens alone made the most expensive call in the product look free.
  */
-export function usageCostUsd(u: Pick<UsageTotals, "inputTokens" | "outputTokens" | "cacheCreationTokens" | "cacheReadTokens">): number {
+export function usageCostUsd(u: TokenCounts): number {
   return (
     (u.inputTokens / 1_000_000) * INPUT_PER_M +
     (u.outputTokens / 1_000_000) * OUTPUT_PER_M +
@@ -28,6 +37,6 @@ export function usageCostUsd(u: Pick<UsageTotals, "inputTokens" | "outputTokens"
 }
 
 /** Every token the call consumed, cached or not — the figure to show beside the cost. */
-export function totalTokens(u: Pick<UsageTotals, "inputTokens" | "outputTokens" | "cacheCreationTokens" | "cacheReadTokens">): number {
+export function totalTokens(u: TokenCounts): number {
   return u.inputTokens + u.outputTokens + (u.cacheCreationTokens ?? 0) + (u.cacheReadTokens ?? 0);
 }

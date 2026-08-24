@@ -23,6 +23,22 @@ export interface Commission {
 
 export const NO_COMMISSION: Commission = { type: "none", value: 0 };
 
+/** Standard offer must choose one commission model; two populated fields are ambiguous. */
+export function commissionModeError(econ: {
+  commissionPercent?: number;
+  commissionPerOrder?: number;
+}): string | null {
+  const percent = econ.commissionPercent ?? 0;
+  const perOrder = econ.commissionPerOrder ?? 0;
+  if (![percent, perOrder].every((value) => Number.isFinite(value) && value >= 0)) {
+    return "Commission rates must be valid numbers of zero or more.";
+  }
+  if (percent > 0 && perOrder > 0) {
+    return "Choose one default commission model: percentage of revenue or dollars per order.";
+  }
+  return null;
+}
+
 export interface Economics {
   /** Average order value, in dollars. */
   aov: number;
@@ -291,6 +307,57 @@ export function trueDealCost(params: {
   };
 }
 
+/** Revenue divided by a named cost basis; null keeps missing/zero cost visibly unknown. */
+export function returnOnAdSpend(revenue: number, cost: number): number | null {
+  if (!Number.isFinite(revenue) || !Number.isFinite(cost) || revenue <= 0 || cost <= 0) {
+    return null;
+  }
+  return revenue / cost;
+}
+
+/**
+ * True cost once results are known.
+ *
+ * A percentage commission settles against attributed revenue, not a forecast AOV. A
+ * dollar-per-order agreement still settles against actual orders and its volume ladder.
+ * When revenue has not been logged yet, percentage commission falls back to the same
+ * AOV basis used by the forecast so an incomplete record is not presented as free.
+ */
+export function actualDealCost(params: {
+  fee: number;
+  actualOrders: number;
+  actualRevenue?: number | null;
+  aov: number;
+  commission?: Commission;
+  discount?: Discount;
+  tiers?: CommissionTier[];
+  productCost?: number;
+}): ReturnType<typeof trueDealCost> {
+  const commission = params.commission ?? NO_COMMISSION;
+  const orders = Math.max(0, params.actualOrders);
+  const discount = discountPerOrder(params.discount ?? NO_DISCOUNT, params.aov) * orders;
+  const forecast = earningsForecast({
+    expectedOrders: orders,
+    commission,
+    aov: params.aov,
+    discount: params.discount,
+    tiers: params.tiers,
+  });
+  const actualCommission =
+    commission.type === "percent" && params.actualRevenue != null
+      ? Math.max(0, params.actualRevenue) * (commission.value / 100)
+      : forecast.total;
+  const product = params.productCost ?? 0;
+
+  return {
+    fee: params.fee,
+    commission: actualCommission,
+    discount,
+    product,
+    total: params.fee + actualCommission + product,
+  };
+}
+
 export type DealStructure = "paid" | "gifted_plus_commission" | "not_viable";
 
 /**
@@ -446,7 +513,9 @@ export function earningsForecast(params: {
   unreachableTiers: CommissionTier[];
 } {
   const orders = Math.max(0, params.expectedOrders);
-  const tiers = params.tiers ?? [];
+  // Volume tiers are dollar-per-order ladders. They must never replace an explicitly
+  // agreed percentage commission: 8% of revenue remains 8% at every volume.
+  const tiers = params.commission.type === "percent" ? [] : (params.tiers ?? []);
 
   // With a ladder configured, the rate follows the volume they're actually likely to
   // do — but a ladder whose first rung starts above that volume pays nothing, and the

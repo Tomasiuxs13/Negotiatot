@@ -7,6 +7,10 @@ import {
   updateContentItem,
   type ContentStatus,
 } from "@/lib/fulfillment";
+import { getDeal } from "@/lib/db";
+import { canAdvanceContent, canManageFulfillment } from "@/lib/lifecycle";
+import { dealPlatforms } from "@/lib/types";
+import { resolvePlatform } from "@/lib/content-queue";
 
 /**
  * The board edits the same rows the deal page does, so every surface that reads them has
@@ -38,6 +42,16 @@ export async function setContentStatusAction(
   if (!exists(itemId, dealId)) {
     return { error: "That content item no longer exists — reload the board." };
   }
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found." };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
+  const item = getContentItems(dealId).find((content) => content.id === itemId)!;
+  const transition = canAdvanceContent(item.status, status);
+  if (!transition.ok) return { error: transition.reason };
+  if (status === "posted") {
+    return { error: "Open the deal and add the live URL before marking this posted." };
+  }
   updateContentItem(itemId, { status });
   // Verifying content is what releases money held against it.
   refreshPaymentStatuses(dealId);
@@ -53,6 +67,10 @@ export async function setContentDueDateAction(
   if (!exists(itemId, dealId)) {
     return { error: "That content item no longer exists — reload the board." };
   }
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found." };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
   updateContentItem(itemId, { dueDate: dueDate || null });
   refresh(dealId);
   return {};
@@ -66,7 +84,19 @@ export async function setContentPlatformAction(
   if (!exists(itemId, dealId)) {
     return { error: "That content item no longer exists — reload the board." };
   }
-  updateContentItem(itemId, { platform: platform || null });
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found." };
+  const access = canManageFulfillment(deal.stage);
+  if (!access.ok) return { error: access.reason };
+  const platforms = dealPlatforms(deal);
+  if (platform && !platforms.some((candidate) => candidate === platform)) {
+    return { error: "Choose a platform that belongs to this deal." };
+  }
+  const resolved = resolvePlatform({ platform: platform || null }, platforms);
+  if (platforms.length > 1 && !resolved) {
+    return { error: "A multi-platform deliverable must keep a platform." };
+  }
+  updateContentItem(itemId, { platform: resolved });
   refresh(dealId);
   return {};
 }
