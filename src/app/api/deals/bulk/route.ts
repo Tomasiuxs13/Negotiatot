@@ -3,6 +3,7 @@ import { createDealAction } from "@/app/new/actions";
 import { findPartnerByName, getPartnerDeals, getPartners, getSetting } from "@/lib/db";
 import { TERMINAL_STAGES } from "@/lib/types";
 import { BULK_MAX_ITEMS, normalizeBulkItem, type ProgramDefaults } from "@/lib/bulk-import";
+import { checkApiKey } from "@/lib/api-auth";
 
 /**
  * Bulk deal import — the outreach tool's door into the pipeline.
@@ -21,6 +22,16 @@ import { BULK_MAX_ITEMS, normalizeBulkItem, type ProgramDefaults } from "@/lib/b
  * refused: a file import that silently starts N model runs is a bill nobody reviewed.
  */
 export async function POST(request: Request) {
+  // No key configured means the API is off, not open — see api-auth.ts for why.
+  const auth = checkApiKey(
+    request.headers.get("authorization"),
+    request.headers.get("x-api-key"),
+    getSetting<string>("api_key")
+  );
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.reason }, { status: auth.status });
+  }
+
   let body: unknown;
   try {
     body = await request.json();

@@ -197,9 +197,11 @@ ROAS**, whose denominator includes actual commission and gifted product cost.
 ### Settings
 `/settings`
 
-API key status, active model, database location and deal count, currency, and cumulative
-API usage with an estimated cost (including tokens served from cache at a tenth of input
-price).
+Claude API key status, active model, database location and deal count, currency, and
+cumulative API usage with an estimated cost (including tokens served from cache at a
+tenth of input price). **API access**: generate, copy, rotate or revoke the key that
+switches the bulk-import endpoint on, with the endpoint URL and a copyable working
+example assembled for the host you are browsing on.
 
 ---
 
@@ -212,8 +214,9 @@ and discount overriding Playbook defaults). Rows are independent — the respons
 `created` ids, per-row `errors`, and `duplicates`: creators (matched by name or email)
 who already have a live deal are skipped, not doubled. Every row runs through the same
 create path as the form. Analysis never runs from the import — stage "analyzing" is
-refused, so a file can never silently start model runs. Unauthenticated, like the rest of
-the app: local single-user use only until the deferred auth work lands.
+refused, so a file can never silently start model runs. Requires an API key sent as `Authorization: Bearer …` or `x-api-key` — generated,
+copied, rotated and revoked in **Settings → API access**, which also shows the endpoint
+URL and a working example. No key configured means the API is off, not open.
 
 
 An **On create** choice sits at the top: *Analyze now* (runs the pricing analysis),

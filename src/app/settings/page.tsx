@@ -2,6 +2,8 @@ import PageHeader from "@/components/PageHeader";
 import { getDeals, getUsageTotals } from "@/lib/db";
 import { hasApiKey, MODEL } from "@/lib/claude";
 import { usageCostUsd, totalTokens } from "@/lib/usage-cost";
+import ApiAccessBlock from "@/components/settings/ApiAccessBlock";
+import { getSetting } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +62,7 @@ export default function SettingsPage() {
               <p className="text-xs text-slate-500 mt-1 max-w-[60ch]">{r.note}</p>
             </div>
           ))}
+          <ApiAccessBlock currentKey={getSetting<string>("api_key")} />
         </div>
       </main>
     </>
