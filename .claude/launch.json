@@ -2,12 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "//": "Attaches to the always-on server rather than starting one. A LaunchAgent (com.counterpart.dev) keeps `next dev` running on 3001 across sessions and reboots, so spawning a second `next dev` in this directory just collides — Next refuses with 'Another next dev server is already running'. No command here means attach-only.",
       "name": "counterpart-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 3000,
-      "autoPort": true,
-      "cwd": "/Users/tomasnorkus/Influncer negotiations/counterpart-dev"
+      "url": "http://localhost:3001"
     },
     {
       "name": "counterpart",
