@@ -76,10 +76,8 @@ export default function PipelineBoard({
           >
             <div className="flex items-center justify-between px-2 py-3 mb-2">
               <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-sm text-slate-800">{stage.label}</h3>
-                <span className="bg-slate-200 text-slate-600 text-xs font-medium px-2 py-0.5 rounded-full font-tabular">
-                  {stageDeals.length}
-                </span>
+                <h3 className="label-caps text-slate-600">{stage.label}</h3>
+                <span className="font-data text-xs text-slate-400">{stageDeals.length}</span>
               </div>
               {(["lead", "contacted", "analyzing"] as Stage[]).includes(stage.key) && (
                 <a
@@ -115,9 +113,11 @@ export default function PipelineBoard({
                 </a>
               )}
               {stageDeals.length === 0 && (
-                <div className="text-xs text-slate-400 text-center py-8 border border-dashed border-slate-200 rounded-lg">
-                  {isOver ? "Drop here" : "No deals in this stage"}
-                </div>
+                <div
+                  className={`h-16 rounded-lg border border-dashed transition-colors ${
+                    isOver ? "border-brand/50 bg-brand/5" : "border-slate-200"
+                  }`}
+                />
               )}
             </div>
           </div>

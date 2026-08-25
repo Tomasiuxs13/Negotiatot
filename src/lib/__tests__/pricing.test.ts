@@ -300,3 +300,50 @@ describe("playbook isolation", () => {
     expect(again).toEqual(first);
   });
 });
+
+/**
+ * The grouping exists so the analysis prompt can be shown valuation and breakeven without
+ * showing Target or Anchor. Those two are functions of a quality discount the model has
+ * not returned yet, and a provisional figure in front of the model is one that ends up
+ * quoted as final — on a real deal that printed "Target $190" into a summary sitting
+ * above a cockpit reading $175.
+ */
+describe("workings are grouped so pre-discount numbers can be withheld", () => {
+  const n = computeNumbers(
+    {
+      platforms: ["youtube"],
+      blendedViews: 100_000,
+      pieces: 1,
+      deliverablesText: "1 video",
+      expectedOrders: 5,
+      qualityDiscountPct: 20,
+    },
+    RULES
+  );
+
+  it("keeps Target and Anchor out of the valuation group", () => {
+    const valuation = n.valuationWorkings.join(" ");
+    expect(valuation).not.toMatch(/Target\s*=/);
+    expect(valuation).not.toMatch(/Anchor\s*=/);
+    expect(valuation).toMatch(/Walk-away\s*=/);
+  });
+
+  it("puts Target and Anchor in their own group", () => {
+    const target = n.targetWorkings.join(" ");
+    expect(target).toMatch(/Target\s*=/);
+    expect(target).toMatch(/Anchor\s*=/);
+  });
+
+  it("isolates breakeven", () => {
+    expect(n.breakevenWorkings.join(" ")).toMatch(/Breakeven\s*=/);
+    expect(n.breakevenWorkings).toHaveLength(1);
+  });
+
+  it("still exposes the full derivation in order", () => {
+    expect(n.workings).toEqual([
+      ...n.valuationWorkings,
+      ...n.targetWorkings,
+      ...n.breakevenWorkings,
+    ]);
+  });
+});

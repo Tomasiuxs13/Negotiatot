@@ -25,21 +25,6 @@ const TONE_DOT: Record<string, string> = {
   neutral: "bg-slate-300",
 };
 
-function Row({ label, value, accent }: { label: string; value: string; accent?: "warn" | "good" }) {
-  return (
-    <div className="flex justify-between text-xs font-tabular">
-      <span className="text-slate-500">{label}</span>
-      <span
-        className={`font-medium ${
-          accent === "warn" ? "text-amber-600" : accent === "good" ? "text-emerald-600" : "text-slate-900"
-        }`}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
 const PHASE_DOT: Record<string, string> = {
   neutral: "bg-slate-300",
   good: "bg-emerald-500",
@@ -50,78 +35,80 @@ export default function DealCard({ deal, phase }: { deal: Deal; phase?: DealPhas
   const platforms = dealPlatforms(deal);
   const yourMove = deal.your_move === 1;
 
-  const rows: { label: string; value: string; accent?: "warn" | "good" }[] = [];
+  /**
+   * One line of the figures that matter at THIS stage — no labels. Which numbers they
+   * are is what the stage already tells you: an unpriced lead shows reach, a live
+   * negotiation shows the two positions and the gap between them.
+   */
+  const facts: string[] = [];
   if (deal.stage === "lead" || deal.stage === "contacted") {
-    if (deal.avg_views != null) rows.push({ label: "Avg views:", value: fmtViews(deal.avg_views) });
-    if (deal.current_ask != null) rows.push({ label: "Their ask:", value: money(deal.current_ask) });
+    if (deal.avg_views != null) facts.push(`${fmtViews(deal.avg_views)} views`);
+    if (deal.current_ask != null) facts.push(`asks ${money(deal.current_ask)}`);
   } else if (deal.stage === "analyzing") {
-    if (deal.current_ask != null) rows.push({ label: "Ask:", value: money(deal.current_ask) });
-    if (deal.target != null) rows.push({ label: "Est. value:", value: money(deal.target) });
+    if (deal.current_ask != null) facts.push(`asks ${money(deal.current_ask)}`);
+    if (deal.target != null) facts.push(`worth ${money(deal.target)}`);
   } else if (deal.stage === "offer_sent") {
-    if (deal.current_offer != null) rows.push({ label: "Our offer:", value: money(deal.current_offer) });
-    if (deal.current_ask != null) rows.push({ label: "Their ask:", value: money(deal.current_ask) });
+    if (deal.current_offer != null) facts.push(`offered ${money(deal.current_offer)}`);
+    if (deal.current_ask != null) facts.push(`asks ${money(deal.current_ask)}`);
   } else if (deal.stage === "negotiating") {
-    if (deal.current_ask != null) rows.push({ label: "Current ask:", value: money(deal.current_ask) });
-    if (deal.current_offer != null) rows.push({ label: "Our offer:", value: money(deal.current_offer) });
-    if (deal.current_ask != null && deal.current_offer != null)
-      rows.push({ label: "Gap:", value: money(deal.current_ask - deal.current_offer), accent: "warn" });
+    if (deal.current_offer != null && deal.current_ask != null) {
+      facts.push(`${money(deal.current_offer)} vs ${money(deal.current_ask)}`);
+      facts.push(`gap ${money(deal.current_ask - deal.current_offer)}`);
+    } else if (deal.current_ask != null) {
+      facts.push(`asks ${money(deal.current_ask)}`);
+    }
   } else if (deal.stage === "agreed" || deal.stage === "completed") {
-    if (deal.agreed_price != null) rows.push({ label: "Final:", value: money(deal.agreed_price) });
-    if (deal.first_ask != null && deal.agreed_price != null)
-      rows.push({ label: "Saved:", value: money(deal.first_ask - deal.agreed_price), accent: "good" });
+    if (deal.agreed_price != null) facts.push(money(deal.agreed_price));
+    if (deal.first_ask != null && deal.agreed_price != null && deal.first_ask > deal.agreed_price)
+      facts.push(`saved ${money(deal.first_ask - deal.agreed_price)}`);
   }
 
   return (
     <Link
       href={`/deals/${deal.id}`}
       draggable={false}
-      className={`block bg-white rounded-lg p-4 shadow-sm relative group cursor-grab active:cursor-grabbing transition-shadow ${
-        yourMove
-          ? "border-2 border-brand hover:shadow-md"
-          : "border border-slate-200 hover:border-slate-300"
+      className={`block bg-white rounded-lg p-3 relative group cursor-grab active:cursor-grabbing transition-colors border border-slate-200 hover:border-slate-300 ${
+        yourMove ? "border-l-2 border-l-brand" : ""
       }`}
     >
-      {yourMove && (
-        <div className="absolute -top-2.5 right-3 bg-brand text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shadow-sm z-10">
-          Your move
-        </div>
-      )}
-      <div className="flex justify-between items-start mb-3">
+      <div className="flex justify-between items-start mb-2">
         <div className="flex items-center gap-2">
           <div
             className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${avatarColor(deal.creator)}`}
           >
             {deal.creator.charAt(0)}
           </div>
-          <div>
-            <h4 className="font-semibold text-sm text-slate-900 leading-tight">{deal.creator}</h4>
-            <span className="text-xs text-slate-500 flex items-center gap-1.5">
+          <div className="min-w-0">
+            <h4 className="font-semibold text-[13px] text-slate-900 leading-tight truncate">
+              {deal.creator}
+            </h4>
+            <span className="text-slate-400 flex items-center gap-1 mt-0.5">
               {platforms.map((p) => (
-                <span key={p} className="flex items-center gap-0.5">
-                  <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
-                    {PLATFORM_META[p].icon}
-                  </span>
-                  {platforms.length > 1 ? "" : PLATFORM_META[p].label}
+                <span
+                  key={p}
+                  className="material-symbols-outlined"
+                  style={{ fontSize: 13 }}
+                  title={PLATFORM_META[p].label}
+                >
+                  {PLATFORM_META[p].icon}
                 </span>
               ))}
-              {platforms.length > 1 && "Multi-platform"}
             </span>
           </div>
         </div>
-        <span className="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
-          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>more_horiz</span>
-        </span>
+        {yourMove && (
+          <span
+            className="w-2 h-2 rounded-full bg-brand shrink-0 mt-1"
+            title="Your move — the Copilot's recommendation is ready"
+          />
+        )}
       </div>
 
-      {rows.length > 0 && (
-        <div className="space-y-1.5 mb-3">
-          {rows.map((r) => (
-            <Row key={r.label} {...r} />
-          ))}
-        </div>
+      {facts.length > 0 && (
+        <p className="font-data text-[11px] text-slate-600 mb-2">{facts.join(" · ")}</p>
       )}
 
-      <div className="pt-3 border-t border-slate-100">
+      <div className="pt-2 border-t border-slate-100">
         {/* Once a deal is signed, where the work stands beats a status typed at signing. */}
         {phase && phase.key !== "nothing_tracked" ? (
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -133,12 +120,12 @@ export default function DealCard({ deal, phase }: { deal: Deal; phase?: DealPhas
               </span>
             )}
           </div>
-        ) : (
+        ) : deal.status_label ? (
           <div className="flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full ${TONE_DOT[deal.status_tone]}`} />
-            <span className="text-xs font-medium text-slate-600">{deal.status_label ?? "—"}</span>
+            <span className="text-xs font-medium text-slate-600 truncate">{deal.status_label}</span>
           </div>
-        )}
+        ) : null}
       </div>
     </Link>
   );

@@ -122,7 +122,6 @@ export default async function PipelinePage({
     <>
       <PageHeader
         title="Pipeline"
-        subtitle="Every deal and where it stands"
         actions={
           <>
             {/* View toggle — same deals, two ways to read them. */}
