@@ -1,15 +1,25 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand: #0e7a6e;
-  --color-brand-dark: #0c6b60;
-  --color-sidebar: #141d21;
+  /* Deep emerald: the single accent. Reserved for primary actions, the active nav
+     item and genuinely good outcomes — never decoration. */
+  --color-brand: #0d4d44;
+  --color-brand-dark: #00352e;
+  --color-brand-soft: #e6f0ed;
+  /* The sidebar is the same emerald family rather than a neutral slate, so navigation
+     reads as one branded surface instead of a black bar bolted onto a white app. */
+  --color-sidebar: #062e28;
+  --color-sidebar-hover: #0d4d44;
+  /* A warm off-white canvas. Pure white cards need something to sit ON — against
+     slate-50 they disappeared, which is what made every screen look flat. */
+  --color-canvas: #f1f4f3;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-headline: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-headline: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-data), ui-monospace, SFMono-Regular, monospace;
 }
 
 body {
-  background-color: var(--color-slate-50);
+  background-color: var(--color-canvas);
   color: var(--color-slate-800);
   font-family: var(--font-sans);
 }
@@ -25,6 +35,34 @@ h6 {
 
 .font-tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Money, counts and dates: a mono face so columns of figures line up and a number
+   reads as data rather than prose. */
+.font-data {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* The small uppercase label above a number or over a group of rows. One class so the
+   size, weight and tracking cannot drift between screens. */
+.label-caps {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Headline numbers on KPI tiles — the figure IS the content, so it gets the room. */
+.stat-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 36px;
+  letter-spacing: -0.02em;
 }
 
 /* Subtle scrollbar for kanban columns */

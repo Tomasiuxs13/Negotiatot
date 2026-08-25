@@ -18,6 +18,18 @@ import { DEAL_STAGE_TONE } from "@/lib/status-tones";
 
 export const dynamic = "force-dynamic";
 
+/** "2h ago" — when scanning what just moved, elapsed time beats a timestamp. */
+function ago(stamp: string): string {
+  const then = new Date(stamp.replace(" ", "T") + "Z").getTime();
+  const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  return days === 1 ? "yesterday" : `${days}d ago`;
+}
+
 export default function DashboardPage() {
   const deals = getDeals();
   const payments = getAllPaymentItems();
@@ -51,29 +63,29 @@ export default function DashboardPage() {
       href: "/pipeline",
     },
     {
-      label: "Committed / cap",
-      value: kpis.committed > 0 ? money(kpis.committed) : "—",
-      note:
-        kpis.committed > 0
-          ? `of ${money(kpis.monthlyCap)} this month`
-          : `nothing committed yet · cap ${money(kpis.monthlyCap)}`,
+      label: "Committed",
+      // money(0) reads "$0" — a real, calm answer. The em-dash it replaced looked like
+      // a rendering failure on every fresh month.
+      value: money(kpis.committed),
+      note: `of ${money(kpis.monthlyCap)} this month`,
       noteTone: "text-slate-500",
       href: "/pipeline",
     },
     {
       label: "Owed to creators",
-      value: outstanding > 0 ? money(outstanding) : "—",
-      note:
-        toApprove.length > 0
-          ? `${toApprove.length} ready to approve`
-          : "nothing to approve",
+      value: money(outstanding),
+      note: toApprove.length > 0 ? `${toApprove.length} ready to approve` : "nothing to approve",
       noteTone: toApprove.length > 0 ? "text-amber-600" : "text-slate-500",
       href: "/payments",
     },
     {
       label: "Avg closed CPM",
+      // The only genuine unknown: with no closed deals there IS no average yet.
       value: kpis.avgClosedCpm != null ? moneyCpm(kpis.avgClosedCpm) : "—",
-      note: `target ≤ ${money(kpis.targetCpm)}`,
+      note:
+        kpis.avgClosedCpm != null
+          ? `target ≤ ${money(kpis.targetCpm)}`
+          : `no closed deals yet · target ≤ ${money(kpis.targetCpm)}`,
       noteTone: "text-slate-500",
       href: "/benchmarks",
     },
@@ -98,7 +110,6 @@ export default function DashboardPage() {
     <>
       <PageHeader
         title="Dashboard"
-        subtitle="What needs you today"
         actions={<NewDealButton />}
       />
       <main className="flex-1 overflow-y-auto p-8">
@@ -110,15 +121,13 @@ export default function DashboardPage() {
               <Link
                 key={k.label}
                 href={k.href}
-                className="bg-white rounded-lg p-5 border border-slate-200 shadow-sm hover:border-slate-300 transition-colors"
+                className="bg-white rounded-lg p-5 border border-slate-200 hover:border-brand/40 transition-colors group"
               >
-                <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                <div className="label-caps text-slate-500 group-hover:text-brand-dark transition-colors">
                   {k.label}
                 </div>
-                <div className="text-3xl font-semibold text-slate-900 font-tabular mt-2">
-                  {k.value}
-                </div>
-                <div className={`text-xs mt-1 ${k.noteTone}`}>{k.note}</div>
+                <div className="stat-value text-slate-900 mt-2">{k.value}</div>
+                <div className={`text-xs mt-1.5 ${k.noteTone}`}>{k.note}</div>
               </Link>
             ))}
           </div>
@@ -159,8 +168,8 @@ export default function DashboardPage() {
                             <span className="font-medium">{d.status_label ?? "Updated"}</span>
                             <span className="text-slate-500"> · {d.creator}</span>
                           </span>
-                          <span className="block text-xs text-slate-400 font-tabular">
-                            {d.updated_at?.slice(0, 16).replace("T", " ")}
+                          <span className="block text-xs text-slate-400 font-data">
+                            {ago(d.updated_at!)}
                           </span>
                         </span>
                       </Link>
@@ -189,15 +198,11 @@ export default function DashboardPage() {
                   aria-label={`${s.count} deals in ${s.label}`}
                 >
                   <div
-                    className={`text-3xl font-semibold font-tabular ${
-                      s.count > 0 ? "text-slate-900" : "text-slate-300"
-                    }`}
+                    className={`stat-value ${s.count > 0 ? "text-slate-900" : "text-slate-300"}`}
                   >
                     {s.count}
                   </div>
-                  <div className="text-[11px] uppercase tracking-wider text-slate-500 mt-1 mb-2">
-                    {s.label}
-                  </div>
+                  <div className="label-caps text-slate-500 mt-1 mb-2">{s.label}</div>
                   <div
                     className={`h-1 rounded-full transition-colors ${
                       s.count === 0

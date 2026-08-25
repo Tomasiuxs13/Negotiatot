@@ -139,7 +139,7 @@ describe("attentionItems", () => {
       ...base,
       deals: [deal({ stage: "analyzing", analysis: "{}", job_status: null, updated_at: "2026-07-22 09:00:00" })],
     });
-    expect(fresh[0].title).toContain("verdict ready to review");
+    expect(fresh[0].id).toMatch(/^verdict-/);
     expect(fresh[0].severity).toBe("info");
 
     const stale = attentionItems({
@@ -147,7 +147,8 @@ describe("attentionItems", () => {
       deals: [deal({ stage: "analyzing", analysis: "{}", job_status: null, updated_at: "2026-07-15 09:00:00" })],
     });
     expect(stale[0].severity).toBe("warning");
-    expect(stale[0].detail).toContain("7 days");
+    // The wait is still stated, just compactly — the number is what matters.
+    expect(stale[0].detail).toContain("7d");
   });
 
   it("stays quiet while the analysis is still running", () => {
@@ -433,7 +434,7 @@ describe("verdict vs your-move overlap", () => {
 
   it("still asks for a decision when no recommendation is waiting", () => {
     const items = attentionItems({ ...base, deals: [deal({ ...analyzed, your_move: 0 })] });
-    expect(items.some((i) => i.title.includes("verdict ready to review"))).toBe(true);
+    expect(items.some((i) => i.id.startsWith("verdict-"))).toBe(true);
   });
 });
 

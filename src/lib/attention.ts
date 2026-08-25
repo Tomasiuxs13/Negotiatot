@@ -304,7 +304,7 @@ export function attentionItems({
         id: `silent-${d.id}`,
         severity: "info",
         title: `${d.creator} — no reply in ${quiet} days`,
-        detail: "Consider a follow-up nudge",
+        detail: "Send a follow-up",
         href: `/deals/${d.id}?tab=negotiation`,
       });
     }
@@ -320,10 +320,10 @@ export function attentionItems({
     items.push({
       id: `verdict-${d.id}`,
       severity: waiting >= silentDays ? "warning" : "info",
-      title: `${d.creator} — verdict ready to review`,
+      title: `${d.creator} — verdict ready`,
       detail:
         waiting >= 1
-          ? `Waiting ${waiting} day${waiting === 1 ? "" : "s"} — send an offer or decline`
+          ? `Waiting ${waiting}d — send an offer or decline`
           : "Send an offer or decline",
       href: `/deals/${d.id}?tab=analysis`,
     });
@@ -336,7 +336,7 @@ export function attentionItems({
       id: `your-move-${d.id}`,
       severity: "warning",
       title: `${d.creator} — your move`,
-      detail: `Round ${d.round}: the Copilot's recommendation is waiting`,
+      detail: `Round ${d.round} · recommendation ready to send`,
       href: `/deals/${d.id}?tab=negotiation`,
     });
   }

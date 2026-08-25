@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Inter } from "next/font/google";
+import { Geist, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import AppShell from "@/components/AppShell";
@@ -8,6 +8,12 @@ import { getPipelineKpis } from "@/lib/db";
 const geist = Geist({
   variable: "--font-geist",
   subsets: ["latin"],
+});
+
+const monoData = JetBrains_Mono({
+  variable: "--font-mono-data",
+  subsets: ["latin"],
+  weight: ["500", "600"],
 });
 
 const inter = Inter({
@@ -29,7 +35,7 @@ export default function RootLayout({
   const month = new Date().toLocaleString("en", { month: "long" });
 
   return (
-    <html lang="en" className={`${geist.variable} ${inter.variable} h-full antialiased`}>
+    <html lang="en" className={`${geist.variable} ${inter.variable} ${monoData.variable} h-full antialiased`}>
       <head>
         {/* Material Symbols is an icon stylesheet, not the page's text font. */}
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}

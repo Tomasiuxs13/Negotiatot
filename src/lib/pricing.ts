@@ -103,6 +103,19 @@ export interface ComputedNumbers {
   qualityDiscountPct: number;
   /** The arithmetic, written out in code so the explanation can't drift from the value. */
   workings: string[];
+  /**
+   * The same arithmetic, grouped by which number it explains.
+   *
+   * Split because the two consumers must see different subsets. The analysis prompt is
+   * shown `valuation` and `breakevenWorkings` only: those are independent of the quality
+   * discount, so they are true before the model has judged it. `targetWorkings` describes
+   * Target and Anchor, which are recomputed *after* the model answers — showing them
+   * pre-discount is what let a verdict summary quote "Target $190" onto a screen whose
+   * cockpit said $175. The deal workspace uses all three, one per row.
+   */
+  valuationWorkings: string[];
+  targetWorkings: string[];
+  breakevenWorkings: string[];
 }
 
 /**
@@ -253,7 +266,7 @@ export function computeNumbers(inputs: PricingInputs, rules: PricingRules): Comp
     missingPlatforms,
     capApplied,
     qualityDiscountPct,
-    workings: describeWorkings({
+    ...groupWorkings(describeWorkings({
       perPlatform,
       crosspost: inputs.crosspost ?? false,
       missingPlatforms,
@@ -270,7 +283,18 @@ export function computeNumbers(inputs: PricingInputs, rules: PricingRules): Comp
       anchor,
       breakeven,
       expectedOrders: inputs.expectedOrders ?? 0,
-    }),
+    })),
+  };
+}
+
+/** Flattens the grouped arithmetic back out, keeping one combined list for callers that
+ *  want the whole derivation in order. */
+function groupWorkings(g: { valuation: string[]; target: string[]; breakeven: string[] }) {
+  return {
+    workings: [...g.valuation, ...g.target, ...g.breakeven],
+    valuationWorkings: g.valuation,
+    targetWorkings: g.target,
+    breakevenWorkings: g.breakeven,
   };
 }
 
@@ -302,7 +326,7 @@ function describeWorkings(p: {
   anchor: number;
   breakeven: number;
   expectedOrders: number;
-}): string[] {
+}): { valuation: string[]; target: string[]; breakeven: string[] } {
   const money = (n: number) => `$${n.toLocaleString("en-US")}`;
   const lines: string[] = [];
 
@@ -335,16 +359,18 @@ function describeWorkings(p: {
       ? `Walk-away = ${money(p.cap!)} — maxPerDeal caps the ${money(p.fairValue)} the reach would otherwise support`
       : `Walk-away = ${money(p.fairValue)} at the playbook's ceiling CPMs`
   );
-  lines.push(
+  // Everything above explains valuation and the ceiling: true regardless of the quality
+  // discount, and therefore safe to put in front of the model before it has judged one.
+  const target = [
     p.qualityDiscountPct > 0
       ? `Target = fair value less ${p.qualityDiscountPct}% for quality = ${money(p.target)}`
-      : `Target = ${money(p.target)} — no quality discount applied`
-  );
-  lines.push(`Anchor = target less ${p.anchorStep}% anchoring step = ${money(p.anchor)}`);
-  lines.push(
+      : `Target = ${money(p.target)} — no quality discount applied`,
+    `Anchor = target less ${p.anchorStep}% anchoring step = ${money(p.anchor)}`,
+  ];
+  const breakeven = [
     p.expectedOrders > 0
       ? `Breakeven = ${money(p.breakeven)} — the largest fee ${Math.round(p.expectedOrders)} expected orders still support`
-      : `Breakeven = ${money(p.breakeven)} — no order forecast available, so no fee is supported by performance alone`
-  );
-  return lines;
+      : `Breakeven = ${money(p.breakeven)} — no order forecast available, so no fee is supported by performance alone`,
+  ];
+  return { valuation: lines, target, breakeven };
 }

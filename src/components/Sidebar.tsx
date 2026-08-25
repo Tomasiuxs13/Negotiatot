@@ -47,10 +47,10 @@ function NavItem({
     <Link
       href={item.href}
       aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-3 px-4 py-3 text-[13px] font-medium transition-colors cursor-pointer border-l-4 ${
+      className={`flex items-center gap-3 mx-2 px-3 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer ${
         active
-          ? "text-brand bg-brand/10 border-brand"
-          : "text-slate-400 border-transparent hover:bg-white/5 hover:text-white"
+          ? "bg-brand text-white"
+          : "text-white/60 hover:bg-white/8 hover:text-white"
       }`}
     >
       <span

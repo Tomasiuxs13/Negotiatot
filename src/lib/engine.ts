@@ -169,26 +169,38 @@ export function pricingInputsFor(deal: Deal, ctx: Ctx, extracted?: ExtractedRepo
 
 /** The four rows the deal workspace renders, values and arithmetic both from code. */
 export function displayNumbers(n: ComputedNumbers, qualityRationale: string) {
-  const workings = n.workings.join("; ");
+  const money = (v: number) => `$${v.toLocaleString("en-US")}`;
+  const valuation = n.valuationWorkings.join("; ");
   const quality = n.qualityDiscountPct > 0 && qualityRationale ? ` ${qualityRationale}` : "";
   return [
-    { label: "Anchor", value: n.anchor, explanation: workings },
+    {
+      label: "Anchor",
+      value: n.anchor,
+      // Each row explains its own number. These two used to carry the entire derivation
+      // verbatim — the same paragraph printed twice, and neither one saying what its own
+      // figure was for.
+      explanation: `${n.targetWorkings.join("; ")}. Opening offer: below Target, defensible from the same CPM math.`,
+    },
     {
       label: "Target",
       value: n.target,
       explanation:
         n.qualityDiscountPct > 0
-          ? `Content and rights value $${n.fairValue.toLocaleString("en-US")} less a ${n.qualityDiscountPct}% quality discount.${quality}`
-          : `Content at the playbook's ceiling CPMs plus $${n.rightsPremium.toLocaleString("en-US")} for rights, with no quality discount.${quality}`,
+          ? `Content and rights value ${money(n.fairValue)} less a ${n.qualityDiscountPct}% quality discount.${quality}`
+          : `Content at the playbook's ceiling CPMs plus ${money(n.rightsPremium)} for rights, with no quality discount.${quality}`,
     },
     {
       label: "Walk-away",
       value: n.walkaway,
       explanation: n.capApplied
-        ? `Capped by maxPerDeal. Content and rights would otherwise support $${n.fairValue.toLocaleString("en-US")}.`
-        : `The playbook's ceiling CPMs plus priced rights. Never adjusted for quality — this is what the deal can bear, not what it should cost.`,
+        ? `Capped by maxPerDeal. Content and rights would otherwise support ${money(n.fairValue)}. ${valuation}`
+        : `${valuation}. Never adjusted for quality — this is what the deal can bear, not what it should cost.`,
     },
-    { label: "Breakeven", value: n.breakeven, explanation: workings },
+    {
+      label: "Breakeven",
+      value: n.breakeven,
+      explanation: n.breakevenWorkings.join("; "),
+    },
   ];
 }
 
@@ -393,7 +405,18 @@ export async function performRecommendation(dealId: number) {
       status_tone: "good",
     };
     if (reco.theirCurrentPosition != null) {
-      fields.current_ask = Math.round(reco.theirCurrentPosition);
+      const position = Math.round(reco.theirCurrentPosition);
+      fields.current_ask = position;
+      // Their opening number, when the analysis never saw one.
+      //
+      // performAnalysis was the only writer of first_ask, so a deal analysed before the
+      // creator named a price kept it null forever — and four things downstream read it:
+      // the price ladder drops the "R1 · their ask" rung, "Saved:" never renders on the
+      // card or the progress bar, the partner's lifetime savings under-counts, and every
+      // later recommendation prompt says "Their first ask: $unknown". Guarded the same way
+      // performAnalysis guards it, so a real first ask is never overwritten by a later
+      // round's position.
+      if (deal.first_ask == null) fields.first_ask = position;
     }
     if (isOpening) {
       fields.round = Math.max(deal.round, 1);
