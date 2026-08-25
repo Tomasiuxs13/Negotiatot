@@ -4,6 +4,7 @@ import { getSetting } from "@/lib/db";
 import { buildRounds, currentGap } from "@/lib/negotiation";
 import CopilotCard from "./CopilotCard";
 import ReplyForm from "./ReplyForm";
+import DeleteMessageButton from "./DeleteMessageButton";
 import GenerateOfferButton from "./GenerateOfferButton";
 import RegenerateRecoButton from "./RegenerateRecoButton";
 
@@ -21,9 +22,15 @@ function Bubble({ msg, creator }: { msg: Message; creator: string }) {
           : "bg-brand/10 border border-brand/25 rounded-br-sm self-end"
       }`}
     >
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-        {them ? creator : "You"} · {date}
-        {!them && " · sent"}
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-2">
+        <span>
+          {them ? creator : "You"} · {date}
+          {!them && " · sent"}
+        </span>
+        {/* Mis-pastes happen — a reply meant for one creator lands on another's deal,
+            and it takes the round counter and the wrong ask with it. Removable, with
+            the cleanup handled by the action rather than left to memory. */}
+        <DeleteMessageButton dealId={msg.deal_id} messageId={msg.id} />
       </div>
       <p className="whitespace-pre-line text-slate-800">{msg.body}</p>
     </div>

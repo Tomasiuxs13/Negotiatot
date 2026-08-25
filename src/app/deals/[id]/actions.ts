@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { hasRights, parseRights, type DealRights } from "@/lib/rights";
 import { readReportFile } from "@/lib/report-upload";
+import { dependentCopilotIds, repairThread } from "@/lib/thread-repair";
 import { after } from "next/server";
-import { addMessage, getContractDraft, getDeal, getPartner, markContractDraftSigned, saveContractDraft, setJob, updateDeal, upsertPartnerChannel } from "@/lib/db";
+import { addMessage, deleteMessage, getContractDraft, getDeal, getMessage, getMessages, getPartner, markContractDraftSigned, saveContractDraft, setJob, updateDeal, upsertPartnerChannel } from "@/lib/db";
 import { getContentItems, getPaymentItems } from "@/lib/fulfillment";
 import { generateContractText } from "@/lib/contract-template";
 import { getSetting } from "@/lib/db";
@@ -193,6 +194,46 @@ export async function saveActuals(
   // partners table is reading the number this action just changed.
   revalidatePath("/partners");
   return {};
+}
+
+/**
+ * Remove a message pasted into the wrong deal — and everything it caused.
+ *
+ * A wrong paste is never just a row: it bumps the round, hands you the move, and the
+ * recommendation it triggers stamps the wrong creator's ask on this deal. So deletion
+ * takes the dependent copilot messages with it (they were computed from a thread
+ * containing the mistake) and rewinds round, move, asks, stage and label to what the
+ * remaining thread actually supports — all decided in thread-repair.ts, where it is
+ * tested.
+ */
+export async function deleteMessageAction(dealId: number, messageId: number) {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  const message = getMessage(messageId);
+  if (!message || message.deal_id !== dealId) {
+    return { error: "That message is not on this deal." };
+  }
+
+  const all = getMessages(dealId);
+  const casualties = message.sender === "copilot" ? [] : dependentCopilotIds(all, messageId);
+  for (const id of [messageId, ...casualties]) deleteMessage(id);
+
+  const remaining = all.filter((m) => m.id !== messageId && !casualties.includes(m.id));
+  const repair = repairThread(remaining, deal);
+  updateDeal(dealId, {
+    round: repair.round,
+    your_move: repair.your_move,
+    ...("first_ask" in repair ? { first_ask: null, current_ask: null } : {}),
+    ...(repair.stage ? { stage: repair.stage } : {}),
+    ...(repair.status_label ? { status_label: repair.status_label, status_tone: "neutral" } : {}),
+  });
+
+  revalidatePath(`/deals/${dealId}`);
+  revalidatePath("/");
+  revalidatePath("/pipeline");
+  return {
+    removedRecommendations: casualties.length,
+  };
 }
 
 /**

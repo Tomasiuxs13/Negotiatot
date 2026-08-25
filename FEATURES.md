@@ -246,7 +246,7 @@ fake-follower share, view trend — each graded against the playbook with a reas
 | Tab | What it holds |
 |---|---|
 | **Analysis** | Verdict (accept / negotiate / decline), reasoning, red flags, the four numbers with the arithmetic that produced them (written by `pricing.ts`, not narrated by the model), audience-data editor |
-| **Negotiation** | Round-by-round thread, the Copilot's recommendation with a single ready-to-send draft, on-demand tone rewrite, reply capture |
+| **Negotiation** | Round-by-round thread, the Copilot's recommendation with a single ready-to-send draft, on-demand tone rewrite, reply capture. Any message can be removed (mis-pastes happen) — deletion also removes recommendations generated from it and rewinds round, move, asks, stage and label to what the remaining thread supports |
 | **Fulfillment** *(signed deals)* | Contact strip (creator email + copyable portal URL), contract upload and parsing, generated contract draft, onboarding checklist with a generated welcome email, content items with the draft review loop and per-item nudge emails, integration check, product delivery, payments |
 | **Actuals** *(delivered deals, plus legacy posted records)* | Per-item views, clicks, orders and revenue, with the measurement window state; fee-only and all-in ROAS are shown with their cost bases explained |
 | **History** | Every model call for this deal: kind, model, tokens, cache reads, cost |

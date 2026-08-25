@@ -1440,6 +1440,14 @@ export function setSetting(key: string, value: unknown) {
   ).run(key, JSON.stringify(value));
 }
 
+export function getMessage(id: number): Message | undefined {
+  return db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as Message | undefined;
+}
+
+export function deleteMessage(id: number) {
+  db.prepare("DELETE FROM messages WHERE id = ?").run(id);
+}
+
 export function addMessage(
   dealId: number,
   sender: "them" | "us" | "copilot",
