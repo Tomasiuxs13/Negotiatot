@@ -48,6 +48,10 @@ export default function AnalysisTab({
 
   const analysis = JSON.parse(deal.analysis) as DealAnalysis;
   const v = VERDICT_PILL[analysis.verdict];
+  // A re-run in flight: unlike the first run, there is a previous analysis on screen —
+  // which is exactly why the progress must be loud. Without it, attaching a report and
+  // re-running looked like nothing happened: the old verdict just sat there unmarked.
+  const reanalyzing = deal.job_status === "analyzing";
   const stale = Boolean(
     analyzedAt &&
       playbookUpdatedAt &&
@@ -57,7 +61,15 @@ export default function AnalysisTab({
 
   return (
     <div className="@container flex flex-col gap-6">
-      {stale && (
+      {reanalyzing && (
+        <AnalyzingProgress
+          startedAt={deal.job_started_at}
+          hint="Re-pricing this deal — everything below is the previous analysis and will be replaced when this finishes. You can leave this page."
+        />
+      )}
+      {/* The stale-Playbook banner offers a re-run button; while one is already running
+          it would be an invitation to do what is being done. */}
+      {stale && !reanalyzing && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
           <div>
             <p className="text-sm font-semibold text-amber-900">This analysis uses an older Playbook</p>
