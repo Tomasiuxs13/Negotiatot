@@ -36,7 +36,7 @@ export default function PlaybookPage() {
     <>
       <PageHeader
         title="Playbook"
-        subtitle="Your rules — every number and every draft traces back to this page"
+        subtitle="Every number and draft traces back to here"
       />
       <main className="flex-1 overflow-y-auto p-8 space-y-4">
         <PlaybookEditor initial={initial} />

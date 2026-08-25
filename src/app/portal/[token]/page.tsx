@@ -80,7 +80,7 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
 
               {items.length > 0 && (
                 <div>
-                  <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1">Content</h3>
+                  <h3 className="label-caps text-slate-500 mb-1">Content</h3>
                   <div className="divide-y divide-slate-100">
                     {items.map((c) => (
                       <div key={c.id} className="py-2">
@@ -132,7 +132,7 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
 
               {shipments.length > 0 && (
                 <div>
-                  <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1">Product delivery</h3>
+                  <h3 className="label-caps text-slate-500 mb-1">Product delivery</h3>
                   {shipments.map((s) => (
                     <p key={s.id} className="text-sm text-slate-700 py-1">
                       {s.product} —{" "}
@@ -144,7 +144,7 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
 
               {payments.length > 0 && (
                 <div>
-                  <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1">Payments</h3>
+                  <h3 className="label-caps text-slate-500 mb-1">Payments</h3>
                   {payments.map((p) => (
                     <p key={p.id} className="text-sm text-slate-700 py-1 flex justify-between">
                       <span>{p.description}</span>

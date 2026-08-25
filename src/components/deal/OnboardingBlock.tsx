@@ -272,7 +272,7 @@ export default function OnboardingBlock({
 
       {partnerTasks.length > 0 && (
         <div className="mb-3">
-          <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1">
+          <div className="label-caps text-slate-500 mb-1">
             {creator} — one-time setup
           </div>
           {partnerTasks.map((t) => (
@@ -283,7 +283,7 @@ export default function OnboardingBlock({
 
       {dealTasks.length > 0 && (
         <div>
-          <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1">
+          <div className="label-caps text-slate-500 mb-1">
             This collaboration
           </div>
           {dealTasks.map((t) => (

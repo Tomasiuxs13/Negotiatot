@@ -32,12 +32,8 @@ export default function ContentBoard({
             className="flex-1 min-w-56 flex flex-col rounded-xl p-2 border bg-slate-100/50 border-slate-200/60"
           >
             <div className="flex items-center gap-2 px-2 py-3 mb-2">
-              <h3 className="font-semibold text-sm text-slate-800">
-                {CONTENT_STATUS_LABEL[status]}
-              </h3>
-              <span className="bg-slate-200 text-slate-600 text-xs font-medium px-2 py-0.5 rounded-full font-tabular">
-                {column.length}
-              </span>
+              <h3 className="label-caps text-slate-600">{CONTENT_STATUS_LABEL[status]}</h3>
+              <span className="font-data text-xs text-slate-400">{column.length}</span>
             </div>
             <div className="flex-1 overflow-y-auto space-y-2.5 px-1 custom-scrollbar">
               {column.map((row) => (
@@ -49,9 +45,7 @@ export default function ContentBoard({
                 />
               ))}
               {column.length === 0 && (
-                <div className="text-xs text-slate-400 text-center py-8 border border-dashed border-slate-200 rounded-lg">
-                  Nothing here
-                </div>
+                <div className="h-16 rounded-lg border border-dashed border-slate-200" />
               )}
             </div>
           </div>

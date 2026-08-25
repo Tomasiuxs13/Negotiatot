@@ -177,7 +177,7 @@ export default function ContentCalendar({
           {WEEKDAYS.map((d) => (
             <div
               key={d}
-              className="px-2 py-2 text-[11px] font-medium text-slate-500 uppercase tracking-wider text-center"
+              className="px-2 py-2 label-caps text-slate-500 text-center"
             >
               {d}
             </div>

@@ -50,7 +50,7 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" subtitle="Environment and app status" />
+      <PageHeader title="Settings" />
       <main className="flex-1 overflow-y-auto p-8">
         <div className="max-w-2xl bg-white rounded-lg border border-slate-200 shadow-sm divide-y divide-slate-100">
           {rows.map((r) => (

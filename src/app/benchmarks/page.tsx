@@ -23,7 +23,6 @@ export default function BenchmarksPage() {
     <>
       <PageHeader
         title="Benchmarks"
-        subtitle="Calibrated from your closed deals — predicted vs actual, and your real CPM by platform"
       />
       <main className="flex-1 overflow-y-auto p-8">
         {result.lost + result.won > 0 && (
@@ -36,7 +35,7 @@ export default function BenchmarksPage() {
             </div>
             <div className="flex items-baseline gap-6 flex-wrap">
               <div>
-                <div className="text-2xl font-semibold font-tabular text-slate-900">
+                <div className="text-2xl font-semibold font-data text-slate-900">
                   {result.winRate != null ? `${Math.round(result.winRate * 100)}%` : "—"}
                 </div>
                 <div className="text-xs text-slate-500">
@@ -45,7 +44,7 @@ export default function BenchmarksPage() {
               </div>
               {result.reasons.length > 0 && (
                 <div className="flex-1 min-w-64">
-                  <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                  <div className="label-caps text-slate-500 mb-1.5">
                     Why deals died
                   </div>
                   <div className="space-y-1">
@@ -53,9 +52,9 @@ export default function BenchmarksPage() {
                       <div key={r.reason} className="flex items-baseline gap-2 text-sm">
                         <span className="text-slate-600">{r.label}</span>
                         <span className="flex-1 border-b border-dotted border-slate-200" />
-                        <span className="font-tabular text-slate-900">{r.count}</span>
+                        <span className="font-data text-slate-900">{r.count}</span>
                         {r.value > 0 && (
-                          <span className="font-tabular text-xs text-slate-400 w-20 text-right">
+                          <span className="font-data text-xs text-slate-400 w-20 text-right">
                             {money(r.value)} asked
                           </span>
                         )}
@@ -90,18 +89,18 @@ export default function BenchmarksPage() {
                     <h3 className="font-headline text-sm font-semibold text-slate-900">
                       {PLATFORM_META[c.platform].label}
                     </h3>
-                    <span className="ml-auto text-xs text-slate-400 font-tabular">{c.count} deals</span>
+                    <span className="ml-auto text-xs text-slate-400 font-data">{c.count} deals</span>
                   </div>
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-500">Your real avg CPM</span>
-                      <span className="font-tabular font-semibold text-slate-900">{moneyCpm(c.avgActualCpm)}</span>
+                      <span className="font-data font-semibold text-slate-900">{moneyCpm(c.avgActualCpm)}</span>
                     </div>
                     {c.avgDelivery != null && (
                       <div className="flex justify-between text-sm">
                         <span className="text-slate-500">Delivery vs predicted</span>
                         <span
-                          className={`font-tabular font-semibold ${
+                          className={`font-data font-semibold ${
                             c.avgDelivery >= 1 ? "text-emerald-600" : "text-amber-600"
                           }`}
                         >
@@ -112,7 +111,7 @@ export default function BenchmarksPage() {
                     {c.avgRoas != null && (
                       <div className="flex justify-between text-sm">
                         <span className="text-slate-500">Avg fee ROAS</span>
-                        <span className="font-tabular font-semibold text-slate-900">{c.avgRoas.toFixed(2)}×</span>
+                        <span className="font-data font-semibold text-slate-900">{c.avgRoas.toFixed(2)}×</span>
                       </div>
                     )}
                   </div>
@@ -124,7 +123,7 @@ export default function BenchmarksPage() {
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                  <tr className="text-left label-caps text-slate-500 border-b border-slate-200">
                     <th className="px-4 py-3 font-medium">Creator</th>
                     <th className="px-4 py-3 font-medium">Platform</th>
                     <th className="px-4 py-3 font-medium text-right">Paid</th>
@@ -164,16 +163,16 @@ export default function BenchmarksPage() {
                           )}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right font-tabular">{money(r.price)}</td>
-                      <td className="px-4 py-3 text-right font-tabular text-slate-500">
+                      <td className="px-4 py-3 text-right font-data">{money(r.price)}</td>
+                      <td className="px-4 py-3 text-right font-data text-slate-500">
                         {r.predictedViews != null ? fmtViews(r.predictedViews) : "—"}
                       </td>
-                      <td className="px-4 py-3 text-right font-tabular">{fmtViews(r.actualViews)}</td>
-                      <td className="px-4 py-3 text-right font-tabular text-slate-500">
+                      <td className="px-4 py-3 text-right font-data">{fmtViews(r.actualViews)}</td>
+                      <td className="px-4 py-3 text-right font-data text-slate-500">
                         {r.predictedCpm != null ? moneyCpm(r.predictedCpm) : "—"}
                       </td>
                       <td
-                        className={`px-4 py-3 text-right font-tabular font-semibold ${
+                        className={`px-4 py-3 text-right font-data font-semibold ${
                           r.predictedCpm != null
                             ? r.actualCpm <= r.predictedCpm
                               ? "text-emerald-600"
@@ -183,7 +182,7 @@ export default function BenchmarksPage() {
                       >
                         {moneyCpm(r.actualCpm)}
                       </td>
-                      <td className="px-4 py-3 text-right font-tabular">
+                      <td className="px-4 py-3 text-right font-data">
                         {r.roas != null ? `${r.roas.toFixed(2)}×` : "—"}
                       </td>
                     </tr>
@@ -192,21 +191,26 @@ export default function BenchmarksPage() {
               </table>
             </div>
 
-            <p className="text-xs text-slate-500 max-w-[70ch]">
-              Actual CPM in green means the deal delivered at or below what you predicted (you got
-              equal or better reach per dollar); amber means it under-delivered. As this table grows,
-              the per-platform averages above become your calibrated fair-price baseline. Fee ROAS
-              uses only the creator fee; open a deal&apos;s Actuals tab for all-in ROAS including
-              commission and gifted product cost.
+            {/* A legend, not an essay. The five-sentence version explained the colour
+                coding, the baseline, the ROAS basis and the provisional rule in prose
+                nobody reads twice — the colours only need naming once. */}
+            <div className="flex items-center gap-4 flex-wrap text-xs text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                CPM at or below predicted
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                under-delivered
+              </span>
+              <span className="text-slate-400">Fee ROAS counts the fee only</span>
               {rows.some((r) => !r.isFinal) && (
-                <>
-                  {" "}
-                  Rows marked <span className="font-medium text-amber-700">provisional</span>{" "}
-                  were read before that platform&apos;s views had settled — they&apos;re listed but
-                  left out of the averages, so an early number can&apos;t drag your baseline down.
-                </>
+                <span className="text-slate-400">
+                  <span className="font-medium text-amber-700">provisional</span> rows are excluded
+                  from the averages
+                </span>
               )}
-            </p>
+            </div>
           </div>
         )}
       </main>

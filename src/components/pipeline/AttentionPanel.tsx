@@ -51,7 +51,7 @@ export default function AttentionPanel({ items }: { items: AttentionItem[] }) {
       <div className="space-y-4">
         {buckets.map((bucket) => (
           <section key={bucket.key}>
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            <h3 className="label-caps text-slate-400 mb-1">
               {bucket.label}{" "}
               <span className="font-tabular text-slate-300">{bucket.items.length}</span>
             </h3>
@@ -71,7 +71,7 @@ export default function AttentionPanel({ items }: { items: AttentionItem[] }) {
                   {/* Only the chase-them items are marked. Everything else is yours, and
                       labelling the majority case is noise. */}
                   {item.owner === "creator" && (
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 shrink-0">
+                    <span className="label-caps text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 shrink-0">
                       chase
                     </span>
                   )}

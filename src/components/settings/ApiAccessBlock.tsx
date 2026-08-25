@@ -95,7 +95,7 @@ export default function ApiAccessBlock({ currentKey }: { currentKey: string | nu
           {example && (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                <span className="label-caps text-slate-500">
                   Working example
                 </span>
                 <button

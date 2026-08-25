@@ -65,7 +65,7 @@ export default function DealsTable({
     <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
       <table className="w-full text-sm min-w-[860px]">
         <thead>
-          <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
+          <tr className="text-left label-caps text-slate-500 border-b border-slate-200">
             {sortable("Creator", "creator")}
             <th className="px-4 py-3 font-medium">Platforms</th>
             <th className="px-4 py-3 font-medium">Stage</th>
@@ -109,10 +109,10 @@ export default function DealsTable({
                   {STAGE_LABELS[d.stage]}
                 </span>
               </td>
-              <td className="px-4 py-3 text-right font-tabular text-slate-600">
+              <td className="px-4 py-3 text-right font-data text-slate-600">
                 {d.current_ask ? money(d.current_ask) : "—"}
               </td>
-              <td className="px-4 py-3 text-right font-tabular font-medium text-slate-900">
+              <td className="px-4 py-3 text-right font-data font-medium text-slate-900">
                 {d.agreed_price ?? d.current_offer ? money(d.agreed_price ?? d.current_offer) : "—"}
               </td>
               <td className="px-4 py-3 text-slate-500 text-xs">

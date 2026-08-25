@@ -68,7 +68,7 @@ export default function DealProgress({
   return (
     <div className="mt-4 flex items-end gap-8 flex-wrap">
       <div>
-        <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+        <div className="label-caps text-slate-500">
           Agreed fee
         </div>
         <div className="text-2xl font-semibold font-tabular text-slate-900">{money(fee)}</div>
@@ -81,7 +81,7 @@ export default function DealProgress({
 
       {cost && (
         <div>
-          <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+          <div className="label-caps text-slate-500">
             True cost
           </div>
           <div className="text-2xl font-semibold font-tabular text-slate-900">
@@ -109,7 +109,7 @@ export default function DealProgress({
       )}
 
       <div className="min-w-40">
-        <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+        <div className="label-caps text-slate-500">
           Content
         </div>
         <div className="text-2xl font-semibold font-tabular text-slate-900">
@@ -131,7 +131,7 @@ export default function DealProgress({
       </div>
 
       <div>
-        <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+        <div className="label-caps text-slate-500">
           Paid out
         </div>
         <div className="text-2xl font-semibold font-tabular text-slate-900">{money(paid)}</div>

@@ -59,7 +59,6 @@ export default async function PaymentsPage({
     <>
       <PageHeader
         title="Payments"
-        subtitle="Everything owed across deals"
         actions={
           <Link
             href={buildQuery("/payments/export", params as Record<string, string>, {})}
@@ -76,10 +75,10 @@ export default async function PaymentsPage({
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {kpis.map((k) => (
               <div key={k.label} className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
-                <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                <div className="label-caps text-slate-500">
                   {k.label}
                 </div>
-                <div className={`text-xl font-semibold font-tabular mt-1 ${k.tone}`}>{k.value}</div>
+                <div className={`text-xl font-semibold font-data mt-1 ${k.tone}`}>{k.value}</div>
               </div>
             ))}
           </div>

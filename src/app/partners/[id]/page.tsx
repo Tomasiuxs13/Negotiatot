@@ -99,7 +99,7 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
           {kpis.map((k) => (
             <div key={k.label} className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
-              <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+              <div className="label-caps text-slate-500">
                 {k.label}
               </div>
               <div

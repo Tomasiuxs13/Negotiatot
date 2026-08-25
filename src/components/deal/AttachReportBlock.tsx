@@ -44,8 +44,7 @@ export default function AttachReportBlock({ dealId }: { dealId: number }) {
     <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
       <h3 className="font-headline text-sm font-semibold text-slate-900">Analytics report</h3>
       <p className="text-xs text-slate-500 mt-0.5 mb-2">
-        Modash / HypeAuditor PDF or a screenshot — attaching one re-runs the analysis on
-        its figures. Hand-corrected views keep priority.
+        PDF or screenshot — re-runs the analysis on its figures.
       </p>
       <input
         ref={fileRef}

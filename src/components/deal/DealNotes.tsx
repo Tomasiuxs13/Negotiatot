@@ -58,7 +58,7 @@ export default function DealNotes({
         className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand resize-y"
       />
       <p className="text-xs text-slate-400 mt-1.5">
-        The Copilot reads these as context on the next run.
+        Read as context on the next run.
       </p>
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </div>

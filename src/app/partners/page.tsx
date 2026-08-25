@@ -93,7 +93,6 @@ export default async function PartnersPage({
     <>
       <PageHeader
         title="Partners"
-        subtitle="Every creator you've worked with, and what each one is worth"
         actions={<NewPartnerButton />}
       />
       <main className="flex-1 overflow-y-auto p-8">
@@ -159,7 +158,7 @@ export default async function PartnersPage({
           <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                <tr className="text-left label-caps text-slate-500 border-b border-slate-200">
                   <SortHeader label="Partner" href={sortHref("name")} active={sort === "name"} dir={dir as SortDir} />
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Setup</th>
@@ -200,7 +199,7 @@ export default async function PartnersPage({
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {rowSetup === "none" ? (
-                        <span className="text-xs text-slate-300">—</span>
+                        <span className="text-slate-200">—</span>
                       ) : rowSetup === "ready" ? (
                         <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5">
                           Ready
@@ -213,7 +212,7 @@ export default async function PartnersPage({
                           No {blockingLabel(progress!.blockingLeft)}
                         </span>
                       ) : (
-                        <span className="text-[11px] font-medium text-slate-500 font-tabular">
+                        <span className="text-[11px] font-medium text-slate-500 font-data">
                           {progress!.done}/{progress!.total} done
                         </span>
                       )}
@@ -234,7 +233,7 @@ export default async function PartnersPage({
                         {channels.length === 0 && <span className="text-xs text-slate-400">—</span>}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right font-tabular whitespace-nowrap">
+                    <td className="px-4 py-3 text-right font-data whitespace-nowrap">
                       {stats.totalDeals}
                       {stats.activeDeals > 0 && (
                         <span className="text-xs text-amber-600 ml-1.5">
@@ -242,17 +241,29 @@ export default async function PartnersPage({
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right font-tabular">
-                      {stats.committed > 0 ? money(stats.committed) : "—"}
+                    <td className="px-4 py-3 text-right font-data">
+                      {stats.committed > 0 ? (
+                        money(stats.committed)
+                      ) : (
+                        <span className="text-slate-200">—</span>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-right font-tabular text-slate-500">
-                      {stats.paid > 0 ? money(stats.paid) : "—"}
+                    <td className="px-4 py-3 text-right font-data text-slate-500">
+                      {stats.paid > 0 ? money(stats.paid) : <span className="text-slate-200">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-right font-tabular text-slate-500">
-                      {stats.actualCpm != null ? moneyCpm(stats.actualCpm) : "—"}
+                    <td className="px-4 py-3 text-right font-data text-slate-500">
+                      {stats.actualCpm != null ? (
+                        moneyCpm(stats.actualCpm)
+                      ) : (
+                        <span className="text-slate-200">—</span>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-right font-tabular text-emerald-600">
-                      {stats.savedVsAsk > 0 ? money(stats.savedVsAsk) : "—"}
+                    <td className="px-4 py-3 text-right font-data text-emerald-600">
+                      {stats.savedVsAsk > 0 ? (
+                        money(stats.savedVsAsk)
+                      ) : (
+                        <span className="text-slate-200">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <DeletePartnerButton

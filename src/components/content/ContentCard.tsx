@@ -173,14 +173,14 @@ export default function ContentCard({
             </button>
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-2">
+          <div className="space-y-1.5">
             <span
-              className={`text-[11px] font-medium rounded px-1.5 py-0.5 truncate ${chipStyle(action)}`}
+              className={`block text-[11px] font-medium rounded px-1.5 py-1 ${chipStyle(action)}`}
               title={action.kind === "await_product" ? row.awaitingProduct?.product : undefined}
             >
               {action.label}
             </span>
-            <span className="flex items-center gap-2 shrink-0">
+            <span className="flex items-center gap-3">
               {/* Offered whenever the item is approved, including when something else is
                   blocking it: if it does go live, you must still be able to say so. */}
               {item.status === "approved" && (

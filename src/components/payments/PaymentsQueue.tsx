@@ -57,7 +57,7 @@ export default function PaymentsQueue({
       )}
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
+          <tr className="text-left label-caps text-slate-500 border-b border-slate-200">
             <th className="px-4 py-3 font-medium">Status</th>
             {sortHrefs ? (
               <SortHeader
@@ -100,7 +100,7 @@ export default function PaymentsQueue({
               </td>
               <td className="px-4 py-3 text-slate-600">{p.description}</td>
               <td className="px-4 py-3 text-slate-500 text-xs">{PAYMENT_TRIGGER_LABEL[p.trigger]}</td>
-              <td className="px-4 py-3 text-right font-tabular font-semibold">{money(p.amount)}</td>
+              <td className="px-4 py-3 text-right font-data font-semibold">{money(p.amount)}</td>
               <td className="px-4 py-3 text-right">
                 {p.status === "approvable" && (
                   <button
@@ -134,7 +134,7 @@ export default function PaymentsQueue({
                   <span className="text-xs text-slate-400">{pendingReason(p)}</span>
                 )}
                 {p.status === "paid" && p.paid_at && (
-                  <span className="text-xs text-slate-400 font-tabular">{p.paid_at.slice(0, 10)}</span>
+                  <span className="text-xs text-slate-400 font-data">{p.paid_at.slice(0, 10)}</span>
                 )}
               </td>
             </tr>

@@ -22,7 +22,7 @@ function Bubble({ msg, creator }: { msg: Message; creator: string }) {
           : "bg-brand/10 border border-brand/25 rounded-br-sm self-end"
       }`}
     >
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-2">
+      <div className="label-caps text-slate-500 mb-1 flex items-center gap-2">
         <span>
           {them ? creator : "You"} · {date}
           {!them && " · sent"}

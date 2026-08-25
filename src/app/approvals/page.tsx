@@ -86,22 +86,33 @@ export default async function ApprovalsPage({
     <>
       <PageHeader
         title="Approvals"
-        subtitle="Every decision waiting on you, with the evidence beside it"
       />
       <main className="flex-1 overflow-y-auto p-4 md:p-8">
         <div className={`${PAGE_WIDTH} space-y-5`}>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             {[
-              { label: "Waiting for you", value: String(all.length), tone: "text-slate-900" },
+              {
+                label: "Waiting for you",
+                value: String(all.length),
+                tone: all.length ? "text-slate-900" : "text-slate-300",
+              },
               { label: "Urgent", value: String(urgent), tone: urgent ? "text-red-600" : "text-slate-300" },
-              { label: "Contracts", value: String(counts.contracts), tone: "text-amber-700" },
-              { label: "Money ready", value: readyMoney > 0 ? money(readyMoney) : "—", tone: "text-brand-dark" },
+              {
+                label: "Contracts",
+                value: String(counts.contracts),
+                tone: counts.contracts ? "text-amber-700" : "text-slate-300",
+              },
+              {
+                label: "Money ready",
+                value: money(readyMoney),
+                tone: readyMoney > 0 ? "text-brand-dark" : "text-slate-300",
+              },
             ].map((stat) => (
               <div key={stat.label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
+                <p className="label-caps text-slate-500">
                   {stat.label}
                 </p>
-                <p className={`mt-1 text-2xl font-semibold font-tabular ${stat.tone}`}>
+                <p className={`mt-1 text-2xl font-semibold font-data ${stat.tone}`}>
                   {stat.value}
                 </p>
               </div>
@@ -177,7 +188,7 @@ export default async function ApprovalsPage({
                       <h2 id={`approval-${group}`} className="text-sm font-semibold text-slate-800">
                         {APPROVAL_GROUP_LABEL[group]}
                       </h2>
-                      <span className="text-xs font-tabular text-slate-400">{groupItems.length}</span>
+                      <span className="text-xs font-data text-slate-400">{groupItems.length}</span>
                     </div>
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                       {groupItems.map((item) => (
@@ -192,7 +203,7 @@ export default async function ApprovalsPage({
                               <span className="flex items-start justify-between gap-3">
                                 <span className="text-sm font-semibold text-slate-900">{item.title}</span>
                                 {item.amount != null && (
-                                  <span className="shrink-0 text-sm font-semibold font-tabular text-slate-900">
+                                  <span className="shrink-0 text-sm font-semibold font-data text-slate-900">
                                     {money(item.amount)}
                                   </span>
                                 )}

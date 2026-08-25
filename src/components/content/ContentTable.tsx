@@ -62,7 +62,7 @@ export default function ContentTable({
     <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
       <table className="w-full text-sm min-w-[900px]">
         <thead>
-          <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
+          <tr className="text-left label-caps text-slate-500 border-b border-slate-200">
             {sortable("Creator", "creator")}
             <th className="px-4 py-3 font-medium">Deliverable</th>
             <th className="px-4 py-3 font-medium">Platform</th>
@@ -129,7 +129,7 @@ export default function ContentTable({
                   </span>
                 </td>
                 <td
-                  className={`px-4 py-3 text-xs font-tabular whitespace-nowrap ${
+                  className={`px-4 py-3 text-xs font-data whitespace-nowrap ${
                     overdue ? "text-red-600 font-semibold" : "text-slate-500"
                   }`}
                 >
@@ -149,7 +149,7 @@ export default function ContentTable({
                     {action.label}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-right text-xs text-slate-400 font-tabular whitespace-nowrap">
+                <td className="px-4 py-3 text-right text-xs text-slate-400 font-data whitespace-nowrap">
                   {waiting == null ? "—" : `${waiting}d`}
                 </td>
               </tr>
