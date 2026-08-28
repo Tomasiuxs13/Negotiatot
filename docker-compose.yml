@@ -1,0 +1,30 @@
+# Counterpart on the VPS, as its own project alongside the existing stacks.
+#
+# Bound to 127.0.0.1 deliberately. The app has NO authentication on its web UI — every
+# deal, creator email, contract and the Playbook's margins are readable by anyone who can
+# reach the port. Publishing it through Traefik would put all of that on the open
+# internet. Reached instead over an SSH tunnel, the same way n8n is on this host.
+services:
+  counterpart:
+    build: .
+    image: counterpart:latest
+    container_name: counterpart
+    restart: unless-stopped
+    # host:container — the leading 127.0.0.1 is what keeps it off the public interface.
+    ports:
+      - "127.0.0.1:3100:3000"
+    env_file:
+      - .env
+    volumes:
+      # The SQLite database and uploaded reports/contracts. Named volume rather than a
+      # bind mount so the container's non-root user owns it cleanly.
+      - counterpart-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  counterpart-data:
