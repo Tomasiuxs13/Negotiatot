@@ -1,30 +1,54 @@
 # Counterpart on the VPS, as its own project alongside the existing stacks.
 #
-# Bound to 127.0.0.1 deliberately. The app has NO authentication on its web UI — every
-# deal, creator email, contract and the Playbook's margins are readable by anyone who can
-# reach the port. Publishing it through Traefik would put all of that on the open
-# internet. Reached instead over an SSH tunnel, the same way n8n is on this host.
+# Published at https://counterpart.srv956307.hstgr.cloud through the host's Traefik,
+# behind HTTP basic auth. The auth is NOT decoration: this app has no login of its own,
+# so without a gate in front every deal, creator email, contract and the Playbook's
+# margins would be readable by anyone who found the hostname — and the Anthropic key
+# would be theirs to spend. Traefik supplies the gate the app lacks.
+#
+# Port 3100 stays bound to the loopback as well, so the SSH tunnel keeps working for
+# local debugging without going through the proxy.
 services:
   counterpart:
     build: .
     image: counterpart:latest
     container_name: counterpart
     restart: unless-stopped
-    # host:container — the leading 127.0.0.1 is what keeps it off the public interface.
     ports:
       - "127.0.0.1:3100:3000"
     env_file:
       - .env
     volumes:
-      # The SQLite database and uploaded reports/contracts. Named volume rather than a
-      # bind mount so the container's non-root user owns it cleanly.
+      # SQLite database and uploaded reports/contracts.
       - counterpart-data:/app/data
+    networks:
+      # Traefik reaches containers over this shared network, not via published ports.
+      - root_default
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: root_default
+      traefik.http.routers.counterpart.rule: "Host(`counterpart.srv956307.hstgr.cloud`)"
+      traefik.http.routers.counterpart.entrypoints: "web,websecure"
+      traefik.http.routers.counterpart.tls: "true"
+      traefik.http.routers.counterpart.tls.certresolver: "mytlschallenge"
+      traefik.http.routers.counterpart.middlewares: "counterpart-auth@docker,counterpart-headers@docker"
+      # The container listens on 3000; without this Traefik guesses and can pick wrong.
+      traefik.http.services.counterpart.loadbalancer.server.port: "3000"
+      traefik.http.middlewares.counterpart-auth.basicauth.users: "tomas:$$2y$$05$$aiMf8xUeIqM17YZZ1M0I3uLzgiIN5QSRHXz1la9ZAgymhddwWuOJG"
+      traefik.http.middlewares.counterpart-headers.headers.SSLRedirect: "true"
+      traefik.http.middlewares.counterpart-headers.headers.STSSeconds: "315360000"
+      traefik.http.middlewares.counterpart-headers.headers.contentTypeNosniff: "true"
+      traefik.http.middlewares.counterpart-headers.headers.browserXSSFilter: "true"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 20s
+
+networks:
+  root_default:
+    external: true
 
 volumes:
   counterpart-data:
