@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { archiveCampaign, createCampaign, updateCampaign } from "@/lib/db";
-import type { CampaignOverrides } from "@/lib/campaigns";
+import {
+  CAMPAIGN_KPIS,
+  CAMPAIGN_OBJECTIVES,
+  type CampaignKpi,
+  type CampaignObjective,
+  type CampaignOverrides,
+} from "@/lib/campaigns";
 
 function revalidateAll() {
   revalidatePath("/playbook");
@@ -14,18 +20,44 @@ function revalidateAll() {
 export async function saveCampaignAction(payload: {
   id?: number;
   name: string;
+  objective: CampaignObjective;
+  primaryKpi: CampaignKpi;
+  kpiTarget: number | null;
   overrides: CampaignOverrides;
   budget: number | null;
 }): Promise<{ id?: number; error?: string }> {
   const name = payload.name.trim();
   if (!name) return { error: "Campaign name is required." };
+  if (!CAMPAIGN_OBJECTIVES.some((objective) => objective.key === payload.objective)) {
+    return { error: "Choose a campaign objective." };
+  }
+  if (!CAMPAIGN_KPIS[payload.primaryKpi]?.objectives.includes(payload.objective)) {
+    return { error: "Choose a primary KPI that matches the campaign objective." };
+  }
+  if (payload.kpiTarget != null && (!Number.isFinite(payload.kpiTarget) || payload.kpiTarget < 0)) {
+    return { error: "KPI target must be a positive number." };
+  }
+  if (payload.budget != null && (!Number.isFinite(payload.budget) || payload.budget < 0)) {
+    return { error: "Campaign budget must be a positive number." };
+  }
   try {
     if (payload.id != null) {
-      updateCampaign(payload.id, { name, overrides: payload.overrides, budget: payload.budget });
+      updateCampaign(payload.id, {
+        name,
+        objective: payload.objective,
+        primaryKpi: payload.primaryKpi,
+        kpiTarget: payload.kpiTarget,
+        overrides: payload.overrides,
+        budget: payload.budget,
+      });
       revalidateAll();
       return { id: payload.id };
     }
-    const id = createCampaign(name, payload.overrides, payload.budget);
+    const id = createCampaign(name, payload.overrides, payload.budget, {
+      objective: payload.objective,
+      primaryKpi: payload.primaryKpi,
+      kpiTarget: payload.kpiTarget,
+    });
     revalidateAll();
     return { id };
   } catch (err) {

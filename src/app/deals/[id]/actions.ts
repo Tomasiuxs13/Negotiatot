@@ -5,7 +5,7 @@ import { hasRights, parseRights, type DealRights } from "@/lib/rights";
 import { readReportFile } from "@/lib/report-upload";
 import { dependentCopilotIds, repairThread } from "@/lib/thread-repair";
 import { after } from "next/server";
-import { addMessage, deleteMessage, getContractDraft, getDeal, getMessage, getMessages, getPartner, markContractDraftSigned, saveContractDraft, setJob, updateDeal, upsertPartnerChannel } from "@/lib/db";
+import { addMessage, clearFollowUpState, deleteMessage, getContractDraft, getDeal, getMessage, getMessages, getPartner, markContractDraftSigned, saveContractDraft, setJob, updateDeal, upsertPartnerChannel } from "@/lib/db";
 import { getContentItems, getPaymentItems } from "@/lib/fulfillment";
 import { generateContractText } from "@/lib/contract-template";
 import { getSetting } from "@/lib/db";
@@ -29,6 +29,7 @@ export async function markDraftAsSent(dealId: number, text: string, proposedOffe
   });
   if (guardError) return { error: guardError };
   addMessage(dealId, "us", text, { offer: proposedOffer });
+  clearFollowUpState(dealId);
   updateDeal(dealId, {
     current_offer: proposedOffer,
     your_move: 0,
@@ -52,6 +53,7 @@ export async function addTheirReply(dealId: number, text: string) {
   }
 
   addMessage(dealId, "them", trimmed);
+  clearFollowUpState(dealId);
   const round = deal.round + 1;
   updateDeal(dealId, {
     round,
@@ -169,12 +171,19 @@ export async function saveAudienceData(
 
 export async function saveActuals(
   dealId: number,
-  actuals: { views?: number | null; clicks?: number | null; orders?: number | null; revenue?: number | null }
+  actuals: {
+    views?: number | null;
+    engagements?: number | null;
+    clicks?: number | null;
+    orders?: number | null;
+    revenue?: number | null;
+  }
 ) {
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
   updateDeal(dealId, {
     actual_views: actuals.views ?? null,
+    actual_engagements: actuals.engagements ?? null,
     actual_clicks: actuals.clicks ?? null,
     actual_orders: actuals.orders ?? null,
     actual_revenue: actuals.revenue ?? null,

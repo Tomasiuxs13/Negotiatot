@@ -55,6 +55,7 @@ export interface ContentItem {
   actuals_measured_at: string | null;
   /** What this specific deliverable returned, so bundles can be split by platform. */
   actual_views: number | null;
+  actual_engagements?: number | null;
   actual_clicks: number | null;
   actual_orders: number | null;
   actual_revenue: number | null;

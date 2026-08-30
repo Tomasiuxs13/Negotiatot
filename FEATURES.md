@@ -11,20 +11,21 @@ payment — and calibrates its own advice against what actually closed.
 
 ## Navigation
 
-The sidebar splits into two groups, because they are two different kinds of thing.
+The sidebar groups screens by the job they support, so a new manager does not need to
+learn nine peer-level destinations before finding the right one.
 
-**Work** — opened many times a day, in the order a deal moves through them:
-
-| | Screen | Route | One line |
+| Group | Screen | Route | One line |
 |---|---|---|---|
-| 1 | [Dashboard](#dashboard) | `/` | What needs you today |
-| 2 | [Approvals](#approvals) | `/approvals` | Decisions ready for you |
-| 3 | [Pipeline](#pipeline) | `/pipeline` | Every deal and where it stands |
-| 4 | [Content](#content) | `/content` | Every deliverable and what it is waiting on |
-| 5 | [Partners](#partners) | `/partners` | Every creator, what they're worth, whether they're set up |
-| 6 | [Payments](#payments) | `/payments` | Everything owed across deals |
+| Overview | [Dashboard](#dashboard) | `/` | What needs you today |
+| Deals | [Pipeline](#pipeline) | `/pipeline` | Every deal and where it stands |
+| Deals | [Inbox](#inbox) | `/inbox` | Review incoming creator replies before recording them |
+| Deals | [Creator intake](#creator-intake) | `/imports` | Reconcile provider lists before they enter the pipeline |
+| Deals | [Approvals](#approvals) | `/approvals` | Decisions ready for you |
+| Delivery | [Content](#content) | `/content` | Every deliverable and what it is waiting on |
+| Delivery | [Payments](#payments) | `/payments` | Everything owed across deals |
+| Relationships | [Partners](#partners) | `/partners` | Every creator, what they're worth, whether they're set up |
 
-**Setup** — visited occasionally; these change how the work screens behave:
+**Configure** — visited occasionally; these change how the work screens behave:
 
 | Screen | Route | One line |
 |---|---|---|
@@ -90,8 +91,10 @@ manager does not need to search the deal after choosing the decision.
 
 Board and list views over all deals.
 
-- **Board** — drag-and-drop kanban across the deal stages (lead → contacted → analyzing →
-  offer sent → negotiating → agreed → completed). Completion is refused while tracked
+- **Board** — a plain-language journey strip explains what each stage means and filters
+  directly to it. Every card has a keyboard-accessible **Move to** menu; drag-and-drop
+  remains a shortcut across lead → contacted → analyzing → offer sent → negotiating →
+  agreed → completed. Completion is refused while tracked
   content, payments or shipments remain open; a won deal with operational records cannot
   be silently dragged back into negotiation. Add shortcuts appear only for stages the
   intake flow can actually create; critical stage changes also have in-deal buttons, so
@@ -103,6 +106,68 @@ Board and list views over all deals.
 Signed deals show a **phase** rather than a stage — "Producing 2/3", "Payment to approve",
 "Ready to wrap" — because a deal is routinely mid-onboarding *and* mid-production *and*
 awaiting payment at once. A `behind` note names anything earlier that was skipped over.
+
+### Inbox
+`/inbox` — *Review creator replies before they change a negotiation*
+
+A manager connects a personal Gmail account with per-user OAuth and **read-only** access.
+**Check Gmail for replies** reads up to 50 inbox messages from the last 30 days, matches the
+sender email against a partner's primary and secondary contacts, and shows the email beside its
+single live deal when that match is unambiguous.
+
+- **Safe match:** “Add reply & draft next move” records the email in that deal's negotiation
+  thread and asks the Copilot to prepare a response. It never sends through Gmail.
+- **Partner only / no match:** the message stays in the queue, linked to the partner when
+  possible, until the manager resolves the relationship. The app never guesses among several
+  live deals or based on a similar creator name.
+- **Privacy and control:** OAuth credentials are encrypted at rest. Disconnecting removes
+  Counterpart's local credentials and revokes the Google token when available; previously
+  imported review records remain as part of the deal history.
+
+The initial sync is deliberately manual rather than a background inbox monitor: it makes the
+data boundary visible while the workflow is validated. The Google Cloud setup is documented in
+[Gmail setup](docs/GMAIL-SETUP.md).
+
+**Counterpart for Gmail** is the companion Manifest V3 Chrome extension in `extension/`.
+It offers a lower-friction browser path when Gmail API access is unavailable: the user grants
+the extension access only to `mail.google.com`, then connects it to Counterpart with the API key
+from Settings. A purple Counterpart button appears beside Gmail and shows the exact-email matched
+partner, single live deal, commercial guardrails and latest Copilot recommendation. The manager
+can explicitly record the latest expanded creator message, ask Counterpart to draft the next
+move, and copy or insert a balanced, warm or firm draft into an already-open Gmail composer.
+The extension never chooses among ambiguous matches and never clicks Send.
+
+This is a foreground integration, not a background mailbox replacement: it sees only the Gmail
+conversation open in that Chrome browser. Mail received while Chrome is closed or handled on
+another device still requires Gmail API sync. The extension API is exposed through authenticated,
+CORS-enabled `/api/extension/status`, `/api/extension/context` and `/api/extension/replies`
+routes; no configured Counterpart API key means those routes are off.
+
+### Creator intake
+`/imports` — *Reconcile a discovery list before it becomes relationship work*
+
+Imports Modash and HypeAuditor exports, a generic CSV/TSV/XLSX file, or a lightweight
+manual creator record. The manager confirms the column mapping, then sees each creator
+beside its matching Counterpart partner and any live deal before committing selected rows.
+
+- **Identity comes first.** Provider record ID, normalised profile URL and email are safe
+  match keys; a name-only similarity is displayed as a possible match but is never merged
+  automatically.
+- **External data remains evidence.** Each import retains its source, raw row and provider
+  identity. It can fill a blank partner/channel field or add a secondary contact, but does
+  not overwrite a manager-entered email, URL, audience metric or deal status.
+- **Pipeline creation is intentional.** New records can enter as Partners only, a Pipeline
+  prospect, or Contacted. A partial record with no supported social platform stays a
+  partner until the manager has enough information to open a deal.
+
+This is deliberately provider-neutral: Modash, HypeAuditor and future discovery tools are
+sources of evidence, while Counterpart remains the source of truth for outreach and deal stage.
+
+Mailbox syncing is a separate, credentialed integration: until a workspace connects Gmail or
+another provider through OAuth, the Negotiation tab remains the place to capture a reply and
+generate the approved response. A future inbox connection should match sender addresses to
+partner contacts and provider identities first, create a reviewable draft, and only send after
+manager approval — never infer a deal from a creator name or send automatically.
 
 ### Content
 `/content` — *Every deliverable and what it is waiting on*
@@ -176,8 +241,10 @@ The rules the negotiation engine reasons with:
   the deterministic anchor, target and walk-away arithmetic. The standard offer chooses
   exactly one commission model (percentage of revenue or dollars per order); volume tiers
   can raise only a dollar-per-order rate and never replace an agreed percentage.
-- **Campaigns** — named budgets with per-campaign overrides layered on top of the platform
-  rules, plus spend-to-date
+- **Campaigns** — an explicit objective (awareness, engagement or conversion), one primary
+  KPI, an optional target and budget. The outcome stays visible on the campaign and deal;
+  per-campaign pricing overrides are available under an advanced section rather than
+  competing with the strategy fields
 - **Campaign briefs** — upload a brief; Claude extracts the checkable requirements
   (required mentions, disclosures, prohibited claims, minimum integration length), which
   are then editable by hand
@@ -203,6 +270,16 @@ tenth of input price). **API access**: generate, copy, rotate or revoke the key 
 switches the bulk-import endpoint on, with the endpoint URL and a copyable working
 example assembled for the host you are browsing on.
 
+**Gmail inbox** shows whether the OAuth client is configured, gives the exact redirect URI
+needed in Google Cloud, and connects or disconnects one user-owned Gmail account. The required
+server-only environment variables are `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET` and
+`GMAIL_TOKEN_ENCRYPTION_KEY`; `GMAIL_REDIRECT_URI` is optional for a deployed host. Setup and
+the Workspace-admin boundary are documented in [Gmail setup](docs/GMAIL-SETUP.md). The connection
+button doubles as a permission check: after Google returns, Settings distinguishes a successful
+self-approved connection from a Workspace policy block, a declined request, an expired state or
+an OAuth configuration failure. A connection is saved only when Google confirms that the
+read-only Gmail scope was actually granted.
+
 ---
 
 ### New deal
@@ -218,13 +295,31 @@ refused, so a file can never silently start model runs. Requires an API key sent
 copied, rotated and revoked in **Settings → API access**, which also shows the endpoint
 URL and a working example. No key configured means the API is off, not open.
 
+**Deal lookup and bulk edits** — three more endpoints, all requiring the same API key:
 
-An **On create** choice sits at the top: *Analyze now* (runs the pricing analysis),
-*Outreach first* (saved as contacted — analyze when they reply, no credits spent), or
-*Just track it* (a lead: a CRM row, nothing runs). The pipeline's per-column add buttons
-preselect the matching mode. Then creator name, platform(s), deliverables, campaign,
-their opening message, and an
-optional analytics report (PDF or screenshot). Starting from a partner profile loads the
+- `GET /api/deals?handles=a,b,c` — resolves creator handles to `{handle, id, stage, live}`.
+  Case-insensitive, tolerates a leading `@`. A creator with two live deals returns
+  `id: null` plus every candidate, so a caller never guesses. Without handles it lists the
+  pipeline, optionally filtered by `?stage=`.
+- `POST /api/deals/decline` — `[{id|handle, reason, note?, revisitOn?}]`. The reason is
+  validated against the enum in both forms (`no_reply` or "Went quiet"); free text is
+  refused, because the UI renders the reason from a fixed map and an unknown value would
+  show a deal declined for no stated cause.
+- `POST /api/deals/stage` — `[{id|handle, stage}]`.
+
+Both mutating endpoints accept `{dryRun: true, items: [...]}` and then report each change
+as `{from, to}` without writing — which is what catches a move whose premise is already
+wrong, such as promoting a creator who has in fact declined. Every write goes through the
+same server action the UI calls, so the stage guards, won-stage protections and
+revisit-date rules cannot drift between the two paths.
+
+
+The form starts by asking what job the manager is doing: *Evaluate & price*, *Outreach
+sent*, or *Save as prospect*. The pipeline's per-column add buttons preselect the matching
+mode. The always-visible essentials are creator, platform, campaign outcome and deliverable
+scope. Creator evidence (analytics report, message/rate card, channel URL and known stats)
+is grouped together and opens automatically only for evaluation; contact/commission
+exceptions and rights remain separate advanced sections. Starting from a partner profile loads the
 creator's name, email, platforms, primary channel URL, audience figures and operational
 record on the first render; the manager can still update them for the new deal. On a
 multi-platform deal the manager names
@@ -238,17 +333,22 @@ analysis in the background.
 ### Deal workspace
 `/deals/[id]`
 
-A sticky app bar carrying the breadcrumb, tab strip and deal actions; below it the
-always-visible **cockpit** (anchor, target, walk-away, breakeven; total deal cost;
-affordability) and the **metric band** (average views, engagement, audience geo, followers,
-fake-follower share, view trend — each graded against the playbook with a reason).
+A sticky app bar carrying the breadcrumb, tab strip and primary deal actions; secondary
+decline/delete actions live under **More**. A stage guide immediately below the bar shows
+the full lifecycle, explains the current stage and its next step, and lets the manager
+move between active negotiation stages without returning to Pipeline. Agreement and
+completion retain their guarded actions. Below it sits the **cockpit** (anchor, target,
+walk-away, breakeven; total deal cost; affordability). The **Audience & evidence** band
+(average views, engagement, audience geo, followers, fake-follower share, view trend) is
+collapsed by default with an issue count, then expands to show every value and reason;
+this keeps the recommendation and next action above the fold.
 
 | Tab | What it holds |
 |---|---|
 | **Analysis** | Verdict (accept / negotiate / decline), reasoning, red flags, the four numbers with the arithmetic that produced them (written by `pricing.ts`, not narrated by the model), audience-data editor |
 | **Negotiation** | Round-by-round thread, the Copilot's recommendation with a single ready-to-send draft, on-demand tone rewrite, reply capture. Any message can be removed (mis-pastes happen) — deletion also removes recommendations generated from it and rewinds round, move, asks, stage and label to what the remaining thread supports |
 | **Fulfillment** *(signed deals)* | Contact strip (creator email + copyable portal URL), contract upload and parsing, generated contract draft, onboarding checklist with a generated welcome email, content items with the draft review loop and per-item nudge emails, integration check, product delivery, payments |
-| **Actuals** *(delivered deals, plus legacy posted records)* | Per-item views, clicks, orders and revenue, with the measurement window state; fee-only and all-in ROAS are shown with their cost bases explained |
+| **Actuals** *(delivered deals, plus legacy posted records)* | The campaign's primary KPI and progress to target, plus views for price calibration. Engagements, clicks, orders and revenue are supported per item but non-primary diagnostics sit under **Additional metrics**; measurement-window state, fee-only ROAS and all-in ROAS remain available |
 | **History** | Every model call for this deal: kind, model, tokens, cache reads, cost |
 
 The always-visible rail carries the audience-data editor, **Rights & extras** (editable
@@ -358,10 +458,25 @@ transcribed, then checked against the campaign brief's requirements. Failed find
 generate an editable change-request email, worded differently depending on whether the
 video is still a draft or already live.
 
-**Content → actuals → benchmarks → playbook.** Per-item results roll up to the deal, which
-feeds partner stats and the benchmark page, which is what tells you whether your playbook's
-target CPM is realistic. Measurement windows decide when a number is worth reading and
-whether it counts toward the averages.
+**Campaign objective → actuals; content → benchmarks → playbook.** A campaign's one primary
+KPI determines which result is requested and highlighted in Actuals; the optional target
+shows progress without hiding supporting metrics. Per-item results roll up to the deal,
+which feeds partner stats and the benchmark page, which is what tells you whether your
+playbook's target CPM is realistic. Measurement windows decide when a view count is worth
+reading and whether it counts toward the pricing averages.
+
+**Inbox → negotiation.** Gmail is a read-only evidence source: an inbox item matches only on a
+saved contact email, and can enter a negotiation only when that partner has exactly one live
+deal and the manager chooses **Add reply & draft next move**. The captured reply follows the
+same stage, recommendation and attention-panel updates as a pasted response; no email is sent.
+
+**Outbound message → follow-up queue.** While a deal is in *Offer sent* or *Negotiating* and the
+creator has the move, Counterpart waits three full calendar days from the last outbound message
+before placing a stage-specific, editable follow-up in the Dashboard. A manager can copy it for
+their email app, mark it sent (which starts a new waiting window), or snooze that exact message
+for two days. Deal edits never reset the window; nor does a stale follow-up survive an incoming
+reply or a newer outbound message. Until Gmail drafting is connected, this is intentionally
+copy-and-record only: no email is created or sent.
 
 **Portal → your worklist.** A creator submitting a draft moves the item to *submitted*,
 which puts it on your board and in the attention panel with a review clock running from
@@ -426,11 +541,15 @@ centimetres away — but the two views of the same row do read differently.
 |---|---|
 | `deals` | The negotiation: stage, asks, offers, ladder numbers, audience metrics, rights (usage/whitelisting/exclusivity JSON), analysis, decline/revisit, actuals |
 | `partners` / `partner_channels` | Creators, legal details, portal token, per-platform average views |
+| `partner_contacts` / `partner_source_records` | Secondary emails and provider-specific identity/evidence; imported data is auditable and never silently replaces manager-owned fields |
+| `creator_import_batches` / `creator_import_records` | Source file/manual intake audit trail and its per-row reconciliation outcome |
+| `email_connections` / `inbound_emails` | Encrypted Gmail OAuth credentials and a manager-reviewed local inbox queue, with sender/deal match outcome and import status |
 | `messages` | The negotiation thread, including Copilot recommendations |
-| `campaigns` | Named budgets, per-campaign playbook overrides, brief and its extracted requirements |
+| `deal_followup_states` | A manager's temporary snooze, anchored to the outbound message it postpones; follow-up eligibility itself is derived from the deal and messages |
+| `campaigns` | Objective, primary KPI, target, named budget, per-campaign playbook overrides, brief and its extracted requirements |
 | `playbook` / `settings` | Per-platform rules; global rules, unit economics, brand profile, negotiation style, onboarding template, measurement windows |
 | `contracts` / `contract_drafts` | Uploaded contracts and their parsed terms; generated drafts until signed |
-| `content_items` | Deliverables: deal-platform attribution, status, resolved/fixed/relative date rule, approved date override, pending creator date request/reason, draft/approval/posted URLs, revision round, transcript, check result, actuals |
+| `content_items` | Deliverables: deal-platform attribution, status, resolved/fixed/relative date rule, approved date override, pending creator date request/reason, draft/approval/posted URLs, revision round, transcript, check result, actual views/engagements/clicks/orders/revenue |
 | `onboarding_tasks` | Setup checklist, partner- or deal-scoped |
 | `shipments` | Product delivery, address token, carrier, tracking, and explicit no-tracking exception |
 | `payment_items` | Amounts, triggers, linked content, status |

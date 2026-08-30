@@ -1,9 +1,10 @@
 import Link from "next/link";
 import PageHeader, { NewDealButton } from "@/components/PageHeader";
 import AttentionPanel from "@/components/pipeline/AttentionPanel";
-import { getDeals, getOpenReminders, getPipelineKpis, getSetting } from "@/lib/db";
+import { getDeals, getFollowUpMessages, getFollowUpStates, getOpenReminders, getPipelineKpis, getSetting } from "@/lib/db";
 import type { MeasurementWindows } from "@/lib/measurement";
 import { attentionItems } from "@/lib/attention";
+import { getFollowUpCandidates } from "@/lib/followups";
 import {
   getAllContentItems,
   getAllContracts,
@@ -11,7 +12,7 @@ import {
   getAllPaymentItems,
   getAllShipments,
 } from "@/lib/fulfillment";
-import { STAGES, TERMINAL_STAGES } from "@/lib/types";
+import { STAGES, TERMINAL_STAGES, type Message } from "@/lib/types";
 import { money, moneyCpm } from "@/lib/format";
 import { PAGE_WIDTH } from "@/lib/layout";
 import { DEAL_STAGE_TONE } from "@/lib/status-tones";
@@ -34,6 +35,17 @@ export default function DashboardPage() {
   const deals = getDeals();
   const payments = getAllPaymentItems();
   const kpis = getPipelineKpis();
+  const messagesByDeal = new Map<number, Message[]>();
+  for (const message of getFollowUpMessages()) {
+    const thread = messagesByDeal.get(message.deal_id);
+    if (thread) thread.push(message);
+    else messagesByDeal.set(message.deal_id, [message]);
+  }
+  const followUps = getFollowUpCandidates(
+    deals,
+    messagesByDeal,
+    new Map(getFollowUpStates().map((state) => [state.deal_id, state]))
+  );
   const attention = attentionItems({
     deals,
     contentItems: getAllContentItems(),
@@ -42,6 +54,7 @@ export default function DashboardPage() {
     onboarding: getAllOnboardingTasks(),
     contracts: getAllContracts(),
     reminders: getOpenReminders(),
+    followUps,
     draftLeadDays: Number(getSetting<Record<string, number>>("workflow")?.draftLeadDays ?? 10),
     windows: getSetting<MeasurementWindows>("measurement_windows") ?? {},
   });
@@ -110,6 +123,7 @@ export default function DashboardPage() {
     <>
       <PageHeader
         title="Dashboard"
+        subtitle="Your priorities, performance, and pipeline at a glance"
         actions={<NewDealButton />}
       />
       <main className="flex-1 overflow-y-auto p-8">

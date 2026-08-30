@@ -12,6 +12,7 @@ import { isOverdue } from "./fulfillment-rules";
 import { measurementState, type MeasurementWindows } from "./measurement";
 import { dueReminders, reminderHref, type Reminder } from "./reminders";
 import { DEFAULT_DRAFT_LEAD_DAYS, daysToPublish, shouldRequestDraft } from "./timeline";
+import type { FollowUpCandidate } from "./followups";
 
 export type AttentionSeverity = "critical" | "warning" | "info";
 
@@ -63,7 +64,7 @@ const CLASSIFY: [prefix: string, group: AttentionGroup, owner: TaskOwner | null]
   ["shipment-stuck-", "delivery", null],
   ["setup-gap-", "delivery", "us"],
   ["onboarding-", "delivery", "us"],
-  ["silent-", "negotiation", "creator"],
+  ["follow-up-", "negotiation", "creator"],
   ["verdict-", "negotiation", "us"],
   ["your-move-", "negotiation", "us"],
   ["stale-lead-", "negotiation", "us"],
@@ -131,10 +132,12 @@ export interface AttentionInput {
   contracts?: Contract[];
   /** The manager's own follow-ups — surfaced when their date arrives. */
   reminders?: Reminder[];
+  /** Stage-aware nudges based on the last outbound message, supplied by the data layer. */
+  followUps?: FollowUpCandidate[];
   /** Days before an item's publish date its draft is due. */
   draftLeadDays?: number;
   today?: string;
-  /** Days of silence before we suggest nudging the creator. */
+  /** Days of silence before we flag other time-based negotiation work. */
   silentDays?: number;
   /** Days in transit before a shipment looks stuck. */
   stuckDays?: number;
@@ -164,6 +167,7 @@ export function attentionItems({
   onboarding = [],
   contracts = [],
   reminders = [],
+  followUps = [],
   draftLeadDays = DEFAULT_DRAFT_LEAD_DAYS,
   today = new Date().toISOString().slice(0, 10),
   silentDays = 3,
@@ -294,20 +298,17 @@ export function attentionItems({
     }
   }
 
-  // Negotiations where the ball is in their court and has been for a while.
-  for (const d of deals) {
-    if (d.stage !== "offer_sent" && d.stage !== "negotiating") continue;
-    if (d.your_move === 1) continue;
-    const quiet = daysBetween(d.updated_at, today);
-    if (quiet >= silentDays) {
-      items.push({
-        id: `silent-${d.id}`,
-        severity: "info",
-        title: `${d.creator} — no reply in ${quiet} days`,
-        detail: "Send a follow-up",
-        href: `/deals/${d.id}?tab=negotiation`,
-      });
-    }
+  // A follow-up is driven by the last outbound message, not deal.updated_at: editing a
+  // note should never buy someone another three days of silence. The draft itself is
+  // shown after this link, in the negotiation workspace where it can be edited first.
+  for (const followUp of followUps) {
+    items.push({
+      id: `follow-up-${followUp.dealId}`,
+      severity: followUp.daysWaiting >= 7 ? "warning" : "info",
+      title: `${followUp.creator} — follow-up ready`,
+      detail: `No reply for ${followUp.daysWaiting} day${followUp.daysWaiting === 1 ? "" : "s"} · ${followUp.stage === "offer_sent" ? "offer follow-up" : "negotiation follow-up"} drafted`,
+      href: `/deals/${followUp.dealId}?tab=negotiation`,
+    });
   }
 
   // Analysis finished and nobody has acted on the verdict. Once the Copilot has drafted

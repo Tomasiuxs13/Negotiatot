@@ -12,7 +12,13 @@ export default async function NewDealPage({
 }) {
   const { partner: partnerParam, stage } = await searchParams;
   const isLeadCapture = stage === "lead" || stage === "contacted";
-  const campaigns = getCampaigns().map((c) => ({ id: c.id, name: c.name }));
+  const campaigns = getCampaigns().map((c) => ({
+    id: c.id,
+    name: c.name,
+    objective: c.objective,
+    primary_kpi: c.primary_kpi,
+    kpi_target: c.kpi_target,
+  }));
   const partners = getPartners().map((p) => ({ id: p.id, name: p.name }));
   const presetPartner = partnerParam
     ? (partnerPrefillById(Number(partnerParam)) ?? undefined)
@@ -68,16 +74,16 @@ export default async function NewDealPage({
             <div className="space-y-4">
               {[
                 {
-                  title: "Extract & analyze",
-                  body: "Claude reads the report and message, pulls the real stats (avg views, engagement, audience), and checks them against your Playbook.",
+                  title: "Define the outcome",
+                  body: "The campaign objective and primary KPI determine what good performance means before price enters the conversation.",
                 },
                 {
-                  title: "Your four numbers",
-                  body: "Anchor, target, walk-away, and breakeven are computed from your rules and unit economics — with the math shown for each.",
+                  title: "Check fit & economics",
+                  body: "Counterpart reviews creator evidence, audience quality, scope, rights, and your Playbook to calculate a negotiation range.",
                 },
                 {
-                  title: "Verdict & first offer",
-                  body: "Accept fast, negotiate, or walk away. Then head to the Negotiation tab for the ready-to-send opening message.",
+                  title: "Approve the next move",
+                  body: "You choose whether to negotiate, contract, or pass. After publishing, results are reported against the campaign's primary KPI.",
                 },
               ].map((s, i) => (
                 <div key={s.title} className="flex gap-3">

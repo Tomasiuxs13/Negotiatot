@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Counterpart for Gmail",
+  "description": "See creator context and prepare negotiation replies from Gmail.",
+  "version": "0.1.1",
+  "permissions": ["storage"],
+  "host_permissions": ["https://mail.google.com/*"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Counterpart settings",
+    "default_popup": "popup.html"
+  },
+  "options_page": "popup.html"
+}

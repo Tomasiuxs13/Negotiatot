@@ -39,7 +39,7 @@ export default function AnalysisTab({
         <p className="text-sm font-medium text-slate-700 mb-1">No analysis yet</p>
         <p className="text-sm text-slate-500 mb-4">
           Upload a report or add channel data, then run the analysis to get fair price, red flags,
-          and your three numbers.
+          and your four numbers.
         </p>
         <RunAnalysisButton dealId={deal.id} />
       </div>

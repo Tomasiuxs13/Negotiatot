@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Counterpart for Gmail</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <div class="brand">C</div>
+      <div>
+        <p class="eyebrow">Counterpart</p>
+        <h1>Gmail connection</h1>
+      </div>
+
+      <label for="serverUrl">Counterpart URL</label>
+      <input id="serverUrl" type="url" spellcheck="false" placeholder="http://localhost:3000" />
+
+      <label for="apiKey">API key</label>
+      <input id="apiKey" type="password" spellcheck="false" placeholder="cpk_…" />
+      <p class="hint">Generate this in Counterpart → Settings → API access.</p>
+
+      <button id="save" type="button">Save and test</button>
+      <p id="status" class="status" aria-live="polite"></p>
+
+      <p class="privacy">
+        The extension reads only the Gmail conversation you open. It sends thread participants
+        to Counterpart for matching, and sends the latest message only when you choose
+        <strong>Log reply &amp; draft</strong>.
+      </p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

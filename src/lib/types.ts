@@ -43,6 +43,47 @@ export const STAGE_LABELS: Record<Stage, string> = {
 };
 
 /**
+ * Plain-language guidance for the working pipeline. The label names the bucket; the
+ * description tells a manager why a deal belongs there and what moves it forward.
+ * Keeping this next to the stage definitions lets the board and deal workspace teach
+ * the same workflow instead of inventing slightly different copy on every screen.
+ */
+export const STAGE_HELP: Record<Stage, { description: string; next: string }> = {
+  lead: {
+    description: "A creator you may want to work with.",
+    next: "Reach out, then move to Contacted.",
+  },
+  contacted: {
+    description: "Outreach sent; waiting for a response.",
+    next: "Add their reply or start analysis.",
+  },
+  analyzing: {
+    description: "Evidence and pricing are ready for a decision.",
+    next: "Send an offer or decline the deal.",
+  },
+  offer_sent: {
+    description: "Your offer is with the creator.",
+    next: "Record their reply when it arrives.",
+  },
+  negotiating: {
+    description: "You are working toward final terms.",
+    next: "Record each reply or mark terms agreed.",
+  },
+  agreed: {
+    description: "Terms are final; delivery is in progress.",
+    next: "Finish paperwork, content, and payment.",
+  },
+  completed: {
+    description: "Everything is delivered and paid.",
+    next: "Review actuals and partner history.",
+  },
+  declined: {
+    description: "The collaboration is not moving forward.",
+    next: "Reopen it later if the situation changes.",
+  },
+};
+
+/**
  * Why a deal died. Recording this is the point of having a Declined stage at all —
  * "six lost above walk-away" says your ceiling may be wrong, "four ghosted after the
  * offer" says your opening move is.
@@ -105,6 +146,8 @@ export interface Deal {
   analysis: string | null;
   channel_url: string | null;
   actual_views: number | null;
+  /** Likes, comments, shares, saves, and other platform-defined interactions. */
+  actual_engagements?: number | null;
   actual_clicks: number | null;
   actual_orders: number | null;
   actual_revenue: number | null;

@@ -93,6 +93,7 @@ export default async function PartnersPage({
     <>
       <PageHeader
         title="Partners"
+        subtitle="Creator relationships, history, and setup"
         actions={<NewPartnerButton />}
       />
       <main className="flex-1 overflow-y-auto p-8">

@@ -10,19 +10,14 @@ export default function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <header className="bg-white h-16 sticky top-0 z-10 border-b border-slate-200 flex items-center justify-between gap-3 px-4 md:px-8 shrink-0">
-      <div className="flex items-baseline gap-4 min-w-0">
-        <h2 className="font-headline text-lg font-semibold text-slate-900 border-b-2 border-brand pb-4 mt-4 whitespace-nowrap">
+    <header className="sticky top-0 z-10 flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3 md:px-8">
+      <div className="min-w-0">
+        <h2 className="font-headline text-xl font-semibold tracking-tight text-slate-900">
           {title}
         </h2>
-        {/* Hidden on narrow viewports — it would otherwise wrap to one word per line. */}
-        {subtitle && (
-          <span className="hidden xl:block text-sm text-slate-500 font-medium truncate">
-            {subtitle}
-          </span>
-        )}
+        {subtitle && <p className="mt-0.5 truncate text-xs text-slate-500 md:text-sm">{subtitle}</p>}
       </div>
-      <div className="flex items-center gap-3 min-w-0 overflow-x-auto">{actions}</div>
+      {actions && <div className="flex min-w-0 shrink-0 items-center gap-2 overflow-x-auto">{actions}</div>}
     </header>
   );
 }

@@ -14,8 +14,12 @@ import {
   type PlatformKey,
 } from "./playbook-defaults";
 import type { Campaign } from "./campaigns";
-import type { Partner, PartnerChannel } from "./partners";
+import type { Partner, PartnerChannel, PartnerContact, PartnerSourceRecord } from "./partners";
 import type { Reminder } from "./reminders";
+import { normalizeEmail, normalizeProfileUrl } from "./creator-identity";
+import type { CreatorImportCandidate, ImportSource } from "./creator-import";
+import type { EmailProvider, GmailConnectionSummary, InboxEmail, InboxEmailStatus, InboxMatchKind } from "./email-inbox";
+import type { FollowUpState } from "./followups";
 
 const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -26,6 +30,11 @@ db.pragma("journal_mode = WAL");
 // SQLite leaves foreign keys off per connection unless asked, so make it explicit
 // rather than trust a default — an orphaned payment row is a silent data bug.
 db.pragma("foreign_keys = ON");
+
+/** Keep multi-row operational changes all-or-nothing without exposing the database handle. */
+export function inTransaction<T>(fn: () => T): T {
+  return db.transaction(fn)();
+}
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS deals (
@@ -122,6 +131,8 @@ CREATE TABLE IF NOT EXISTS usage_log (
   if (!cols.includes("deliverables")) db.exec("ALTER TABLE deals ADD COLUMN deliverables TEXT");
   if (!cols.includes("channel_url")) db.exec("ALTER TABLE deals ADD COLUMN channel_url TEXT");
   if (!cols.includes("actual_views")) db.exec("ALTER TABLE deals ADD COLUMN actual_views INTEGER");
+  if (!cols.includes("actual_engagements"))
+    db.exec("ALTER TABLE deals ADD COLUMN actual_engagements INTEGER");
   if (!cols.includes("actual_clicks")) db.exec("ALTER TABLE deals ADD COLUMN actual_clicks INTEGER");
   if (!cols.includes("actual_orders")) db.exec("ALTER TABLE deals ADD COLUMN actual_orders INTEGER");
   if (!cols.includes("actual_revenue")) db.exec("ALTER TABLE deals ADD COLUMN actual_revenue INTEGER");
@@ -186,6 +197,99 @@ CREATE TABLE IF NOT EXISTS usage_log (
     followers INTEGER,
     avg_views INTEGER,
     engagement_rate REAL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  /*
+   * Provider evidence is intentionally separate from the partner record. Modash,
+   * HypeAuditor and a manager may all describe the same creator differently; keeping
+   * the raw source and identity key means we can match it again without pretending the
+   * numbers are interchangeable or overwriting a human correction.
+   */
+  db.exec(`CREATE TABLE IF NOT EXISTS partner_source_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    partner_id INTEGER NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+    source TEXT NOT NULL,
+    external_id TEXT,
+    profile_url TEXT,
+    raw_data TEXT NOT NULL DEFAULT '{}',
+    imported_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_partner_source_external ON partner_source_records(source, external_id) WHERE external_id IS NOT NULL"
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_partner_source_profile ON partner_source_records(profile_url) WHERE profile_url IS NOT NULL"
+  );
+  db.exec(`CREATE TABLE IF NOT EXISTS partner_contacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    partner_id INTEGER NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    label TEXT,
+    source TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(partner_id, email)
+  )`);
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_partner_contacts_email ON partner_contacts(email)"
+  );
+  db.exec(`CREATE TABLE IF NOT EXISTS creator_import_batches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,
+    filename TEXT,
+    row_count INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS creator_import_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id INTEGER NOT NULL REFERENCES creator_import_batches(id) ON DELETE CASCADE,
+    row_number INTEGER NOT NULL,
+    source_record_id TEXT,
+    result TEXT NOT NULL,
+    partner_id INTEGER REFERENCES partners(id) ON DELETE SET NULL,
+    deal_id INTEGER REFERENCES deals(id) ON DELETE SET NULL,
+    raw_data TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  // OAuth credentials remain encrypted by gmail.ts. This table contains only opaque
+  // cipher text and gives the operational inbox a durable, auditable local home.
+  db.exec(`CREATE TABLE IF NOT EXISTS email_connections (
+    provider TEXT PRIMARY KEY,
+    account_email TEXT NOT NULL,
+    encrypted_tokens TEXT NOT NULL,
+    scopes TEXT NOT NULL,
+    connected_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_sync_at TEXT,
+    last_error TEXT
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS inbound_emails (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    provider_message_id TEXT NOT NULL,
+    provider_thread_id TEXT,
+    from_email TEXT,
+    from_name TEXT,
+    subject TEXT,
+    body TEXT NOT NULL,
+    received_at TEXT NOT NULL,
+    partner_id INTEGER REFERENCES partners(id) ON DELETE SET NULL,
+    deal_id INTEGER REFERENCES deals(id) ON DELETE SET NULL,
+    match_kind TEXT NOT NULL CHECK (match_kind IN ('deal','partner_only','unmatched')),
+    status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','imported','ignored')),
+    imported_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(provider, provider_message_id)
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_inbound_emails_status ON inbound_emails(status, received_at DESC)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_inbound_emails_partner ON inbound_emails(partner_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_inbound_emails_deal ON inbound_emails(deal_id)");
+  // Follow-ups are derived from the negotiation thread. This tiny state table stores
+  // only an intentional temporary exception — the manager's snooze — tied to the
+  // exact outbound message it postpones.
+  db.exec(`CREATE TABLE IF NOT EXISTS deal_followup_states (
+    deal_id INTEGER PRIMARY KEY REFERENCES deals(id) ON DELETE CASCADE,
+    anchor_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+    anchor_at TEXT NOT NULL,
+    snoozed_until TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
   if (!cols.includes("deal_type")) db.exec("ALTER TABLE deals ADD COLUMN deal_type TEXT");
@@ -395,6 +499,9 @@ CREATE TABLE IF NOT EXISTS usage_log (
   db.exec(`CREATE TABLE IF NOT EXISTS campaigns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
+    objective TEXT,
+    primary_kpi TEXT,
+    kpi_target REAL,
     overrides TEXT NOT NULL DEFAULT '{}',
     budget INTEGER,
     archived INTEGER NOT NULL DEFAULT 0,
@@ -411,6 +518,19 @@ CREATE TABLE IF NOT EXISTS usage_log (
       if (ccols2.length > 0 && !ccols2.includes(col)) {
         try {
           db.exec(`ALTER TABLE campaigns ADD COLUMN ${col} TEXT`);
+        } catch {
+          /* added concurrently */
+        }
+      }
+    }
+    for (const [col, type] of [
+      ["objective", "TEXT"],
+      ["primary_kpi", "TEXT"],
+      ["kpi_target", "REAL"],
+    ] as const) {
+      if (ccols2.length > 0 && !ccols2.includes(col)) {
+        try {
+          db.exec(`ALTER TABLE campaigns ADD COLUMN ${col} ${type}`);
         } catch {
           /* added concurrently */
         }
@@ -450,6 +570,8 @@ for (const table of ["content_items", "payment_items", "shipments", "contracts"]
   );
   if (!cols.includes("actual_views"))
     db.exec("ALTER TABLE content_items ADD COLUMN actual_views INTEGER");
+  if (!cols.includes("actual_engagements"))
+    db.exec("ALTER TABLE content_items ADD COLUMN actual_engagements INTEGER");
   if (!cols.includes("actual_clicks"))
     db.exec("ALTER TABLE content_items ADD COLUMN actual_clicks INTEGER");
   if (!cols.includes("actual_orders"))
@@ -875,6 +997,58 @@ export function findPartnerByName(name: string): Partner | undefined {
     | undefined;
 }
 
+/** Match email against the primary contact first, then agency/secondary contacts. */
+export function findPartnerByEmail(email: string): Partner | undefined {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return undefined;
+  const primary = db
+    .prepare("SELECT * FROM partners WHERE lower(email) = ? LIMIT 1")
+    .get(normalized) as Partner | undefined;
+  if (primary) return primary;
+  return db
+    .prepare(
+      `SELECT p.* FROM partners p
+       JOIN partner_contacts c ON c.partner_id = p.id
+       WHERE c.email = ? LIMIT 1`
+    )
+    .get(normalized) as Partner | undefined;
+}
+
+/** A profile URL is a stronger identity key than a creator name. */
+export function findPartnerByProfileUrl(profileUrl: string): Partner | undefined {
+  const normalized = normalizeProfileUrl(profileUrl);
+  if (!normalized) return undefined;
+  const sourceMatch = db
+    .prepare(
+      `SELECT p.* FROM partners p
+       JOIN partner_source_records s ON s.partner_id = p.id
+       WHERE s.profile_url = ? LIMIT 1`
+    )
+    .get(normalized) as Partner | undefined;
+  if (sourceMatch) return sourceMatch;
+
+  const channel = db
+    .prepare(
+      `SELECT p.*, c.url AS channel_url FROM partners p
+       JOIN partner_channels c ON c.partner_id = p.id
+       WHERE c.url IS NOT NULL`
+    )
+    .all() as (Partner & { channel_url: string | null })[];
+  return channel.find((partner) => normalizeProfileUrl(partner.channel_url) === normalized);
+}
+
+export function findPartnerBySourceRecord(source: ImportSource, externalId: string): Partner | undefined {
+  const id = externalId.trim();
+  if (!id) return undefined;
+  return db
+    .prepare(
+      `SELECT p.* FROM partners p
+       JOIN partner_source_records s ON s.partner_id = p.id
+       WHERE s.source = ? AND s.external_id = ? LIMIT 1`
+    )
+    .get(source, id) as Partner | undefined;
+}
+
 /** How many deals go with a partner, so a delete confirmation can say what it removes. */
 export function partnerDealCount(id: number): number {
   return (db.prepare("SELECT COUNT(*) c FROM deals WHERE partner_id = ?").get(id) as { c: number })
@@ -903,6 +1077,271 @@ export function getPartnerChannels(partnerId: number): PartnerChannel[] {
   return db
     .prepare("SELECT * FROM partner_channels WHERE partner_id = ? ORDER BY platform")
     .all(partnerId) as PartnerChannel[];
+}
+
+export function getPartnerContacts(partnerId: number): PartnerContact[] {
+  return db
+    .prepare("SELECT * FROM partner_contacts WHERE partner_id = ? ORDER BY created_at")
+    .all(partnerId) as PartnerContact[];
+}
+
+export function addPartnerContact(fields: {
+  partnerId: number;
+  email: string;
+  label?: string | null;
+  source?: string | null;
+}) {
+  const email = normalizeEmail(fields.email);
+  if (!email) return;
+  db.prepare(
+    `INSERT INTO partner_contacts (partner_id, email, label, source)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(partner_id, email) DO NOTHING`
+  ).run(fields.partnerId, email, fields.label?.trim() || null, fields.source?.trim() || null);
+}
+
+export function getPartnerSourceRecords(partnerId: number): PartnerSourceRecord[] {
+  return db
+    .prepare("SELECT * FROM partner_source_records WHERE partner_id = ? ORDER BY imported_at DESC")
+    .all(partnerId) as PartnerSourceRecord[];
+}
+
+/** Retain provider evidence without replacing the manager-owned partner profile. */
+export function recordPartnerSource(fields: {
+  partnerId: number;
+  source: ImportSource;
+  externalId?: string | null;
+  profileUrl?: string | null;
+  raw: Record<string, string>;
+}) {
+  const source = fields.source;
+  const externalId = fields.externalId?.trim() || null;
+  const profileUrl = normalizeProfileUrl(fields.profileUrl);
+  const existing = externalId
+    ? (db
+        .prepare("SELECT id, partner_id FROM partner_source_records WHERE source = ? AND external_id = ?")
+        .get(source, externalId) as { id: number; partner_id: number } | undefined)
+    : profileUrl
+      ? (db
+          .prepare("SELECT id, partner_id FROM partner_source_records WHERE source = ? AND profile_url = ?")
+          .get(source, profileUrl) as { id: number; partner_id: number } | undefined)
+      : undefined;
+  if (existing) {
+    // A different partner means the caller should have treated this as an exact match.
+    // Do not silently reassign a provider identity just because a source file is messy.
+    if (existing.partner_id !== fields.partnerId) return existing.id;
+    db.prepare(
+      `UPDATE partner_source_records
+       SET profile_url = COALESCE(?, profile_url), raw_data = ?, imported_at = datetime('now')
+       WHERE id = ?`
+    ).run(profileUrl, JSON.stringify(fields.raw), existing.id);
+    return existing.id;
+  }
+  const info = db
+    .prepare(
+      `INSERT INTO partner_source_records (partner_id, source, external_id, profile_url, raw_data)
+       VALUES (?, ?, ?, ?, ?)`
+    )
+    .run(fields.partnerId, source, externalId, profileUrl, JSON.stringify(fields.raw));
+  return Number(info.lastInsertRowid);
+}
+
+/** Fill blanks only. Imported evidence must never overwrite an existing correction. */
+export function enrichPartnerFromImport(partnerId: number, candidate: CreatorImportCandidate) {
+  const partner = getPartner(partnerId);
+  if (!partner) return;
+  if (candidate.email) {
+    if (!partner.email) updatePartner(partnerId, { email: candidate.email });
+    else if (normalizeEmail(partner.email) !== candidate.email) {
+      addPartnerContact({ partnerId, email: candidate.email, source: candidate.source });
+    }
+  }
+  if (candidate.platform) {
+    const channel = getPartnerChannels(partnerId).find((item) => item.platform === candidate.platform);
+    upsertPartnerChannel({
+      partnerId,
+      platform: candidate.platform,
+      handle: channel?.handle ? undefined : candidate.handle,
+      url: channel?.url ? undefined : candidate.profileUrl,
+      followers: channel?.followers != null ? undefined : candidate.followers,
+      avgViews: channel?.avg_views != null ? undefined : candidate.avgViews,
+      engagementRate: channel?.engagement_rate != null ? undefined : candidate.engagementRate,
+    });
+  }
+  recordPartnerSource({
+    partnerId,
+    source: candidate.source,
+    externalId: candidate.sourceRecordId,
+    profileUrl: candidate.profileUrl,
+    raw: candidate.raw,
+  });
+}
+
+export function createCreatorImportBatch(source: ImportSource, filename: string | null, rowCount: number): number {
+  const result = db
+    .prepare("INSERT INTO creator_import_batches (source, filename, row_count) VALUES (?, ?, ?)")
+    .run(source, filename?.trim() || null, rowCount);
+  return Number(result.lastInsertRowid);
+}
+
+export function recordCreatorImport(fields: {
+  batchId: number;
+  rowNumber: number;
+  sourceRecordId?: string | null;
+  result: string;
+  partnerId?: number | null;
+  dealId?: number | null;
+  raw: Record<string, string>;
+}) {
+  db.prepare(
+    `INSERT INTO creator_import_records
+       (batch_id, row_number, source_record_id, result, partner_id, deal_id, raw_data)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    fields.batchId,
+    fields.rowNumber,
+    fields.sourceRecordId?.trim() || null,
+    fields.result,
+    fields.partnerId ?? null,
+    fields.dealId ?? null,
+    JSON.stringify(fields.raw)
+  );
+}
+
+export function getGmailConnection(): (GmailConnectionSummary & { encrypted_tokens: string; scopes: string }) | null {
+  const row = db.prepare("SELECT * FROM email_connections WHERE provider = 'gmail'").get() as
+    | {
+        account_email: string;
+        encrypted_tokens: string;
+        scopes: string;
+        connected_at: string;
+        last_sync_at: string | null;
+        last_error: string | null;
+      }
+    | undefined;
+  if (!row) return null;
+  return {
+    accountEmail: row.account_email,
+    encrypted_tokens: row.encrypted_tokens,
+    scopes: row.scopes,
+    connectedAt: row.connected_at,
+    lastSyncAt: row.last_sync_at,
+    lastError: row.last_error,
+  };
+}
+
+export function saveGmailConnection(fields: { accountEmail: string; encryptedTokens: string; scopes: string }) {
+  db.prepare(
+    `INSERT INTO email_connections (provider, account_email, encrypted_tokens, scopes, connected_at, last_sync_at, last_error)
+     VALUES ('gmail', ?, ?, ?, datetime('now'), NULL, NULL)
+     ON CONFLICT(provider) DO UPDATE SET
+       account_email = excluded.account_email,
+       encrypted_tokens = excluded.encrypted_tokens,
+       scopes = excluded.scopes,
+       connected_at = datetime('now'),
+       last_sync_at = NULL,
+       last_error = NULL`
+  ).run(fields.accountEmail, fields.encryptedTokens, fields.scopes);
+}
+
+export function updateGmailTokens(encryptedTokens: string) {
+  db.prepare("UPDATE email_connections SET encrypted_tokens = ? WHERE provider = 'gmail'").run(encryptedTokens);
+}
+
+export function markGmailSync(fields: { error?: string | null }) {
+  db.prepare(
+    "UPDATE email_connections SET last_sync_at = CASE WHEN ? IS NULL THEN datetime('now') ELSE last_sync_at END, last_error = ? WHERE provider = 'gmail'"
+  ).run(fields.error ?? null, fields.error ?? null);
+}
+
+export function deleteGmailConnection() {
+  db.prepare("DELETE FROM email_connections WHERE provider = 'gmail'").run();
+}
+
+export function getInboundEmail(provider: EmailProvider, providerMessageId: string): InboxEmail | undefined {
+  return db
+    .prepare(
+      `SELECT i.*, p.name AS partner_name, d.creator AS deal_creator, d.stage AS deal_stage
+       FROM inbound_emails i
+       LEFT JOIN partners p ON p.id = i.partner_id
+       LEFT JOIN deals d ON d.id = i.deal_id
+       WHERE i.provider = ? AND i.provider_message_id = ?`
+    )
+    .get(provider, providerMessageId) as InboxEmail | undefined;
+}
+
+export function getInboxEmail(id: number): InboxEmail | undefined {
+  return db
+    .prepare(
+      `SELECT i.*, p.name AS partner_name, d.creator AS deal_creator, d.stage AS deal_stage
+       FROM inbound_emails i
+       LEFT JOIN partners p ON p.id = i.partner_id
+       LEFT JOIN deals d ON d.id = i.deal_id
+       WHERE i.id = ?`
+    )
+    .get(id) as InboxEmail | undefined;
+}
+
+export function getInboxEmails(status?: InboxEmailStatus): InboxEmail[] {
+  return db
+    .prepare(
+      `SELECT i.*, p.name AS partner_name, d.creator AS deal_creator, d.stage AS deal_stage
+       FROM inbound_emails i
+       LEFT JOIN partners p ON p.id = i.partner_id
+       LEFT JOIN deals d ON d.id = i.deal_id
+       ${status ? "WHERE i.status = ?" : ""}
+       ORDER BY datetime(i.received_at) DESC, i.id DESC`
+    )
+    .all(...(status ? [status] : [])) as InboxEmail[];
+}
+
+export function saveInboundEmail(fields: {
+  provider: EmailProvider;
+  providerMessageId: string;
+  providerThreadId?: string | null;
+  fromEmail?: string | null;
+  fromName?: string | null;
+  subject?: string | null;
+  body: string;
+  receivedAt: string;
+  partnerId?: number | null;
+  dealId?: number | null;
+  matchKind: InboxMatchKind;
+}) {
+  const result = db
+    .prepare(
+      `INSERT INTO inbound_emails (
+        provider, provider_message_id, provider_thread_id, from_email, from_name, subject,
+        body, received_at, partner_id, deal_id, match_kind
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(provider, provider_message_id) DO NOTHING`
+    )
+    .run(
+      fields.provider,
+      fields.providerMessageId,
+      fields.providerThreadId ?? null,
+      normalizeEmail(fields.fromEmail) ?? null,
+      fields.fromName?.trim().slice(0, 300) || null,
+      fields.subject?.trim().slice(0, 500) || null,
+      fields.body.slice(0, 40_000),
+      fields.receivedAt,
+      fields.partnerId ?? null,
+      fields.dealId ?? null,
+      fields.matchKind
+    );
+  return Number(result.lastInsertRowid);
+}
+
+export function setInboundEmailStatus(fields: {
+  id: number;
+  status: InboxEmailStatus;
+  importedMessageId?: number | null;
+}) {
+  db.prepare("UPDATE inbound_emails SET status = ?, imported_message_id = ? WHERE id = ?").run(
+    fields.status,
+    fields.importedMessageId ?? null,
+    fields.id
+  );
 }
 
 /** Mints (or returns) the partner's portal token — the link IS the credential. */
@@ -1181,16 +1620,37 @@ export function getCampaign(id: number): Campaign | undefined {
   return db.prepare("SELECT * FROM campaigns WHERE id = ?").get(id) as Campaign | undefined;
 }
 
-export function createCampaign(name: string, overrides: object, budget: number | null): number {
+export function createCampaign(
+  name: string,
+  overrides: object,
+  budget: number | null,
+  strategy?: { objective?: string | null; primaryKpi?: string | null; kpiTarget?: number | null }
+): number {
   const info = db
-    .prepare("INSERT INTO campaigns (name, overrides, budget) VALUES (?, ?, ?)")
-    .run(name, JSON.stringify(overrides), budget);
+    .prepare(
+      "INSERT INTO campaigns (name, overrides, budget, objective, primary_kpi, kpi_target) VALUES (?, ?, ?, ?, ?, ?)"
+    )
+    .run(
+      name,
+      JSON.stringify(overrides),
+      budget,
+      strategy?.objective ?? null,
+      strategy?.primaryKpi ?? null,
+      strategy?.kpiTarget ?? null
+    );
   return Number(info.lastInsertRowid);
 }
 
 export function updateCampaign(
   id: number,
-  fields: { name?: string; overrides?: object; budget?: number | null }
+  fields: {
+    name?: string;
+    overrides?: object;
+    budget?: number | null;
+    objective?: string | null;
+    primaryKpi?: string | null;
+    kpiTarget?: number | null;
+  }
 ) {
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -1205,6 +1665,18 @@ export function updateCampaign(
   if (fields.budget !== undefined) {
     sets.push("budget = ?");
     params.push(fields.budget);
+  }
+  if (fields.objective !== undefined) {
+    sets.push("objective = ?");
+    params.push(fields.objective);
+  }
+  if (fields.primaryKpi !== undefined) {
+    sets.push("primary_kpi = ?");
+    params.push(fields.primaryKpi);
+  }
+  if (fields.kpiTarget !== undefined) {
+    sets.push("kpi_target = ?");
+    params.push(fields.kpiTarget);
   }
   if (sets.length === 0) return;
   db.prepare(`UPDATE campaigns SET ${sets.join(", ")} WHERE id = ?`).run(...params, id);
@@ -1341,6 +1813,55 @@ export function getMessages(dealId: number): Message[] {
 }
 
 /**
+ * Dashboard follow-up detection needs the last outbound note and to know whether a
+ * creator replied after it. Fetching only human conversation messages keeps it a single
+ * small query without pulling Copilot output into a workflow rule.
+ */
+export function getFollowUpMessages(): Message[] {
+  return db
+    .prepare(
+      "SELECT * FROM messages WHERE sender IN ('us', 'them') ORDER BY deal_id, created_at, id"
+    )
+    .all() as Message[];
+}
+
+export function getFollowUpState(dealId: number): FollowUpState | undefined {
+  return db
+    .prepare("SELECT * FROM deal_followup_states WHERE deal_id = ?")
+    .get(dealId) as FollowUpState | undefined;
+}
+
+export function getFollowUpStates(): FollowUpState[] {
+  return db.prepare("SELECT * FROM deal_followup_states").all() as FollowUpState[];
+}
+
+export function snoozeFollowUp({
+  dealId,
+  anchorMessageId,
+  anchorAt,
+  snoozedUntil,
+}: {
+  dealId: number;
+  anchorMessageId: number | null;
+  anchorAt: string;
+  snoozedUntil: string;
+}) {
+  db.prepare(
+    `INSERT INTO deal_followup_states (deal_id, anchor_message_id, anchor_at, snoozed_until)
+     VALUES (@dealId, @anchorMessageId, @anchorAt, @snoozedUntil)
+     ON CONFLICT(deal_id) DO UPDATE SET
+       anchor_message_id = excluded.anchor_message_id,
+       anchor_at = excluded.anchor_at,
+       snoozed_until = excluded.snoozed_until,
+       updated_at = datetime('now')`
+  ).run({ dealId, anchorMessageId, anchorAt, snoozedUntil });
+}
+
+export function clearFollowUpState(dealId: number) {
+  db.prepare("DELETE FROM deal_followup_states WHERE deal_id = ?").run(dealId);
+}
+
+/**
  * A platform's rules with defaults filled in. Merged on read so a field added after an
  * install still reaches the engine, instead of applying only once someone happens to
  * re-save the Playbook page.
@@ -1472,7 +1993,7 @@ export function updateDeal(dealId: number, fields: Record<string, unknown>) {
     "stage", "round", "your_move", "first_ask", "current_ask", "current_offer",
     "agreed_price", "agreed_at", "anchor", "target", "walkaway", "breakeven", "avg_views",
     "engagement_rate", "audience_locked", "notes", "rights", "status_label", "status_tone", "campaign", "analysis", "channel_url",
-    "actual_views", "actual_clicks", "actual_orders", "actual_revenue", "actuals_logged_at",
+    "actual_views", "actual_engagements", "actual_clicks", "actual_orders", "actual_revenue", "actuals_logged_at",
     "job_status", "job_error", "job_started_at",
     "partner_id", "campaign_id", "deal_type",
     "decline_reason", "decline_note", "declined_at", "revisit_on",

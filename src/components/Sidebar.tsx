@@ -4,30 +4,32 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { money } from "@/lib/format";
 
-/**
- * Two groups, because these are two kinds of thing wearing the same clothes.
- *
- * The first six are where the work happens — opened many times a day, in roughly the
- * order a deal moves through them. The last three change how the first six behave and
- * are visited occasionally: the Playbook sets the rules the engine negotiates by,
- * Benchmarks calibrates those rules against what actually closed, and Settings is the
- * system itself. Presented as one undifferentiated list, "Playbook" reads like another
- * place to work rather than the thing that governs the others.
- *
- * There is deliberately no "Deals" entry: Pipeline is the deals home — board plus a
- * filterable list view — and /deals already redirects into it.
- *
- * Content sits between Pipeline and Payments because that is the order the work runs in:
- * win the deal, deliver the content, release the money. Its items are also the thing you
- * chase most often, and chasing them one deal page at a time is what the page replaces.
- */
-const WORK_NAV = [
-  { href: "/", label: "Dashboard", icon: "space_dashboard" },
-  { href: "/approvals", label: "Approvals", icon: "approval" },
-  { href: "/pipeline", label: "Pipeline", icon: "account_tree" },
-  { href: "/content", label: "Content", icon: "movie" },
-  { href: "/partners", label: "Partners", icon: "group" },
-  { href: "/payments", label: "Payments", icon: "payments" },
+/** The labels explain the product's mental model before the user has to learn it. */
+const NAV_GROUPS = [
+  {
+    label: "Overview",
+    items: [{ href: "/", label: "Dashboard", icon: "space_dashboard" }],
+  },
+  {
+    label: "Deals",
+    items: [
+      { href: "/pipeline", label: "Pipeline", icon: "account_tree" },
+      { href: "/inbox", label: "Inbox", icon: "inbox" },
+      { href: "/imports", label: "Creator intake", icon: "upload_file" },
+      { href: "/approvals", label: "Approvals", icon: "approval" },
+    ],
+  },
+  {
+    label: "Delivery",
+    items: [
+      { href: "/content", label: "Content", icon: "movie" },
+      { href: "/payments", label: "Payments", icon: "payments" },
+    ],
+  },
+  {
+    label: "Relationships",
+    items: [{ href: "/partners", label: "Partners", icon: "group" }],
+  },
 ];
 
 const SETUP_NAV = [
@@ -103,7 +105,16 @@ export default function Sidebar({
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>add</span>
               New Deal
             </Link>
-            {[...WORK_NAV, ...SETUP_NAV].map((item) => (
+            {NAV_GROUPS.map((group) => (
+              <div key={group.label} className="mb-2">
+                <p className="label-caps px-3 pb-1 pt-1 text-slate-500">{group.label}</p>
+                {group.items.map((item) => (
+                  <NavItem key={item.href} item={item} active={isActive(item.href)} />
+                ))}
+              </div>
+            ))}
+            <p className="label-caps px-3 pb-1 pt-2 text-slate-500">Configure</p>
+            {SETUP_NAV.map((item) => (
               <NavItem key={item.href} item={item} active={isActive(item.href)} />
             ))}
             <div className="border-t border-white/10 px-3 pt-2 mt-2 text-[11px] text-slate-400 font-tabular">
@@ -136,15 +147,17 @@ export default function Sidebar({
         New Deal
       </Link>
 
-      {/* Navigation. The setup group is pushed to the foot of the nav rather than
-          sitting flush under the work group — the gap is what says "different kind of
-          thing", without needing a heading that would have to call Benchmarks
-          configuration when it is really calibration. */}
-      <nav className="flex-1 flex flex-col">
-        {WORK_NAV.map((item) => (
-          <NavItem key={item.href} item={item} active={isActive(item.href)} />
+      <nav className="flex-1 overflow-y-auto pb-3 custom-scrollbar">
+        {NAV_GROUPS.map((group) => (
+          <div key={group.label} className="mb-3">
+            <p className="label-caps px-5 pb-1 text-slate-500">{group.label}</p>
+            {group.items.map((item) => (
+              <NavItem key={item.href} item={item} active={isActive(item.href)} />
+            ))}
+          </div>
         ))}
-        <div className="mt-auto pt-3 border-t border-white/10">
+        <div className="mt-4 pt-3 border-t border-white/10">
+          <p className="label-caps px-5 pb-1 text-slate-500">Configure</p>
           {SETUP_NAV.map((item) => (
             <NavItem key={item.href} item={item} active={isActive(item.href)} />
           ))}

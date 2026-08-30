@@ -59,6 +59,7 @@ export default async function PaymentsPage({
     <>
       <PageHeader
         title="Payments"
+        subtitle="Approve and track every creator payout"
         actions={
           <Link
             href={buildQuery("/payments/export", params as Record<string, string>, {})}

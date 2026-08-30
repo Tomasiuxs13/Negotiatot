@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { attentionItems, classifyAttention, groupAttention } from "../attention";
+import type { FollowUpCandidate } from "../followups";
 import type { Deal } from "../types";
 import type {
   ContentItem,
@@ -97,18 +98,21 @@ describe("attentionItems", () => {
     expect(recent).toEqual([]);
   });
 
-  it("suggests a nudge only after the agreed silence window", () => {
-    const quiet = attentionItems({
-      ...base,
-      deals: [deal({ stage: "offer_sent", updated_at: "2026-07-18 09:00:00" })],
-    });
-    expect(quiet[0].title).toContain("no reply in 4 days");
-
-    const fresh = attentionItems({
-      ...base,
-      deals: [deal({ stage: "offer_sent", updated_at: "2026-07-21 09:00:00" })],
-    });
-    expect(fresh).toEqual([]);
+  it("puts a prepared, stage-aware follow-up in the attention queue", () => {
+    const followUp: FollowUpCandidate = {
+      dealId: 1,
+      creator: "Marta",
+      stage: "offer_sent",
+      anchorMessageId: 5,
+      anchorAt: "2026-07-18 09:00:00",
+      daysWaiting: 4,
+      draft: "Hi Marta",
+    };
+    const items = attentionItems({ ...base, followUps: [followUp] });
+    expect(items[0].id).toBe("follow-up-1");
+    expect(items[0].title).toContain("follow-up ready");
+    expect(items[0].detail).toContain("No reply for 4 days");
+    expect(items[0].owner).toBe("creator");
   });
 
   it("does not chase the creator when it is our move", () => {

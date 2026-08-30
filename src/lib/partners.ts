@@ -30,6 +30,27 @@ export interface PartnerChannel {
   updated_at: string;
 }
 
+/** Evidence retained from an external discovery/analytics provider. */
+export interface PartnerSourceRecord {
+  id: number;
+  partner_id: number;
+  source: string;
+  external_id: string | null;
+  profile_url: string | null;
+  raw_data: string;
+  imported_at: string;
+}
+
+/** A creator can have an agency and a personal contact; `partners.email` remains primary. */
+export interface PartnerContact {
+  id: number;
+  partner_id: number;
+  email: string;
+  label: string | null;
+  source: string | null;
+  created_at: string;
+}
+
 export function parseTags(raw: string | null | undefined): string[] {
   if (!raw) return [];
   try {

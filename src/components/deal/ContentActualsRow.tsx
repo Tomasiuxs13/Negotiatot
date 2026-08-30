@@ -5,6 +5,7 @@ import type { ContentItem } from "@/lib/fulfillment-types";
 import { PLATFORM_META, type Platform } from "@/lib/types";
 import { moneyCpm } from "@/lib/format";
 import { saveContentActualsAction } from "@/app/deals/[id]/fulfillment-actions";
+import { CAMPAIGN_KPIS, type CampaignKpi } from "@/lib/campaigns";
 import {
   MEASUREMENT_LABEL,
   measurementState,
@@ -59,15 +60,18 @@ export default function ContentActualsRow({
   dealId,
   sharePrice,
   windows,
+  primaryKpi = null,
 }: {
   item: ContentItem;
   dealId: number;
   /** This item's share of the fee, for a per-item CPM readout. */
   sharePrice: number | null;
   windows: MeasurementWindows;
+  primaryKpi?: CampaignKpi | null;
 }) {
   const measurement = measurementState(item, windows);
   const [views, setViews] = useState(item.actual_views?.toString() ?? "");
+  const [engagements, setEngagements] = useState(item.actual_engagements?.toString() ?? "");
   const [clicks, setClicks] = useState(item.actual_clicks?.toString() ?? "");
   const [orders, setOrders] = useState(item.actual_orders?.toString() ?? "");
   const [revenue, setRevenue] = useState(item.actual_revenue?.toString() ?? "");
@@ -76,6 +80,7 @@ export default function ContentActualsRow({
 
   const dirty =
     num(views) !== item.actual_views ||
+    num(engagements) !== item.actual_engagements ||
     num(clicks) !== item.actual_clicks ||
     num(orders) !== item.actual_orders ||
     num(revenue) !== item.actual_revenue;
@@ -84,6 +89,7 @@ export default function ContentActualsRow({
     startTransition(async () => {
       await saveContentActualsAction(item.id, dealId, {
         views: num(views),
+        engagements: num(engagements),
         clicks: num(clicks),
         orders: num(orders),
         revenue: num(revenue),
@@ -95,22 +101,37 @@ export default function ContentActualsRow({
   const cpm = v && v > 0 && sharePrice ? (sharePrice / v) * 1000 : null;
   const platform = item.platform as Platform | null;
 
+  const values: Record<CampaignKpi, [string, (value: string) => void, string]> = {
+    views: [views, setViews, "88000"],
+    engagements: [engagements, setEngagements, "4200"],
+    clicks: [clicks, setClicks, "1050"],
+    orders: [orders, setOrders, "34"],
+    revenue: [revenue, setRevenue, "4080"],
+  };
+  const focusKpi = primaryKpi ?? "views";
+  const hasPrimaryKpi = primaryKpi != null;
+  const visibleKpis = Array.from(new Set<CampaignKpi>([focusKpi, "views"]));
+  const additionalKpis = (Object.keys(CAMPAIGN_KPIS) as CampaignKpi[]).filter(
+    (key) => !visibleKpis.includes(key)
+  );
+
   const field = (
-    label: string,
-    value: string,
-    setter: (s: string) => void,
-    placeholder: string
+    key: CampaignKpi,
+    compact = false
   ) => (
-    <label className="flex flex-col gap-1">
-      <span className="text-[11px] text-slate-500">{label}</span>
+    <label className="flex flex-col gap-1" title={key === "engagements" ? "Use the total interactions reported by the platform for this post." : undefined}>
+      <span className={`text-[11px] ${hasPrimaryKpi && key === focusKpi ? "font-semibold text-brand-dark" : "text-slate-500"}`}>
+        {CAMPAIGN_KPIS[key].shortLabel}{hasPrimaryKpi && key === focusKpi ? " · primary" : ""}
+      </span>
       <input
-        className={inputClass}
+        className={compact ? inputClass : `${inputClass} w-28`}
         type="number"
         min="0"
-        placeholder={placeholder}
-        value={value}
+        step={key === "revenue" ? "0.01" : "1"}
+        placeholder={values[key][2]}
+        value={values[key][0]}
         onChange={(e) => {
-          setter(e.target.value);
+          values[key][1](e.target.value);
           setSaved(false);
         }}
       />
@@ -133,10 +154,7 @@ export default function ContentActualsRow({
       </div>
 
       <div className="flex items-end gap-3 flex-wrap">
-        {field("Views", views, setViews, "88000")}
-        {field("Clicks", clicks, setClicks, "1050")}
-        {field("Orders", orders, setOrders, "34")}
-        {field("Revenue $", revenue, setRevenue, "4080")}
+        {visibleKpis.map((key) => <div key={key}>{field(key)}</div>)}
         <button
           onClick={save}
           disabled={isPending || !dirty}
@@ -146,6 +164,15 @@ export default function ContentActualsRow({
         </button>
         {saved && !dirty && <span className="text-xs font-medium text-emerald-600">Saved ✓</span>}
       </div>
+      <details className="group mt-2">
+        <summary className="cursor-pointer list-none text-[11px] font-medium text-slate-500 hover:text-slate-700 select-none flex items-center gap-1.5">
+          <span className="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
+          Additional metrics
+        </summary>
+        <div className="flex items-end gap-3 flex-wrap mt-2">
+          {additionalKpis.map((key) => <div key={key}>{field(key, true)}</div>)}
+        </div>
+      </details>
     </div>
   );
 }

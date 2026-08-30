@@ -131,6 +131,7 @@ export function createContentItem(fields: {
 
 export interface ContentActuals {
   views: number | null;
+  engagements: number | null;
   clicks: number | null;
   orders: number | null;
   revenue: number | null;
@@ -144,13 +145,22 @@ export interface ContentActuals {
 export function setContentActuals(id: number, actuals: ContentActuals) {
   // Stamping when the reading was taken is what separates a provisional number from
   // one the playbook can be calibrated against.
+  const hasActuals = Object.values(actuals).some((value) => value != null);
   db.prepare(
     `UPDATE content_items
-     SET actual_views = ?, actual_clicks = ?, actual_orders = ?, actual_revenue = ?,
+     SET actual_views = ?, actual_engagements = ?, actual_clicks = ?, actual_orders = ?, actual_revenue = ?,
          actuals_measured_at = CASE WHEN ? IS NULL THEN NULL ELSE date('now') END,
          updated_at = datetime('now')
      WHERE id = ?`
-  ).run(actuals.views, actuals.clicks, actuals.orders, actuals.revenue, actuals.views, id);
+  ).run(
+    actuals.views,
+    actuals.engagements,
+    actuals.clicks,
+    actuals.orders,
+    actuals.revenue,
+    hasActuals ? 1 : null,
+    id
+  );
 
   const item = db.prepare("SELECT deal_id FROM content_items WHERE id = ?").get(id) as
     | { deal_id: number }
@@ -162,13 +172,17 @@ export function setContentActuals(id: number, actuals: ContentActuals) {
 export function recomputeDealActuals(dealId: number) {
   const totals = db
     .prepare(
-      `SELECT SUM(actual_views) AS views, SUM(actual_clicks) AS clicks,
+      `SELECT SUM(actual_views) AS views, SUM(actual_engagements) AS engagements,
+              SUM(actual_clicks) AS clicks,
               SUM(actual_orders) AS orders, SUM(actual_revenue) AS revenue,
-              COUNT(actual_views) AS measured
+              COUNT(CASE WHEN actual_views IS NOT NULL OR actual_engagements IS NOT NULL
+                OR actual_clicks IS NOT NULL OR actual_orders IS NOT NULL
+                OR actual_revenue IS NOT NULL THEN 1 END) AS measured
        FROM content_items WHERE deal_id = ?`
     )
     .get(dealId) as {
     views: number | null;
+    engagements: number | null;
     clicks: number | null;
     orders: number | null;
     revenue: number | null;
@@ -179,11 +193,12 @@ export function recomputeDealActuals(dealId: number) {
 
   db.prepare(
     `UPDATE deals
-     SET actual_views = ?, actual_clicks = ?, actual_orders = ?, actual_revenue = ?,
+     SET actual_views = ?, actual_engagements = ?, actual_clicks = ?, actual_orders = ?, actual_revenue = ?,
          actuals_logged_at = ?, updated_at = datetime('now')
      WHERE id = ?`
   ).run(
     totals.views,
+    totals.engagements,
     totals.clicks,
     totals.orders,
     totals.revenue,

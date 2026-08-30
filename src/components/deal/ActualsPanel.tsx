@@ -10,6 +10,12 @@ import type { MeasurementWindows } from "@/lib/measurement";
 import { saveActuals } from "@/app/deals/[id]/actions";
 import ContentActualsRow from "./ContentActualsRow";
 import {
+  CAMPAIGN_KPIS,
+  objectiveLabel,
+  type CampaignKpi,
+  type CampaignObjective,
+} from "@/lib/campaigns";
+import {
   actualDealCost,
   returnOnAdSpend,
   type Commission,
@@ -36,6 +42,43 @@ const EMPTY_FINANCE: ActualsFinance = {
   productCost: 0,
 };
 
+export interface CampaignGoal {
+  objective: CampaignObjective | null;
+  primaryKpi: CampaignKpi;
+  target: number | null;
+}
+
+function formatKpi(key: CampaignKpi, value: number | null): string {
+  if (value == null) return "—";
+  return key === "revenue" ? money(value) : value.toLocaleString("en-US");
+}
+
+function GoalProgress({ goal, actual }: { goal: CampaignGoal; actual: number | null }) {
+  const objective = objectiveLabel(goal.objective);
+  const progress = goal.target && actual != null ? Math.min(100, (actual / goal.target) * 100) : null;
+  return (
+    <div className="mb-4 rounded-lg border border-violet-200 bg-violet-50/70 px-4 py-3">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="text-xs font-semibold uppercase tracking-wider text-violet-700">
+          {objective ?? "Campaign"} goal
+        </span>
+        <span className="text-sm font-semibold text-slate-900">
+          {CAMPAIGN_KPIS[goal.primaryKpi].label}: {formatKpi(goal.primaryKpi, actual)}
+          {goal.target != null ? ` / ${formatKpi(goal.primaryKpi, goal.target)}` : ""}
+        </span>
+      </div>
+      {progress != null && (
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-violet-100">
+          <div className="h-full rounded-full bg-violet-500" style={{ width: `${progress}%` }} />
+        </div>
+      )}
+      <p className="text-[11px] text-violet-700/80 mt-1">
+        This is the primary success measure. Additional diagnostics stay available below.
+      </p>
+    </div>
+  );
+}
+
 function actualCost(
   fee: number,
   orders: number,
@@ -60,6 +103,7 @@ export default function ActualsPanel({
   expectedReach,
   windows,
   finance = EMPTY_FINANCE,
+  goal = null,
 }: {
   deal: Deal;
   contentItems: ContentItem[];
@@ -67,6 +111,7 @@ export default function ActualsPanel({
   expectedReach?: Record<string, number>;
   windows?: MeasurementWindows;
   finance?: ActualsFinance;
+  goal?: CampaignGoal | null;
 }) {
   const price = deal.agreed_price ?? deal.current_offer;
 
@@ -81,10 +126,11 @@ export default function ActualsPanel({
         expectedReach={expectedReach ?? {}}
         windows={windows ?? {}}
         finance={finance}
+        goal={goal}
       />
     );
   }
-  return <DealLevelActuals deal={deal} price={price} finance={finance} />;
+  return <DealLevelActuals deal={deal} price={price} finance={finance} goal={goal} />;
 }
 
 function PerItemActuals({
@@ -94,6 +140,7 @@ function PerItemActuals({
   expectedReach,
   windows,
   finance,
+  goal,
 }: {
   deal: Deal;
   contentItems: ContentItem[];
@@ -101,13 +148,31 @@ function PerItemActuals({
   expectedReach: Record<string, number>;
   windows: MeasurementWindows;
   finance: ActualsFinance;
+  goal: CampaignGoal | null;
 }) {
-  const measured = contentItems.filter((c) => c.actual_views != null && c.actual_views > 0);
+  const measured = contentItems.filter((item) =>
+    [item.actual_views, item.actual_engagements, item.actual_clicks, item.actual_orders, item.actual_revenue]
+      .some((value) => value != null)
+  );
   const unattributed = measured.filter((c) => !c.platform).length;
   const totalViews = measured.reduce((s, c) => s + (c.actual_views ?? 0), 0);
+  const totalEngagements = measured.reduce((s, c) => s + (c.actual_engagements ?? 0), 0);
+  const totalClicks = measured.reduce((s, c) => s + (c.actual_clicks ?? 0), 0);
   const hasRevenue = measured.some((c) => c.actual_revenue != null);
   const totalRevenue = measured.reduce((s, c) => s + (c.actual_revenue ?? 0), 0);
   const totalOrders = measured.reduce((s, c) => s + (c.actual_orders ?? 0), 0);
+  const totals: Record<CampaignKpi, number> = {
+    views: totalViews,
+    engagements: totalEngagements,
+    clicks: totalClicks,
+    orders: totalOrders,
+    revenue: totalRevenue,
+  };
+  const primaryActual = goal
+    ? measured.some((item) => item[`actual_${goal.primaryKpi}` as keyof ContentItem] != null)
+      ? totals[goal.primaryKpi]
+      : null
+    : null;
   const cost = actualCost(price ?? 0, totalOrders, hasRevenue ? totalRevenue : null, finance);
   const feeRoas = returnOnAdSpend(totalRevenue, price ?? 0);
   const allInRoas = returnOnAdSpend(totalRevenue, cost.total);
@@ -160,11 +225,14 @@ function PerItemActuals({
         Post-campaign actuals
       </h3>
       <p className="text-xs text-slate-500 mb-4 max-w-[65ch]">
-        Log what each deliverable returned.{" "}
+        {goal
+          ? "Log the campaign's primary KPI first, then add diagnostics when they help explain the result. "
+          : "Log views for each deliverable, then add other results when they are available. "}
         {multi
           ? "Because this deal spans platforms, per-item numbers let Counterpart calibrate each platform separately instead of crediting the whole deal to one of them."
           : "Counterpart compares predicted vs actual and calibrates your CPM benchmarks, so your fair-price model sharpens with every closed deal."}
       </p>
+      {goal && <GoalProgress goal={goal} actual={primaryActual} />}
       {unattributed > 0 && (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-3">
           {unattributed} measured item{unattributed === 1 ? " is" : "s are"} excluded from
@@ -180,6 +248,7 @@ function PerItemActuals({
             dealId={deal.id}
             sharePrice={shareOf(item)}
             windows={windows}
+            primaryKpi={goal?.primaryKpi}
           />
         ))}
       </div>
@@ -188,8 +257,11 @@ function PerItemActuals({
         <div className="mt-4 border-t border-slate-100 pt-4">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: "Total views", value: fmtViews(totalViews) },
-              { label: "Orders", value: totalOrders > 0 ? String(totalOrders) : "—" },
+              ...(goal ? [{
+                label: `${CAMPAIGN_KPIS[goal.primaryKpi].shortLabel} · primary`,
+                value: formatKpi(goal.primaryKpi, primaryActual),
+              }] : []),
+              ...(goal?.primaryKpi === "views" ? [] : [{ label: "Total views", value: totalViews > 0 ? fmtViews(totalViews) : "—" }]),
               {
                 label: "Fee ROAS",
                 value: feeRoas != null ? `${feeRoas.toFixed(2)}×` : "—",
@@ -252,12 +324,15 @@ function DealLevelActuals({
   deal,
   price,
   finance,
+  goal,
 }: {
   deal: Deal;
   price: number | null;
   finance: ActualsFinance;
+  goal: CampaignGoal | null;
 }) {
   const [views, setViews] = useState(deal.actual_views?.toString() ?? "");
+  const [engagements, setEngagements] = useState(deal.actual_engagements?.toString() ?? "");
   const [clicks, setClicks] = useState(deal.actual_clicks?.toString() ?? "");
   const [orders, setOrders] = useState(deal.actual_orders?.toString() ?? "");
   const [revenue, setRevenue] = useState(deal.actual_revenue?.toString() ?? "");
@@ -271,6 +346,7 @@ function DealLevelActuals({
     startTransition(async () => {
       await saveActuals(deal.id, {
         views: num(views),
+        engagements: num(engagements),
         clicks: num(clicks),
         orders: num(orders),
         revenue: num(revenue),
@@ -289,12 +365,41 @@ function DealLevelActuals({
   const feeRoas = returnOnAdSpend(actualRevenue, price ?? 0);
   const allInRoas = returnOnAdSpend(actualRevenue, cost.total);
 
-  const fields: [string, string, (s: string) => void, string][] = [
-    ["Actual views delivered", views, setViews, "e.g. 88000"],
-    ["Clicks (from your link)", clicks, setClicks, "e.g. 1050"],
-    ["Orders / conversions", orders, setOrders, "e.g. 34"],
-    ["Revenue attributed ($)", revenue, setRevenue, "e.g. 4080"],
-  ];
+  const values: Record<CampaignKpi, [string, (value: string) => void, string]> = {
+    views: [views, setViews, "e.g. 88000"],
+    engagements: [engagements, setEngagements, "e.g. 4200"],
+    clicks: [clicks, setClicks, "e.g. 1050"],
+    orders: [orders, setOrders, "e.g. 34"],
+    revenue: [revenue, setRevenue, "e.g. 4080"],
+  };
+  const focusKpi = goal?.primaryKpi ?? "views";
+  const hasPrimaryKpi = goal != null;
+  const visibleKpis = Array.from(new Set<CampaignKpi>([focusKpi, "views"]));
+  const additionalKpis = (Object.keys(CAMPAIGN_KPIS) as CampaignKpi[]).filter(
+    (key) => !visibleKpis.includes(key)
+  );
+  const primaryActual = num(values[focusKpi][0]);
+
+  const field = (key: CampaignKpi) => (
+    <div key={key} className="flex items-center justify-between gap-4">
+      <span className={`text-sm ${hasPrimaryKpi && key === focusKpi ? "font-semibold text-brand-dark" : "text-slate-600"}`}>
+        {CAMPAIGN_KPIS[key].label}{hasPrimaryKpi && key === focusKpi ? " · primary" : ""}
+      </span>
+      <input
+        className={inputClass + " w-32"}
+        type="number"
+        min="0"
+        step={key === "revenue" ? "0.01" : "1"}
+        placeholder={values[key][2]}
+        value={values[key][0]}
+        title={key === "engagements" ? "Use the total interactions reported by the platform." : undefined}
+        onChange={(e) => {
+          values[key][1](e.target.value);
+          setSaved(false);
+        }}
+      />
+    </div>
+  );
 
   return (
     <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5 max-w-xl">
@@ -302,28 +407,22 @@ function DealLevelActuals({
         Post-campaign actuals
       </h3>
       <p className="text-xs text-slate-500 mb-4 max-w-[60ch]">
-        Once the deal runs, log what actually happened. Counterpart compares predicted vs actual and
-        calibrates your CPM benchmarks — so your fair-price model gets sharper with every closed deal.
+        {goal
+          ? "Record the primary campaign result first. Views remain visible because they calibrate your creator pricing benchmark; other diagnostic metrics are optional."
+          : "Record delivered views to calibrate creator pricing. Other result metrics are optional."}
       </p>
+      {goal && <GoalProgress goal={goal} actual={primaryActual} />}
 
       <div className="space-y-2.5">
-        {fields.map(([label, val, setter, ph]) => (
-          <div key={label} className="flex items-center justify-between gap-4">
-            <span className="text-sm text-slate-600">{label}</span>
-            <input
-              className={inputClass + " w-32"}
-              type="number"
-              min="0"
-              placeholder={ph}
-              value={val}
-              onChange={(e) => {
-                setter(e.target.value);
-                setSaved(false);
-              }}
-            />
-          </div>
-        ))}
+        {visibleKpis.map(field)}
       </div>
+      <details className="group mt-3 border-t border-slate-100 pt-3">
+        <summary className="cursor-pointer list-none text-xs font-medium text-slate-500 hover:text-slate-700 select-none flex items-center gap-1.5">
+          <span className="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
+          Additional metrics
+        </summary>
+        <div className="space-y-2.5 mt-3">{additionalKpis.map(field)}</div>
+      </details>
 
       {(actualCpm != null || predictedCpm != null) && (
         <div className="mt-4 grid grid-cols-2 gap-3">

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { applyCampaignOverrides, describeOverrides, parseOverrides } from "../campaigns";
+import {
+  applyCampaignOverrides,
+  campaignGoalLabel,
+  describeOverrides,
+  objectiveLabel,
+  parseOverrides,
+} from "../campaigns";
 
 const globalRules = {
   youtube: { maxCpmIntegration: 28, minGeoShare: 60, geoLabel: "DACH", maxPerDeal: 6000 },
@@ -62,5 +68,18 @@ describe("describeOverrides", () => {
       "Min geo share (%): 0",
     ]);
     expect(describeOverrides({})).toEqual([]);
+  });
+});
+
+describe("campaign goals", () => {
+  it("turns the strategy into a compact manager-facing label", () => {
+    expect(
+      campaignGoalLabel({ objective: "conversion", primary_kpi: "orders", kpi_target: 500 })
+    ).toBe("Conversion → Orders · target 500");
+  });
+
+  it("supports legacy campaigns that do not yet have an objective", () => {
+    expect(campaignGoalLabel({ objective: null, primary_kpi: null, kpi_target: null })).toBeNull();
+    expect(objectiveLabel(null)).toBeNull();
   });
 });

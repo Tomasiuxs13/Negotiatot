@@ -86,6 +86,7 @@ export default async function ApprovalsPage({
     <>
       <PageHeader
         title="Approvals"
+        subtitle="Decisions ready for you — work still waiting on creators stays out"
       />
       <main className="flex-1 overflow-y-auto p-4 md:p-8">
         <div className={`${PAGE_WIDTH} space-y-5`}>

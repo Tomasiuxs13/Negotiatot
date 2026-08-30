@@ -1,9 +1,11 @@
 "use server";
 
 import { randomBytes } from "crypto";
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { getSetting, setSetting } from "@/lib/db";
 import { generateApiKey } from "@/lib/api-auth";
+import { disconnectGmail } from "@/lib/gmail";
 
 /**
  * One key, held in the settings table like every other app-level setting. Generating a
@@ -22,4 +24,17 @@ export async function revokeApiKeyAction(): Promise<{ error?: string }> {
   setSetting("api_key", null);
   revalidatePath("/settings");
   return {};
+}
+
+export async function disconnectGmailAction(): Promise<{ error?: string }> {
+  try {
+    const requestHeaders = await headers();
+    const origin = requestHeaders.get("origin") ?? `http://${requestHeaders.get("host") ?? "localhost:3000"}`;
+    await disconnectGmail(origin);
+    revalidatePath("/settings");
+    revalidatePath("/inbox");
+    return {};
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Gmail could not be disconnected." };
+  }
 }

@@ -133,6 +133,7 @@ export default async function ContentPage({
     <>
       <PageHeader
         title="Content"
+        subtitle="Plan, review, publish, and verify every deliverable"
         actions={
           <>
             <div className="flex bg-slate-100 rounded-md p-0.5">

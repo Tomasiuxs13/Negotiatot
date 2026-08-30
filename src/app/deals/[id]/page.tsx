@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ensurePartnerPortalToken, getCampaign, getContractDraft, getDeal, getMessages, getNegotiationStyle, getPartner, getPartnerChannels, getPlaybook, getLastRunAt, getRemindersFor, getSetting, getUnitEconomics, getUsageTotals } from "@/lib/db";
+import { ensurePartnerPortalToken, getCampaign, getContractDraft, getDeal, getFollowUpState, getMessages, getNegotiationStyle, getPartner, getPartnerChannels, getPlaybook, getLastRunAt, getRemindersFor, getSetting, getUnitEconomics, getUsageTotals } from "@/lib/db";
 import ContactStrip from "@/components/deal/ContactStrip";
 import RightsEditor from "@/components/deal/RightsEditor";
 import AttachReportBlock from "@/components/deal/AttachReportBlock";
 import { parseRights, rightsMismatch } from "@/lib/rights";
 import RemindersBlock from "@/components/RemindersBlock";
 import type { MeasurementWindows } from "@/lib/measurement";
-import { describeOverrides, parseOverrides } from "@/lib/campaigns";
-import { DECLINE_REASON_LABEL, PLATFORM_META, STAGE_LABELS, dealPlatforms, dealScope, type Deal, type Message } from "@/lib/types";
+import { campaignGoalLabel, describeOverrides, parseOverrides } from "@/lib/campaigns";
+import { DECLINE_REASON_LABEL, PLATFORM_META, dealPlatforms, dealScope, type Deal, type Message } from "@/lib/types";
 import CockpitNumbers from "@/components/deal/CockpitNumbers";
 import AffordabilityPanel from "@/components/deal/AffordabilityPanel";
 import MetricBand from "@/components/deal/MetricBand";
@@ -37,7 +37,6 @@ import {
 import { money } from "@/lib/format";
 import { actualDealCost, dealCommission, describeCommission, earningsForecast, expectedOrdersFrom, parseTiers, resolveOffer, trueDealCost } from "@/lib/commission";
 import { deliverableCount } from "@/lib/deliverables";
-import { ladderNotes } from "@/lib/ladder-notes";
 import AnalysisTab from "@/components/deal/AnalysisTab";
 import NegotiationTab from "@/components/deal/NegotiationTab";
 import DealNotes from "@/components/deal/DealNotes";
@@ -45,6 +44,8 @@ import { DEAL_STAGE_TONE, TONE_CLASS_BORDERED } from "@/lib/status-tones";
 import { usageCostUsd } from "@/lib/usage-cost";
 import { parseRequirements } from "@/lib/brief-requirements";
 import ContractDraftBlock from "@/components/deal/ContractDraftBlock";
+import DealStageBar from "@/components/deal/DealStageBar";
+import { getFollowUpCandidate } from "@/lib/followups";
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +100,7 @@ export default async function DealPage({
   if (!found) notFound();
   const deal = found;
   const messages = getMessages(deal.id);
+  const followUp = getFollowUpCandidate(deal, messages, getFollowUpState(deal.id));
   const platforms = dealPlatforms(deal);
   const scope = dealScope(deal);
   const contract = getContract(deal.id) ?? null;
@@ -130,23 +132,6 @@ export default async function DealPage({
   const styleTiers = parseTiers(
     ((getNegotiationStyle()?.commissionTiers as string[] | undefined) ?? []).map(String)
   );
-  const ladderRate = earningsForecast({
-    expectedOrders: ladderOrders,
-    commission: offer.commission,
-    aov: Number(econ.aov ?? 0),
-    discount: offer.discount,
-    tiers: styleTiers,
-  }).perOrder;
-  const ladder = ladderNotes({
-    targetFee: deal.target,
-    pieces: ladderPieces,
-    scopeText: dealScope(deal),
-    expectedOrders: ladderOrders,
-    aov: Number(econ.aov ?? 0),
-    commission: { type: "per_order", value: ladderRate },
-    discount: offer.discount,
-    productCost: shipments.length > 0 ? Number(econ.productCost ?? 0) : 0,
-  });
   // Affordability, computed here rather than read off the analysis so the panel is
   // right even before an analysis has ever run, and stays right after the Playbook
   // changes. Same inputs the ladder's cost note uses, so the two cannot disagree.
@@ -272,22 +257,6 @@ export default async function DealPage({
         }
         actions={
           <>
-
-            <span
-              className="text-xs text-slate-500"
-              title={
-                campaignOverrides.length > 0
-                  ? `Campaign overrides — ${campaignOverrides.join(" · ")}`
-                  : undefined
-              }
-            >
-              Campaign: {campaign?.name ?? deal.campaign ?? "—"}
-              {campaignOverrides.length > 0 && (
-                <span className="ml-1.5 text-brand-dark font-medium">
-                  · {campaignOverrides.length} override{campaignOverrides.length > 1 ? "s" : ""}
-                </span>
-              )}
-            </span>
             {deal.stage === "agreed" && (
               <CompleteDealButton
                 dealId={deal.id}
@@ -303,12 +272,20 @@ export default async function DealPage({
             )}
             {deal.stage === "declined" ? (
               <ReopenDealButton dealId={deal.id} />
-            ) : (
-              !closed && <DeclineDealButton dealId={deal.id} />
-            )}
-            <DeleteDealButton dealId={deal.id} creator={deal.creator} />
+            ) : null}
+            <details className="group relative">
+              <summary className="flex cursor-pointer list-none items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+                More
+                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>expand_more</span>
+              </summary>
+              <div className="absolute right-0 top-full z-40 mt-2 flex min-w-44 flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-xl">
+                {!closed && deal.stage !== "declined" && <DeclineDealButton dealId={deal.id} />}
+                <DeleteDealButton dealId={deal.id} creator={deal.creator} />
+              </div>
+            </details>
           </>
         }
+        workflow={<DealStageBar dealId={deal.id} stage={deal.stage} />}
         cockpit={
           <>
         {deal.job_error && !deal.job_status && (
@@ -360,8 +337,8 @@ export default async function DealPage({
           /* The cockpit: who this is, what the numbers are, and whether we can afford
              it — the three things needed to decide an offer, side by side rather than
              stacked down the page with the money furthest from the identity. */
-          <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
-            <div className="lg:col-span-4 flex items-start gap-4 min-w-0">
+          <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 grid grid-cols-1 md:grid-cols-12 gap-6 xl:gap-8 items-start">
+            <div className="md:col-span-6 xl:col-span-4 flex items-start gap-4 min-w-0">
               <div className="w-16 h-16 rounded-lg bg-brand/10 text-brand-dark flex items-center justify-center font-bold text-2xl shrink-0">
                 {deal.creator.charAt(0)}
               </div>
@@ -388,7 +365,6 @@ export default async function DealPage({
                         {PLATFORM_META[pf].label}
                       </span>
                     ))}
-                    {scope ? ` · ${scope}` : ""}
                   </span>
                   {dealCommission(deal).type !== "none" && (
                     <span
@@ -398,29 +374,46 @@ export default async function DealPage({
                       + {describeCommission(dealCommission(deal))}
                     </span>
                   )}
-                  <span
-                    className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${TONE_CLASS_BORDERED[DEAL_STAGE_TONE[deal.stage]]}`}
-                  >
-                    {STAGE_LABELS[deal.stage]}
-                    {deal.round > 0 && !closed ? ` · Round ${deal.round}` : ""}
-                  </span>
+                  {(campaign?.name ?? deal.campaign) && (
+                    <span
+                      className="max-w-full truncate rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700"
+                      title={
+                        campaignOverrides.length > 0
+                          ? `Campaign overrides — ${campaignOverrides.join(" · ")}`
+                          : undefined
+                      }
+                    >
+                      {campaign?.name ?? deal.campaign}
+                      {campaign && campaignGoalLabel(campaign) ? ` · ${campaignGoalLabel(campaign)}` : ""}
+                      {campaignOverrides.length > 0
+                        ? ` · ${campaignOverrides.length} override${campaignOverrides.length > 1 ? "s" : ""}`
+                        : ""}
+                    </span>
+                  )}
+                  {deal.round > 0 && !closed && (
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASS_BORDERED[DEAL_STAGE_TONE[deal.stage]]}`}>
+                      Round {deal.round}
+                    </span>
+                  )}
                   {deal.job_status && (
                     <JobChip
                       label={deal.job_status === "analyzing" ? "Analyzing…" : "Copilot drafting…"}
                     />
                   )}
                 </div>
+                {scope && (
+                  <p className="line-clamp-3 text-xs leading-relaxed text-slate-500" title={scope}>
+                    {scope}
+                  </p>
+                )}
               </div>
             </div>
 
-            <div className="lg:col-span-4 min-w-0">
+            <div className="md:col-span-6 xl:col-span-4 min-w-0">
               <CockpitNumbers deal={deal} />
-              {ladder.scopeNote && (
-                <p className="text-[11px] text-slate-500 mt-3">{ladder.scopeNote}</p>
-              )}
             </div>
 
-            <div className="lg:col-span-4 min-w-0">
+            <div className="md:col-span-12 xl:col-span-4 min-w-0">
               <AffordabilityPanel
                 totalCost={dealCost.total}
                 fee={costFee}
@@ -466,7 +459,7 @@ export default async function DealPage({
                 playbookUpdatedAt={playbookUpdatedAt}
               />
             ) },
-          { name: "Negotiation", node: <NegotiationTab deal={deal} messages={messages} /> },
+          { name: "Negotiation", node: <NegotiationTab deal={deal} messages={messages} followUp={followUp} /> },
           ...(showFulfillment
             ? [{ name: "Fulfillment", node: (
                 <div className="space-y-4 max-w-4xl">
@@ -633,6 +626,11 @@ export default async function DealPage({
                     commissionTiers: styleTiers,
                     productCost: shipments.length > 0 ? Number(econ.productCost ?? 0) : 0,
                   }}
+                  goal={campaign?.primary_kpi ? {
+                    objective: campaign.objective,
+                    primaryKpi: campaign.primary_kpi,
+                    target: campaign.kpi_target,
+                  } : null}
                 />
               ) }]
             : []),

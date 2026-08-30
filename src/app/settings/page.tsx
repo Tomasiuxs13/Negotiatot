@@ -4,12 +4,26 @@ import { hasApiKey, MODEL } from "@/lib/claude";
 import { usageCostUsd, totalTokens } from "@/lib/usage-cost";
 import ApiAccessBlock from "@/components/settings/ApiAccessBlock";
 import { getSetting } from "@/lib/db";
+import GmailConnectionBlock from "@/components/settings/GmailConnectionBlock";
+import { getGmailConnectionSummary, gmailSetupStatus } from "@/lib/gmail";
+import { gmailOAuthStatus } from "@/lib/gmail-oauth-status";
+import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
 
 
-export default function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ gmail?: string | string[] }>;
+}) {
+  const query = await searchParams;
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("host") ?? "localhost:3000";
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  const gmail = gmailSetupStatus(`${protocol}://${host}`);
+  const gmailConnection = getGmailConnectionSummary();
   const keyConfigured = hasApiKey();
   const dealCount = getDeals().length;
   const usage = getUsageTotals();
@@ -50,7 +64,7 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" />
+      <PageHeader title="Settings" subtitle="Connections, usage, and secure access" />
       <main className="flex-1 overflow-y-auto p-8">
         <div className="max-w-2xl bg-white rounded-lg border border-slate-200 shadow-sm divide-y divide-slate-100">
           {rows.map((r) => (
@@ -62,6 +76,13 @@ export default function SettingsPage() {
               <p className="text-xs text-slate-500 mt-1 max-w-[60ch]">{r.note}</p>
             </div>
           ))}
+          <GmailConnectionBlock
+            configured={gmail.configured}
+            redirectUri={gmail.redirectUri}
+            missing={gmail.missing}
+            connection={gmailConnection}
+            oauthStatus={gmailOAuthStatus(query.gmail)}
+          />
           <ApiAccessBlock currentKey={getSetting<string>("api_key")} />
         </div>
       </main>

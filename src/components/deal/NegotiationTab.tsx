@@ -7,6 +7,8 @@ import ReplyForm from "./ReplyForm";
 import DeleteMessageButton from "./DeleteMessageButton";
 import GenerateOfferButton from "./GenerateOfferButton";
 import RegenerateRecoButton from "./RegenerateRecoButton";
+import FollowUpComposer from "./FollowUpComposer";
+import type { FollowUpCandidate } from "@/lib/followups";
 
 function Bubble({ msg, creator }: { msg: Message; creator: string }) {
   const them = msg.sender === "them";
@@ -51,7 +53,15 @@ function playbookLevers(): { status: string; label: string }[] {
   }));
 }
 
-export default function NegotiationTab({ deal, messages }: { deal: Deal; messages: Message[] }) {
+export default function NegotiationTab({
+  deal,
+  messages,
+  followUp,
+}: {
+  deal: Deal;
+  messages: Message[];
+  followUp: FollowUpCandidate | null;
+}) {
   const levers = playbookLevers();
   const recoMsg = [...messages].reverse().find((m) => m.sender === "copilot");
   const reco = recoMsg?.meta ? (JSON.parse(recoMsg.meta) as CopilotReco) : null;
@@ -69,6 +79,7 @@ export default function NegotiationTab({ deal, messages }: { deal: Deal; message
     <div className="grid grid-cols-1 @3xl:grid-cols-[1.5fr_0.8fr] gap-4 items-start">
       {/* Thread */}
       <div className="flex flex-col gap-3.5">
+        {followUp && <FollowUpComposer dealId={deal.id} followUp={followUp} />}
         {thread.map((m) => (
           <Bubble key={m.id} msg={m} creator={deal.creator} />
         ))}

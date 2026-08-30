@@ -20,6 +20,7 @@ import { PAGE_WIDTH } from "@/lib/layout";
 export default function DealWorkspace({
   breadcrumb,
   actions,
+  workflow,
   cockpit,
   band,
   rail,
@@ -28,6 +29,7 @@ export default function DealWorkspace({
 }: {
   breadcrumb: React.ReactNode;
   actions: React.ReactNode;
+  workflow: React.ReactNode;
   cockpit: React.ReactNode;
   band?: React.ReactNode;
   rail: React.ReactNode;
@@ -87,6 +89,7 @@ export default function DealWorkspace({
       </header>
 
       <div className={`p-4 md:p-6 flex flex-col gap-6 ${PAGE_WIDTH}`}>
+        {workflow}
         {cockpit}
         {band}
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,68%)_minmax(0,32%)] gap-6 items-start">

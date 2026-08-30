@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useSyncExternalStore, useTransition } from "react";
 import { generateApiKeyAction, revokeApiKeyAction } from "@/app/settings/actions";
+
+const subscribeToLocation = () => () => {};
+const serverOrigin = () => "";
+const clientOrigin = () => window.location.origin;
 
 /**
  * Where the programmatic API is set up and explained. The rule it teaches: no key, no
@@ -16,7 +20,9 @@ export default function ApiAccessBlock({ currentKey }: { currentKey: string | nu
   const [copied, setCopied] = useState<"key" | "example" | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  // Match the server's initial markup, then replace the relative example with the actual
+  // host after hydration. Reading window during render made Settings emit a hydration warning.
+  const origin = useSyncExternalStore(subscribeToLocation, clientOrigin, serverOrigin);
   const endpoint = `${origin}/api/deals/bulk`;
 
   const example = key

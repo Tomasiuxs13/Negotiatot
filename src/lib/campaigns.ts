@@ -9,6 +9,64 @@ export interface CampaignOverrides {
   minAvgViews?: number;
 }
 
+export type CampaignObjective = "awareness" | "engagement" | "conversion";
+export type CampaignKpi = "views" | "engagements" | "clicks" | "orders" | "revenue";
+
+export const CAMPAIGN_OBJECTIVES: {
+  key: CampaignObjective;
+  label: string;
+  description: string;
+  defaultKpi: CampaignKpi;
+}[] = [
+  {
+    key: "awareness",
+    label: "Awareness",
+    description: "Maximize qualified reach and video consumption.",
+    defaultKpi: "views",
+  },
+  {
+    key: "engagement",
+    label: "Engagement",
+    description: "Generate interaction or traffic from the right audience.",
+    defaultKpi: "engagements",
+  },
+  {
+    key: "conversion",
+    label: "Conversion",
+    description: "Drive attributable orders or revenue.",
+    defaultKpi: "orders",
+  },
+];
+
+export const CAMPAIGN_KPIS: Record<
+  CampaignKpi,
+  { label: string; shortLabel: string; objectives: CampaignObjective[] }
+> = {
+  views: { label: "Video views", shortLabel: "Views", objectives: ["awareness"] },
+  engagements: {
+    label: "Engagements",
+    shortLabel: "Engagements",
+    objectives: ["engagement"],
+  },
+  clicks: { label: "Link clicks", shortLabel: "Clicks", objectives: ["engagement", "conversion"] },
+  orders: { label: "Orders / conversions", shortLabel: "Orders", objectives: ["conversion"] },
+  revenue: { label: "Attributed revenue", shortLabel: "Revenue", objectives: ["conversion"] },
+};
+
+export function objectiveLabel(value: CampaignObjective | null | undefined): string | null {
+  return CAMPAIGN_OBJECTIVES.find((objective) => objective.key === value)?.label ?? null;
+}
+
+export function campaignGoalLabel(
+  campaign: Pick<Campaign, "objective" | "primary_kpi" | "kpi_target">
+): string | null {
+  const objective = objectiveLabel(campaign.objective);
+  const kpi = campaign.primary_kpi ? CAMPAIGN_KPIS[campaign.primary_kpi]?.shortLabel : null;
+  if (!objective && !kpi) return null;
+  const target = campaign.kpi_target != null ? ` · target ${campaign.kpi_target.toLocaleString("en-US")}` : "";
+  return `${objective ?? "Campaign"}${kpi ? ` → ${kpi}` : ""}${target}`;
+}
+
 export interface Campaign {
   brief_path?: string | null;
   brief_requirements?: string | null;
@@ -16,6 +74,9 @@ export interface Campaign {
   brief_mime?: string | null;
   id: number;
   name: string;
+  objective: CampaignObjective | null;
+  primary_kpi: CampaignKpi | null;
+  kpi_target: number | null;
   overrides: string; // JSON CampaignOverrides
   budget: number | null;
   archived: 0 | 1;

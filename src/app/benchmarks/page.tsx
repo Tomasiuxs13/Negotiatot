@@ -23,6 +23,7 @@ export default function BenchmarksPage() {
     <>
       <PageHeader
         title="Benchmarks"
+        subtitle="Compare forecasts with results from completed deals"
       />
       <main className="flex-1 overflow-y-auto p-8">
         {result.lost + result.won > 0 && (

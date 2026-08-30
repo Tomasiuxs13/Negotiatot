@@ -10,7 +10,7 @@ import {
   getAllShipments,
 } from "@/lib/fulfillment";
 import { dealPhase, type DealPhase } from "@/lib/deal-phase";
-import { dealPlatforms } from "@/lib/types";
+import { STAGES, STAGE_HELP, dealPlatforms } from "@/lib/types";
 import { buildQuery, sortBy, type SortDir } from "@/lib/table-sort";
 
 export const dynamic = "force-dynamic";
@@ -122,10 +122,58 @@ export default async function PipelinePage({
     <>
       <PageHeader
         title="Pipeline"
-        actions={
-          <>
-            {/* View toggle — same deals, two ways to read them. */}
-            <div className="flex bg-slate-100 rounded-md p-0.5">
+        subtitle="Move every collaboration from first contact to delivery"
+        actions={<NewDealButton />}
+      />
+
+      <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6">
+        <section className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">How deals move</h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Use the <span className="font-semibold text-slate-700">Move to</span> menu on any card. Dragging is still available as a shortcut.
+              </p>
+            </div>
+            <Link href="/pipeline?view=list" className="hidden text-xs font-semibold text-brand-dark hover:underline sm:block">
+              See all as a list
+            </Link>
+          </div>
+          <ol className="flex gap-2 overflow-x-auto pb-1" aria-label="Pipeline stages">
+            {STAGES.map((item, index) => {
+              const count = all.filter((deal) => deal.stage === item.key).length;
+              return (
+                <li key={item.key} className="flex min-w-40 flex-1 items-center gap-2">
+                  <Link
+                    href={query({ stage: item.key })}
+                    className={`min-w-0 flex-1 rounded-lg border px-3 py-2 transition-colors ${
+                      stage === item.key
+                        ? "border-brand bg-brand-soft"
+                        : "border-slate-200 bg-slate-50 hover:border-slate-300"
+                    }`}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-800">{item.label}</span>
+                      <span className="font-data text-xs text-slate-500">{count}</span>
+                    </span>
+                    <span className="mt-0.5 block truncate text-[10px] text-slate-500">
+                      {STAGE_HELP[item.key].description}
+                    </span>
+                  </Link>
+                  {index < STAGES.length - 1 && (
+                    <span className="material-symbols-outlined shrink-0 text-slate-300" style={{ fontSize: 14 }} aria-hidden>
+                      chevron_right
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex bg-slate-100 rounded-md p-0.5" aria-label="Pipeline view">
               {[
                 { key: "board", label: "Board", icon: "view_kanban" },
                 { key: "list", label: "List", icon: "view_list" },
@@ -146,13 +194,12 @@ export default async function PipelinePage({
                 </Link>
               ))}
             </div>
-
-            <div className="hidden lg:flex gap-1.5">
+            <div className="flex max-w-full gap-1.5 overflow-x-auto pb-0.5">
               {FILTERS.map((f) => (
                 <Link
                   key={f.key}
                   href={query({ platform: f.key })}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                  className={`whitespace-nowrap text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
                     platform === f.key
                       ? "bg-slate-900 text-white border-slate-900"
                       : "border-slate-200 text-slate-500 hover:text-slate-800"
@@ -162,14 +209,9 @@ export default async function PipelinePage({
                 </Link>
               ))}
             </div>
-            <NewDealButton />
-          </>
-        }
-      />
+          </div>
 
-      <main className="flex-1 overflow-x-auto overflow-y-auto p-8">
-        <div className="mb-4 flex items-center gap-3 flex-wrap">
-          <form className="flex items-center gap-2" method="get">
+          <form className="flex w-full min-w-0 flex-1 flex-wrap items-center justify-end gap-2 sm:flex-nowrap lg:w-auto" method="get">
             {platform && <input type="hidden" name="platform" value={platform} />}
             {view !== "board" && <input type="hidden" name="view" value={view} />}
             {stage && <input type="hidden" name="stage" value={stage} />}
@@ -178,13 +220,13 @@ export default async function PipelinePage({
               name="q"
               defaultValue={q}
               placeholder="Search creator or deliverable…"
-              className="border border-slate-200 rounded-lg bg-white px-3 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand w-56"
+              className="min-w-48 flex-1 border border-slate-200 rounded-lg bg-white px-3 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand sm:w-56 sm:flex-none"
             />
             {campaignNames.length > 0 && (
               <select
                 name="campaign"
                 defaultValue={campaign}
-                className="border border-slate-200 rounded-lg bg-white px-2 py-1.5 text-xs text-slate-700"
+                className="min-w-44 flex-1 border border-slate-200 rounded-lg bg-white px-2 py-1.5 text-xs text-slate-700 sm:flex-none"
               >
                 <option value="">All campaigns</option>
                 {campaignNames.map((name) => (
@@ -200,7 +242,7 @@ export default async function PipelinePage({
           </form>
 
           {(stage || campaign || q || platform || sort) && (
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex basis-full items-center justify-end gap-2 text-sm">
               <span className="text-xs text-slate-500">
                 {deals.length} of {all.length} deals
                 {stage ? " · one stage" : ""}

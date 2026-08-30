@@ -27,43 +27,70 @@ const TONE_NOTE: Record<string, string> = {
 export default function MetricBand({ metrics }: { metrics: DealAnalysis["metrics"] }) {
   if (metrics.length === 0) return null;
 
+  const visible = metrics.slice(0, 6);
+  const issues = visible.filter((metric) => metric.tone === "warn" || metric.tone === "crit");
+
   return (
-    // Six across only once there is real width for it. The engine's values are closer
-    // to sentences than numbers — "9.11% overall / 10.65% video", "~87.5% (US 86.49% +
-    // UK 1.00%)" — so at six columns on a 1280 screen each tile is ~147px and the value
-    // wraps to four lines. Three up there reads far better than six cramped ones.
-    <div className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-4">
-      {metrics.slice(0, 6).map((m) => {
-        const icon = TONE_ICON[m.tone] ?? null;
-        return (
-          <div
-            key={m.label}
-            className="bg-white border border-slate-200 shadow-sm p-4 rounded-xl flex flex-col gap-1"
-          >
-            <span className="text-[11px] uppercase font-semibold tracking-wider text-slate-500">
-              {m.label}
-            </span>
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-lg font-semibold font-tabular tracking-tight text-slate-900 leading-tight">
-                {m.value}
-              </span>
-              {icon && (
-                <span
-                  className={`material-symbols-outlined shrink-0 ${icon.className}`}
-                  style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}
-                  aria-hidden
-                />
-              )}
-            </div>
-            {/* The note is the pass/fail reasoning and is often a full sentence — it
-                wraps rather than truncating, since "fails by 2%" and "fails by 10x"
-                are the same tone but very different decisions. */}
-            <span className={`text-[11px] font-medium leading-snug ${TONE_NOTE[m.tone]}`}>
-              {m.note}
+    <details className="group rounded-xl border border-slate-200 bg-white shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 md:px-5">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-900">Audience &amp; evidence</span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                issues.length > 0
+                  ? "bg-amber-100 text-amber-800"
+                  : "bg-emerald-100 text-emerald-800"
+              }`}
+            >
+              {issues.length > 0
+                ? `${issues.length} issue${issues.length === 1 ? "" : "s"}`
+                : "Checks passed"}
             </span>
           </div>
-        );
-      })}
-    </div>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {visible.length} source checks support this recommendation. Expand for values and reasons.
+          </p>
+        </div>
+        <span
+          className="material-symbols-outlined shrink-0 text-slate-400 transition-transform group-open:rotate-180"
+          aria-hidden
+        >
+          expand_more
+        </span>
+      </summary>
+
+      {/* The engine's values can be sentence-length. They stay hidden until requested,
+          so the verdict and next action remain above the fold on a normal laptop. */}
+      <div className="grid grid-cols-1 gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+        {visible.map((m) => {
+          const icon = TONE_ICON[m.tone] ?? null;
+          return (
+            <div key={m.label} className="flex flex-col gap-1 rounded-lg bg-slate-50 p-3">
+              <span className="text-[11px] uppercase font-semibold tracking-wider text-slate-500">
+                {m.label}
+              </span>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-base font-semibold font-tabular tracking-tight text-slate-900 leading-tight">
+                  {m.value}
+                </span>
+                {icon && (
+                  <span
+                    className={`material-symbols-outlined shrink-0 ${icon.className}`}
+                    style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}
+                    aria-hidden
+                  >
+                    {icon.icon}
+                  </span>
+                )}
+              </div>
+              <span className={`text-[11px] font-medium leading-snug ${TONE_NOTE[m.tone]}`}>
+                {m.note}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </details>
   );
 }

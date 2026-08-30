@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createDealAction, lookupPartnerAction } from "@/app/new/actions";
 import type { PartnerPrefill } from "@/lib/partners";
 import { money, moneyCpm } from "@/lib/format";
+import { campaignGoalLabel, type Campaign } from "@/lib/campaigns";
 
 const inputClass =
   "w-full border border-slate-200 rounded-lg bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand";
@@ -26,7 +27,7 @@ export default function NewDealForm({
   defaultDiscount = 0,
   defaultDiscountType = "none",
 }: {
-  campaigns?: { id: number; name: string }[];
+  campaigns?: Pick<Campaign, "id" | "name" | "objective" | "primary_kpi" | "kpi_target">[];
   partners?: { id: number; name: string }[];
   presetPartner?: PartnerPrefill;
   stage?: string;
@@ -122,14 +123,14 @@ export default function NewDealForm({
     <form ref={formRef} onSubmit={submit} className="space-y-4">
       <input type="hidden" name="stage" value={stageChoice === "analyzing" ? "" : stageChoice} />
 
-      {/* What happens on create — the credits question, answered before it costs anything. */}
+      {/* The manager's intent controls both workflow and cost, so ask it before any data entry. */}
       <div>
-        <span className="block text-xs font-semibold text-slate-700 mb-1.5">On create</span>
-        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="What happens on create">
+        <span className="block text-xs font-semibold text-slate-700 mb-1.5">What are you doing now?</span>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label="What are you doing now">
           {[
-            { key: "analyzing", label: "Analyze now", hint: "Runs the pricing analysis (uses API credits)" },
-            { key: "contacted", label: "Outreach first", hint: "Saved as contacted — analyze when they reply, no credits spent" },
-            { key: "lead", label: "Just track it", hint: "Saved as a lead — a CRM row, nothing runs" },
+            { key: "analyzing", label: "Evaluate & price", hint: "Research fit and calculate a negotiation range" },
+            { key: "contacted", label: "Outreach sent", hint: "Track the conversation; evaluate when they reply" },
+            { key: "lead", label: "Save as prospect", hint: "Add to the pipeline without running analysis" },
           ].map((o) => (
             <button
               key={o.key}
@@ -264,6 +265,49 @@ export default function NewDealForm({
           )}
         </div>
       </div>
+
+      <section className="rounded-lg border border-brand/25 bg-brand/5 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-brand-dark mb-3">
+          Deal essentials
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Campaign{" "}
+              <span className="font-normal text-slate-500">
+                — sets the outcome this creator will be measured against
+              </span>
+            </label>
+            {campaigns.length > 0 ? (
+              <select name="campaign_id" className={inputClass} defaultValue="">
+                <option value="">No campaign — use the global Playbook</option>
+                {campaigns.map((campaign) => (
+                  <option key={campaign.id} value={campaign.id}>
+                    {campaign.name}{campaignGoalLabel(campaign) ? ` — ${campaignGoalLabel(campaign)}` : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input name="campaign" placeholder="e.g. Q3 DACH launch" className={inputClass} />
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Deliverables *{" "}
+              <span className="font-normal text-slate-500">— platform, format, and quantity</span>
+            </label>
+            <input
+              name="deliverables"
+              placeholder="e.g. 1× YouTube integration + 2× Instagram reels + 1 story"
+              className={inputClass}
+              required={!isLeadCapture}
+            />
+            <p className="text-[11px] text-slate-500 mt-1">
+              A clear scope prevents price comparisons between unlike packages.
+            </p>
+          </div>
+        </div>
+      </section>
 
       <details className="group border border-slate-200 rounded-lg bg-slate-50/60 px-4 py-3">
         <summary className="cursor-pointer list-none text-xs font-semibold text-slate-700 select-none flex items-center gap-2">
@@ -407,42 +451,13 @@ export default function NewDealForm({
         </div>
       </details>
 
-      <div>
-        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-          Deliverables <span className="font-normal text-slate-500">— what you want from them</span>
-        </label>
-        <input
-          name="deliverables"
-          placeholder="e.g. 1× YouTube integration + 2× Instagram reels + 1 story"
-          className={inputClass}
-        />
-      </div>
-
-      <div>
-        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-          Campaign{" "}
-          <span className="font-normal text-slate-500">
-            — its rule overrides apply to this deal
-          </span>
-        </label>
-        {campaigns.length > 0 ? (
-          <select name="campaign_id" className={inputClass} defaultValue="">
-            <option value="">No campaign — use the global Playbook</option>
-            {campaigns.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            name="campaign"
-            placeholder="e.g. Q3 DACH launch"
-            className={inputClass}
-          />
-        )}
-      </div>
-
+      <details open={!isLeadCapture} className="group border border-slate-200 rounded-lg bg-slate-50/60 px-4 py-3">
+        <summary className="cursor-pointer list-none text-xs font-semibold text-slate-700 select-none flex items-center gap-2">
+          <span className="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
+          Creator evidence
+          <span className="font-normal text-slate-500">— add one reliable source for a sharper evaluation</span>
+        </summary>
+        <div className="mt-4 space-y-4">
       <div>
         <label className="block text-xs font-semibold text-slate-700 mb-1.5">
           Analytics report or screenshot{" "}
@@ -463,13 +478,6 @@ export default function NewDealForm({
         </label>
       </div>
 
-      <details className="group border border-slate-200 rounded-lg bg-slate-50/60 px-4 py-3">
-        <summary className="cursor-pointer list-none text-xs font-semibold text-slate-700 select-none flex items-center gap-2">
-          <span className="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
-          Their message or rate card
-          <span className="font-normal text-slate-500">— paste it if they wrote first</span>
-        </summary>
-        <div className="mt-3">
       <div>
         <label className="block text-xs font-semibold text-slate-700 mb-1.5">
           Their message or rate card{" "}
@@ -484,8 +492,6 @@ export default function NewDealForm({
           className={`${inputClass} resize-y`}
         />
       </div>
-        </div>
-      </details>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
@@ -529,6 +535,8 @@ export default function NewDealForm({
           />
         </div>
       </div>
+        </div>
+      </details>
 
       <button
         type="submit"
@@ -540,7 +548,7 @@ export default function NewDealForm({
             ? "Adding…"
             : "Creating deal…"
           : isLeadCapture
-            ? `Add ${stage === "contacted" ? "contacted deal" : "lead"}`
+            ? stageChoice === "contacted" ? "Add contacted deal" : "Add prospect"
             : "Create deal & run analysis"}
       </button>
       <p className="text-xs text-slate-500 text-center">
