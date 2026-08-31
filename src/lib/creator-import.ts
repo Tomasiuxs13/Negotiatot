@@ -209,3 +209,57 @@ export function sameNormalisedName(a: string | null | undefined, b: string | nul
   const right = normalizeCreatorName(b);
   return left != null && left === right;
 }
+
+/** Everything a partner record can be recognised by, for telling namesakes apart. */
+export interface PartnerIdentitySignals {
+  email: string | null;
+  handles: (string | null)[];
+  urls: (string | null)[];
+}
+
+/**
+ * Whether a name match is two different people who happen to share a first name.
+ *
+ * A 90-row import created 88 because two first names repeated — Emily and Jay — and the
+ * second of each pair was matched to the first by name and dropped. Both carried their
+ * own email and their own handle: every signal that means identity said "different
+ * person", and the one that means nothing decided it.
+ *
+ * So a name only stands when nothing contradicts it. Where both sides carry the same
+ * kind of signal and the signals disagree, they are different people.
+ */
+export function identityConflict(
+  candidate: Pick<CreatorImportCandidate, "email" | "handle" | "profileUrl">,
+  partner: PartnerIdentitySignals
+): boolean {
+  const email = normalizeEmail(candidate.email);
+  const partnerEmail = normalizeEmail(partner.email);
+  if (email && partnerEmail && email !== partnerEmail) return true;
+
+  const handle = normalizeHandle(candidate.handle);
+  const partnerHandles = partner.handles.map(normalizeHandle).filter(Boolean);
+  if (handle && partnerHandles.length > 0 && !partnerHandles.includes(handle)) return true;
+
+  const url = normalizeProfileUrl(candidate.profileUrl);
+  const partnerUrls = partner.urls.map(normalizeProfileUrl).filter(Boolean);
+  if (url && partnerUrls.length > 0 && !partnerUrls.includes(url)) return true;
+
+  return false;
+}
+
+/**
+ * What makes this row the same creator as another row in the same file. Names are
+ * excluded on purpose — sharing one is exactly the thing that must stop meaning
+ * "already imported".
+ */
+export function identityKeys(candidate: CreatorImportCandidate): string[] {
+  const keys: string[] = [];
+  if (candidate.sourceRecordId) keys.push(`src:${candidate.source}:${candidate.sourceRecordId}`);
+  const email = normalizeEmail(candidate.email);
+  if (email) keys.push(`email:${email}`);
+  const url = normalizeProfileUrl(candidate.profileUrl);
+  if (url) keys.push(`url:${url}`);
+  const handle = normalizeHandle(candidate.handle);
+  if (handle && candidate.platform) keys.push(`handle:${candidate.platform}:${handle}`);
+  return keys;
+}

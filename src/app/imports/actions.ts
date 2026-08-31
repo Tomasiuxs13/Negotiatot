@@ -7,6 +7,7 @@ import {
   createPartner,
   enrichPartnerFromImport,
   findPartnerByEmail,
+  getPartnerChannels,
   findPartnerByProfileUrl,
   findPartnerBySourceRecord,
   getPartnerDeals,
@@ -18,6 +19,8 @@ import {
   candidateIdentityLabel,
   candidateIsUsable,
   IMPORT_SOURCES,
+  identityConflict,
+  identityKeys,
   sameNormalisedName,
   type CreatorImportCandidate,
   type CreatorImportPreviewRow,
@@ -108,13 +111,24 @@ function previewCandidate(candidate: CreatorImportCandidate): CreatorImportPrevi
     : [];
   if (byName.length === 1) {
     const partner = byName[0];
-    return {
-      candidate,
-      kind: "name_match",
-      reason: "Possible name match — confirm it in Partners before merging evidence.",
-      partner: { id: partner.id, name: partner.name, email: partner.email },
-      liveDeal: latestLiveDeal(partner.id),
-    };
+    // A shared name is not a shared person. Where the row carries an email, handle or
+    // profile URL of its own and the record's disagrees, this is a namesake: two
+    // creators called Emily, and the one that arrived second used to be dropped.
+    const channels = getPartnerChannels(partner.id);
+    const conflict = identityConflict(candidate, {
+      email: partner.email,
+      handles: channels.map((channel) => channel.handle),
+      urls: channels.map((channel) => channel.url),
+    });
+    if (!conflict) {
+      return {
+        candidate,
+        kind: "name_match",
+        reason: "Possible name match — confirm it in Partners before merging evidence.",
+        partner: { id: partner.id, name: partner.name, email: partner.email },
+        liveDeal: latestLiveDeal(partner.id),
+      };
+    }
   }
   return { candidate, kind: "new", reason: "No existing Counterpart record found.", partner: null, liveDeal: null };
 }
@@ -140,6 +154,7 @@ export async function commitCreatorImportAction(input: {
   createdDeals?: number;
   enriched?: number;
   skipped?: number;
+  skippedRows?: { row: number; name: string; reason: string }[];
   error?: string;
 }> {
   if (!validSource(input.source)) return { error: "Unknown import source." };
@@ -159,13 +174,49 @@ export async function commitCreatorImportAction(input: {
   let createdDeals = 0;
   let enriched = 0;
   let skipped = 0;
+  /** Named, because a count cannot tell you which creator is missing from your pipeline. */
+  const skippedRows: { row: number; name: string; reason: string }[] = [];
+
+  /**
+   * Every decision is made against the database as it stands now, before a single write.
+   *
+   * The commit used to re-run the preview inside the transaction, so a partner created
+   * by row 12 was visible to row 57 — and a second creator with the same first name
+   * matched it and was skipped. The user had approved a preview that said all 90 rows
+   * were new, and 88 arrived. What is written is now what was shown.
+   */
+  const decisions = candidates.map(previewCandidate);
+  /** Identity, never name: two rows are the same creator only if a real signal says so. */
+  const seenInBatch = new Map<string, number>();
 
   const write = () => {
     batchId = createCreatorImportBatch(input.source, input.filename ?? null, candidates.length);
-    for (const candidate of candidates) {
-      const preview = previewCandidate(candidate);
+    for (const [index, candidate] of candidates.entries()) {
+      const preview = decisions[index];
+      const keys = identityKeys(candidate);
+      const alreadyInBatch = keys.map((key) => seenInBatch.get(key)).find((id) => id != null);
+      if (preview.kind === "new" && alreadyInBatch != null) {
+        // The same creator twice in one file: enrich the record this batch just made
+        // rather than creating them again.
+        enrichPartnerFromImport(alreadyInBatch, candidate);
+        enriched += 1;
+        recordCreatorImport({
+          batchId,
+          rowNumber: candidate.rowNumber,
+          sourceRecordId: candidate.sourceRecordId,
+          result: "matched_enriched",
+          partnerId: alreadyInBatch,
+          raw: candidate.raw,
+        });
+        continue;
+      }
       if (preview.kind === "invalid" || preview.kind === "name_match") {
         skipped += 1;
+        skippedRows.push({
+          row: candidate.rowNumber,
+          name: candidate.name ?? candidate.handle ?? candidate.email ?? "unnamed row",
+          reason: preview.reason,
+        });
         recordCreatorImport({
           batchId,
           rowNumber: candidate.rowNumber,
@@ -190,6 +241,7 @@ export async function commitCreatorImportAction(input: {
         });
         enrichPartnerFromImport(partnerId, candidate);
         createdPartners += 1;
+        for (const key of keys) if (!seenInBatch.has(key)) seenInBatch.set(key, partnerId);
         if (input.newRecordStage !== "partner" && candidate.platform) {
           const stage = input.newRecordStage as Extract<Stage, "lead" | "contacted">;
           dealId = createDeal({
@@ -223,5 +275,5 @@ export async function commitCreatorImportAction(input: {
   revalidatePath("/imports");
   revalidatePath("/partners");
   revalidatePath("/pipeline");
-  return { createdPartners, createdDeals, enriched, skipped };
+  return { createdPartners, createdDeals, enriched, skipped, skippedRows };
 }

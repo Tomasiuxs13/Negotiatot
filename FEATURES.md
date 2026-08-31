@@ -191,7 +191,14 @@ beside its matching Counterpart partner and any live deal before committing sele
 
 - **Identity comes first.** Provider record ID, normalised profile URL and email are safe
   match keys; a name-only similarity is displayed as a possible match but is never merged
-  automatically.
+  automatically. A shared name is not a shared person: where the row carries an email,
+  handle or profile URL of its own and the named record's disagrees, they are namesakes
+  and both are kept.
+- **What the preview shows is what is written.** Every row is decided against the database
+  as it stood before the import began, so a partner created by row 12 can never re-classify
+  row 57. Within one file, rows are matched to each other on identity only — never on name.
+  A 90-row file that created 88, because two first names repeated, is the reason both rules
+  exist. Any row that still cannot be imported is listed by row number, name and reason.
 - **External data remains evidence.** Each import retains its source, raw row and provider
   identity. It can fill a blank partner/channel field or add a secondary contact, but does
   not overwrite a manager-entered email, URL, audience metric or deal status.

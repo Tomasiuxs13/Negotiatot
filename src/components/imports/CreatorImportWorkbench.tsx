@@ -160,6 +160,8 @@ export default function CreatorImportWorkbench() {
   const [manual, setManual] = useState({ name: "", email: "", profileUrl: "", platform: "", handle: "" });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  /** Who did not make it in. A count cannot tell you which creator is missing. */
+  const [skippedRows, setSkippedRows] = useState<{ row: number; name: string; reason: string }[]>([]);
   const [isPending, startTransition] = useTransition();
 
   const candidates = useMemo(
@@ -249,8 +251,9 @@ export default function CreatorImportWorkbench() {
         return;
       }
       setSuccess(
-        `${result.createdPartners ?? 0} new partner${result.createdPartners === 1 ? "" : "s"}, ${result.createdDeals ?? 0} new pipeline deal${result.createdDeals === 1 ? "" : "s"}, and ${result.enriched ?? 0} matched record${result.enriched === 1 ? "" : "s"} updated. ${result.skipped ? `${result.skipped} unsafe row${result.skipped === 1 ? " was" : "s were"} skipped.` : ""}`
+        `${result.createdPartners ?? 0} new partner${result.createdPartners === 1 ? "" : "s"}, ${result.createdDeals ?? 0} new pipeline deal${result.createdDeals === 1 ? "" : "s"}, and ${result.enriched ?? 0} matched record${result.enriched === 1 ? "" : "s"} updated.`
       );
+      setSkippedRows(result.skippedRows ?? []);
       setSelected(new Set());
     });
   };
@@ -475,6 +478,23 @@ export default function CreatorImportWorkbench() {
 
       {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {success && <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</p>}
+      {/* Named and listed, not counted. A row that does not arrive is a creator who is
+          invisible until they reply and are not in the pipeline. */}
+      {skippedRows.length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5">
+          <p className="text-sm font-semibold text-amber-900">
+            {skippedRows.length} row{skippedRows.length === 1 ? " was" : "s were"} not imported
+          </p>
+          <ul className="mt-1.5 space-y-1">
+            {skippedRows.map((row) => (
+              <li key={row.row} className="text-xs text-amber-800">
+                <span className="font-tabular">Row {row.row}</span> ·{" "}
+                <span className="font-semibold">{row.name}</span> — {row.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
