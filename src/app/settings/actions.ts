@@ -4,6 +4,7 @@ import { randomBytes } from "crypto";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { getSetting, setSetting } from "@/lib/db";
+import { parseCategories } from "@/lib/categories";
 import { generateApiKey } from "@/lib/api-auth";
 import { disconnectGmail } from "@/lib/gmail";
 
@@ -37,4 +38,18 @@ export async function disconnectGmailAction(): Promise<{ error?: string }> {
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Gmail could not be disconnected." };
   }
+}
+
+/**
+ * The creator-category taxonomy. Stored normalised — trimmed, de-duplicated — so the
+ * list itself can never contain the split spellings it exists to prevent.
+ */
+export async function saveCreatorCategoriesAction(raw: string): Promise<{ error?: string }> {
+  const list = parseCategories(raw);
+  setSetting("creator_categories", list);
+  revalidatePath("/settings");
+  revalidatePath("/new");
+  revalidatePath("/partners");
+  revalidatePath("/benchmarks");
+  return {};
 }

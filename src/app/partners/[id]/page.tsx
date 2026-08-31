@@ -1,7 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PartnerProfile from "@/components/partners/PartnerProfile";
-import { ensurePartnerPortalToken, getPartner, getPartnerChannels, getPartnerDeals, getRemindersFor } from "@/lib/db";
+import {
+  ensurePartnerPortalToken,
+  getCreatorCategories,
+  getPartner,
+  getPartnerChannels,
+  getPartnerDeals,
+  getRemindersFor,
+} from "@/lib/db";
 import RemindersBlock from "@/components/RemindersBlock";
 import ContactStrip from "@/components/deal/ContactStrip";
 import { getContentItems, getPartnerOnboarding } from "@/lib/fulfillment";
@@ -83,7 +90,12 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
       </div>
 
       <div className={`space-y-4 ${PAGE_WIDTH}`}>
-        <PartnerProfile partner={partner} channels={channels} dealCount={deals.length} />
+        <PartnerProfile
+          partner={partner}
+          channels={channels}
+          dealCount={deals.length}
+          categories={getCreatorCategories()}
+        />
 
         <RemindersBlock reminders={getRemindersFor({ partnerId: partner.id })} partnerId={partner.id} />
 

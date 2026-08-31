@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { benchmarkRows, platformAverages, reachKey } from "../benchmark-rows";
+import {
+  benchmarkRows,
+  categoryAverages,
+  platformAverages,
+  reachKey,
+  type BenchmarkRow,
+} from "../benchmark-rows";
 import type { Deal } from "../types";
 import type { ContentItem } from "../fulfillment-types";
 
@@ -262,5 +268,73 @@ describe("measurement maturity", () => {
       ]
     );
     expect(rows[0].isFinal).toBe(true);
+  });
+});
+
+describe("categoryAverages", () => {
+  const row = (over: Partial<BenchmarkRow>): BenchmarkRow =>
+    ({
+      dealId: 1,
+      creator: "Marta",
+      platform: "youtube",
+      category: "Fishing",
+      isFinal: true,
+      price: 1000,
+      label: null,
+      predictedViews: 100_000,
+      actualViews: 100_000,
+      predictedCpm: 10,
+      actualCpm: 10,
+      orders: null,
+      revenue: null,
+      roas: null,
+      ...over,
+    }) as BenchmarkRow;
+
+  it("averages each category separately — the whole point of the field", () => {
+    const averages = categoryAverages([
+      row({ dealId: 1, category: "Fishing", actualCpm: 10 }),
+      row({ dealId: 2, category: "Fishing", actualCpm: 20 }),
+      row({ dealId: 3, category: "Gaming", actualCpm: 4 }),
+    ]);
+    expect(averages.map((a) => a.category)).toEqual(["Fishing", "Gaming"]);
+    expect(averages[0].avgActualCpm).toBe(15);
+    expect(averages[0].count).toBe(2);
+  });
+
+  it("leaves out provisional readings and uncategorised creators", () => {
+    const averages = categoryAverages([
+      row({ dealId: 1, category: "Fishing", isFinal: false, actualCpm: 99 }),
+      row({ dealId: 2, category: null, actualCpm: 99 }),
+      row({ dealId: 3, category: "Fishing", actualCpm: 12 }),
+    ]);
+    expect(averages).toHaveLength(1);
+    expect(averages[0].avgActualCpm).toBe(12);
+  });
+
+  it("names the platforms behind a bucket — one CPM over four platforms needs saying", () => {
+    const averages = categoryAverages([
+      row({ dealId: 1, platform: "youtube" }),
+      row({ dealId: 2, platform: "tiktok" }),
+    ]);
+    expect(averages[0].platforms).toEqual(["youtube", "tiktok"]);
+  });
+});
+
+describe("category on the rows themselves", () => {
+  it("comes from the creator's partner record, not the deal", () => {
+    const rows = benchmarkRows(
+      [
+        deal({ id: 1, partner_id: 7, agreed_price: 1000, actual_views: 50_000, stage: "completed" }),
+        deal({ id: 2, partner_id: 8, agreed_price: 1000, actual_views: 50_000, stage: "completed" }),
+      ],
+      [],
+      new Map(),
+      {},
+      undefined,
+      new Map([[7, "Fishing"]])
+    );
+    expect(rows.find((r) => r.dealId === 1)?.category).toBe("Fishing");
+    expect(rows.find((r) => r.dealId === 2)?.category).toBeNull();
   });
 });

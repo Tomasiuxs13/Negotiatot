@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import {
   addMessage,
+  getCreatorCategories,
   createDeal,
   createPartner,
   findPartnerByName,
@@ -21,6 +22,7 @@ import type { PartnerPrefill } from "@/lib/partners";
 import { parseDecimal } from "@/lib/format";
 import { readReportFile } from "@/lib/report-upload";
 import { hasRights, parseRights, type DealRights } from "@/lib/rights";
+import { normalizeCategory } from "@/lib/categories";
 
 export async function createDealAction(
   formData: FormData
@@ -101,6 +103,13 @@ export async function createDealAction(
   // Fill an existing partner's email only when it's blank — never clobber what's there.
   if (partner && email && !partner.email) {
     updatePartner(partner.id, { email });
+  }
+  // The category belongs to the creator, not the deal. Only what the managed list
+  // contains is stored: a value typed past the picker is not a category, it is the
+  // beginning of a second spelling of one.
+  const category = normalizeCategory(formData.get("category"), getCreatorCategories());
+  if (category && partner?.category !== category) {
+    updatePartner(partnerId, { category });
   }
 
   let pdfBase64: string | undefined;

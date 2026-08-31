@@ -13,6 +13,8 @@ export interface Partner {
   phone: string | null;
   notes: string | null;
   tags: string; // JSON array
+  /** The managed creator category, or null. See categories.ts. */
+  category?: string | null;
   archived: 0 | 1;
   created_at: string;
   updated_at: string;
@@ -88,6 +90,8 @@ export interface PartnerOperationalStats {
 
 export interface PartnerPrefill {
   partnerId: number;
+  /** The managed creator category, so a returning creator keeps it. */
+  category: string | null;
   name: string;
   email: string | null;
   platforms: string[];

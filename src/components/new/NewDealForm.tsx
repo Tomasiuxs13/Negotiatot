@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createDealAction, lookupPartnerAction } from "@/app/new/actions";
 import type { PartnerPrefill } from "@/lib/partners";
+import { categoryOptions } from "@/lib/categories";
 import { money, moneyCpm } from "@/lib/format";
 import { campaignGoalLabel, type Campaign } from "@/lib/campaigns";
 
@@ -20,6 +21,7 @@ const PLATFORMS = [
 export default function NewDealForm({
   campaigns = [],
   partners = [],
+  categories = [],
   presetPartner,
   stage,
   defaultCommission = 0,
@@ -29,6 +31,8 @@ export default function NewDealForm({
 }: {
   campaigns?: Pick<Campaign, "id" | "name" | "objective" | "primary_kpi" | "kpi_target">[];
   partners?: { id: number; name: string }[];
+  /** The managed creator categories, from Settings. */
+  categories?: string[];
   presetPartner?: PartnerPrefill;
   stage?: string;
   /** Your standard affiliate rate, from the Playbook. */
@@ -62,6 +66,9 @@ export default function NewDealForm({
     presetPartner?.primaryPlatform ?? initialPlatforms[0]
   );
   const [known, setKnown] = useState<PartnerPrefill | null>(presetPartner ?? null);
+  // A creator's category belongs to the creator, so a returning one arrives with theirs
+  // already chosen — see recognisePartner.
+  const [category, setCategory] = useState(presetPartner?.category ?? "");
 
   /**
    * Recognises a returning creator and fills in what we already hold on them, so the
@@ -72,6 +79,8 @@ export default function NewDealForm({
       const found = await lookupPartnerAction(name);
       setKnown(found);
       if (found) {
+        // Never overwrite a category the manager just picked for this deal.
+        if (found.category && !category) setCategory(found.category);
         if (found.platforms.length > 0) {
           setSelected(found.platforms);
           setPrimaryPlatform(found.primaryPlatform ?? found.platforms[0]);
@@ -219,6 +228,29 @@ export default function NewDealForm({
               <option key={p.id} value={p.name} />
             ))}
           </datalist>
+          {categories.length > 0 && (
+            <label className="block mt-3">
+              <span className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Category{" "}
+                <span className="font-normal text-slate-500">
+                  — what their channel is about; Benchmarks groups your real CPM by it
+                </span>
+              </span>
+              <select
+                name="category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">Not set</option>
+                {categoryOptions(categories, known?.category ?? presetPartner?.category).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1.5">

@@ -46,6 +46,8 @@ export interface BenchmarkRow {
   dealId: number;
   creator: string;
   platform: Platform;
+  /** The creator's managed category, when they have one. */
+  category: string | null;
   /**
    * True when every reading behind this row was taken after the platform's window
    * closed. Provisional rows are shown but never averaged — one early number would
@@ -91,11 +93,14 @@ export function benchmarkRows(
   contentItems: ContentItem[],
   expectedReach: ExpectedReach = new Map(),
   windows: MeasurementWindows = {},
-  today?: string
+  today?: string,
+  /** Creator category by partner id — what the per-category averages group on. */
+  categories: Map<number, string | null> = new Map()
 ): BenchmarkRow[] {
   const rows: BenchmarkRow[] = [];
 
   for (const deal of deals) {
+    const category = deal.partner_id != null ? (categories.get(deal.partner_id) ?? null) : null;
     const price = deal.agreed_price ?? deal.current_offer;
     if (price == null) continue;
 
@@ -152,6 +157,7 @@ export function benchmarkRows(
           dealId: deal.id,
           creator: deal.creator,
           platform,
+          category,
           isFinal:
             dealFullyMeasured &&
             group.every((c) => countsTowardBenchmarks(measurementState(c, windows, today))),
@@ -180,6 +186,7 @@ export function benchmarkRows(
       dealId: deal.id,
       creator: deal.creator,
       platform: platforms[0],
+      category,
       // Deal-level totals predate per-item measurement; take them at face value.
       isFinal: true,
       price,
@@ -222,4 +229,44 @@ export function platformAverages(rows: BenchmarkRow[]) {
           : null,
     };
   }).filter((entry): entry is NonNullable<typeof entry> => entry != null);
+}
+
+/**
+ * Calibrated averages per creator category, from real delivery.
+ *
+ * The platform average answers "what does YouTube cost us"; this answers "what does a
+ * hunting channel cost us", which is the number that actually decides whether an ask is
+ * fair. Same discipline as the platform version: only settled readings are averaged, and
+ * a bucket says how thin it is so a single deal is never mistaken for a benchmark.
+ */
+export function categoryAverages(rows: BenchmarkRow[]) {
+  const byCategory = new Map<string, BenchmarkRow[]>();
+  for (const row of rows) {
+    if (!row.isFinal || !row.category) continue;
+    const list = byCategory.get(row.category);
+    if (list) list.push(row);
+    else byCategory.set(row.category, [row]);
+  }
+
+  return [...byCategory.entries()]
+    .map(([category, rs]) => {
+      const withRoas = rs.filter((r) => r.roas != null);
+      const withPredicted = rs.filter((r) => r.predictedViews != null);
+      return {
+        category,
+        count: rs.length,
+        platforms: [...new Set(rs.map((r) => r.platform))],
+        avgActualCpm: rs.reduce((s, r) => s + r.actualCpm, 0) / rs.length,
+        avgRoas:
+          withRoas.length > 0
+            ? withRoas.reduce((s, r) => s + (r.roas ?? 0), 0) / withRoas.length
+            : null,
+        avgDelivery:
+          withPredicted.length > 0
+            ? withPredicted.reduce((s, r) => s + r.actualViews / r.predictedViews!, 0) /
+              withPredicted.length
+            : null,
+      };
+    })
+    .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
 }

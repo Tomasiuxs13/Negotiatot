@@ -20,6 +20,7 @@ import { normalizeEmail, normalizeProfileUrl } from "./creator-identity";
 import type { CreatorImportCandidate, ImportSource } from "./creator-import";
 import type { EmailProvider, GmailConnectionSummary, InboxEmail, InboxEmailStatus, InboxMatchKind, OutboundEmail } from "./email-inbox";
 import type { FollowUpState } from "./followups";
+import { DEFAULT_CATEGORIES, parseCategories } from "./categories";
 
 const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -504,6 +505,9 @@ CREATE TABLE IF NOT EXISTS usage_log (
     padd("company_name");
     padd("tax_id");
     padd("legal_address");
+    // What the creator's channel is about, from the managed list in Settings. Tags stay
+    // free-form; this one is constrained so Benchmarks can group on it.
+    padd("category");
   }
   // Generated contracts stay editable text until marked signed; the signed original
   // then arrives through the existing upload-and-parse flow.
@@ -1031,6 +1035,15 @@ export function getPartners(includeArchived = false): Partner[] {
       `SELECT * FROM partners ${includeArchived ? "" : "WHERE archived = 0"} ORDER BY name COLLATE NOCASE`
     )
     .all() as Partner[];
+}
+
+/**
+ * The managed creator categories. Never edited means the starter list, not an empty one:
+ * an empty picker at intake only teaches the manager to skip the field.
+ */
+export function getCreatorCategories(): string[] {
+  const stored = getSetting<unknown>("creator_categories");
+  return stored == null ? DEFAULT_CATEGORIES : parseCategories(stored);
 }
 
 export function getPartner(id: number): Partner | undefined {
@@ -1632,15 +1645,19 @@ export function createPartner(fields: {
   phone?: string | null;
   notes?: string | null;
   tags?: string[];
+  category?: string | null;
 }): number {
   const info = db
-    .prepare("INSERT INTO partners (name, email, phone, notes, tags) VALUES (?, ?, ?, ?, ?)")
+    .prepare(
+      "INSERT INTO partners (name, email, phone, notes, tags, category) VALUES (?, ?, ?, ?, ?, ?)"
+    )
     .run(
       fields.name.trim(),
       fields.email?.trim() || null,
       fields.phone?.trim() || null,
       fields.notes?.trim() || null,
-      JSON.stringify(fields.tags ?? [])
+      JSON.stringify(fields.tags ?? []),
+      fields.category?.trim() || null
     );
   return Number(info.lastInsertRowid);
 }
@@ -1653,6 +1670,7 @@ export function updatePartner(
     phone?: string | null;
     notes?: string | null;
     tags?: string[];
+    category?: string | null;
     archived?: 0 | 1;
   }
 ) {
@@ -1667,6 +1685,7 @@ export function updatePartner(
   if (fields.phone !== undefined) push("phone", fields.phone?.trim() || null);
   if (fields.notes !== undefined) push("notes", fields.notes?.trim() || null);
   if (fields.tags !== undefined) push("tags", JSON.stringify(fields.tags));
+  if (fields.category !== undefined) push("category", fields.category?.trim() || null);
   if (fields.archived !== undefined) push("archived", fields.archived);
   if (sets.length === 0) return;
   db.prepare(

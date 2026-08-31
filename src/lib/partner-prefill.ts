@@ -34,6 +34,7 @@ function buildPartnerPrefill(partner: Partner): PartnerPrefill {
   return {
     partnerId: partner.id,
     name: partner.name,
+    category: partner.category ?? null,
     email: partner.email,
     platforms: channels.map((channel) => channel.platform),
     primaryPlatform: primary?.platform ?? null,

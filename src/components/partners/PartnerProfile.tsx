@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Partner, PartnerChannel } from "@/lib/partners";
+import { categoryOptions } from "@/lib/categories";
 import { parseTags } from "@/lib/partners";
 import { PLATFORM_META, type Platform } from "@/lib/types";
 import { views as fmtViews } from "@/lib/format";
@@ -23,10 +24,13 @@ export default function PartnerProfile({
   partner,
   channels,
   dealCount = 0,
+  categories = [],
 }: {
   partner: Partner;
   channels: PartnerChannel[];
   dealCount?: number;
+  /** The managed creator categories, from Settings. */
+  categories?: string[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -38,6 +42,7 @@ export default function PartnerProfile({
     phone: partner.phone ?? "",
     notes: partner.notes ?? "",
     tags: parseTags(partner.tags).join(", "),
+    category: partner.category ?? "",
   });
   const [newChannel, setNewChannel] = useState<{ platform: Platform; handle: string; url: string } | null>(
     null
@@ -52,6 +57,7 @@ export default function PartnerProfile({
         phone: form.phone,
         notes: form.notes,
         tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
+        category: form.category,
       });
       if (result.error) setError(result.error);
       else setEditing(false);
@@ -106,6 +112,21 @@ export default function PartnerProfile({
           <input className={inputClass} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Email" />
           <input className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="Phone" />
           <input className={inputClass} value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="Tags, comma separated" />
+          {categories.length > 0 && (
+            <select
+              aria-label="Creator category"
+              className={inputClass}
+              value={form.category}
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
+            >
+              <option value="">No category</option>
+              {categoryOptions(categories, partner.category).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          )}
           <textarea
             className={`${inputClass} resize-y`}
             rows={3}
@@ -136,8 +157,13 @@ export default function PartnerProfile({
                 {partner.email || "no email"}
                 {partner.phone ? ` · ${partner.phone}` : ""}
               </p>
-              {tags.length > 0 && (
+              {(partner.category || tags.length > 0) && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
+                  {partner.category && (
+                    <span className="text-[11px] font-semibold bg-brand-soft text-brand-dark rounded-full px-2 py-0.5">
+                      {partner.category}
+                    </span>
+                  )}
                   {tags.map((t) => (
                     <span key={t} className="text-[11px] font-medium bg-slate-100 text-slate-600 rounded-full px-2 py-0.5">
                       {t}

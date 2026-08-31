@@ -1,8 +1,10 @@
 import PageHeader from "@/components/PageHeader";
-import { getDeals, getUsageTotals } from "@/lib/db";
+import { getCreatorCategories, getDeals, getPartners, getUsageTotals } from "@/lib/db";
 import { hasApiKey, MODEL } from "@/lib/claude";
 import { usageCostUsd, totalTokens } from "@/lib/usage-cost";
 import ApiAccessBlock from "@/components/settings/ApiAccessBlock";
+import CreatorCategoriesBlock from "@/components/settings/CreatorCategoriesBlock";
+import { categoryUsage } from "@/lib/categories";
 import { getSetting } from "@/lib/db";
 import GmailConnectionBlock from "@/components/settings/GmailConnectionBlock";
 import { getGmailConnectionSummary, gmailSetupStatus } from "@/lib/gmail";
@@ -27,6 +29,8 @@ export default async function SettingsPage({
   const keyConfigured = hasApiKey();
   const dealCount = getDeals().length;
   const usage = getUsageTotals();
+  const categories = getCreatorCategories();
+  const categoryCounts = categoryUsage(categories, getPartners().map((p) => p.category));
   const estCost = usageCostUsd(usage);
 
   const rows = [
@@ -83,6 +87,7 @@ export default async function SettingsPage({
             connection={gmailConnection}
             oauthStatus={gmailOAuthStatus(query.gmail)}
           />
+          <CreatorCategoriesBlock categories={categories} usage={categoryCounts} />
           <ApiAccessBlock currentKey={getSetting<string>("api_key")} />
         </div>
       </main>

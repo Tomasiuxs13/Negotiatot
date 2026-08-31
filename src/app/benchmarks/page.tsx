@@ -1,8 +1,8 @@
 import PageHeader from "@/components/PageHeader";
-import { getDeals, getExpectedReach, getSetting } from "@/lib/db";
+import { getDeals, getExpectedReach, getPartners, getSetting } from "@/lib/db";
 import type { MeasurementWindows } from "@/lib/measurement";
 import { getAllContentItems } from "@/lib/fulfillment";
-import { benchmarkRows, platformAverages } from "@/lib/benchmark-rows";
+import { benchmarkRows, categoryAverages, platformAverages } from "@/lib/benchmark-rows";
 import { outcomes } from "@/lib/outcomes";
 import { PLATFORM_META } from "@/lib/types";
 import { money, moneyCpm, views as fmtViews } from "@/lib/format";
@@ -15,8 +15,19 @@ export default function BenchmarksPage() {
   // Bundle deals split into one row per platform, so a YouTube + TikTok deal
   // calibrates both baselines instead of inflating whichever came first.
   const windows = getSetting<MeasurementWindows>("measurement_windows") ?? {};
-  const rows = benchmarkRows(deals, getAllContentItems(), getExpectedReach(), windows);
+  // The creator's category comes from their partner record, so one edit on the profile
+  // re-buckets every deal they have ever done.
+  const categoriesByPartner = new Map(getPartners(true).map((p) => [p.id, p.category ?? null]));
+  const rows = benchmarkRows(
+    deals,
+    getAllContentItems(),
+    getExpectedReach(),
+    windows,
+    undefined,
+    categoriesByPartner
+  );
   const calibrated = platformAverages(rows);
+  const byCategory = categoryAverages(rows);
   const result = outcomes(deals);
 
   return (
@@ -120,6 +131,52 @@ export default function BenchmarksPage() {
               ))}
             </div>
 
+            {byCategory.length > 0 && (
+              <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
+                <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
+                  <h3 className="font-headline text-sm font-semibold text-slate-900">
+                    Real CPM by category
+                  </h3>
+                  <span className="text-xs text-slate-400">
+                    What a hunting channel costs you is not what a tech channel costs you
+                  </span>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {byCategory.map((c) => (
+                    <div key={c.category} className="flex items-baseline gap-3 py-2 first:pt-0 last:pb-0">
+                      <span className="text-sm font-medium text-slate-800">{c.category}</span>
+                      {/* Two deals is not a benchmark, and the count is the only thing
+                          that stops it being read as one. */}
+                      <span className="font-data text-xs text-slate-400">
+                        {c.count} deal{c.count === 1 ? "" : "s"}
+                        {c.count < 3 ? " · thin" : ""}
+                      </span>
+                      <span className="flex-1 border-b border-dotted border-slate-200" />
+                      {c.avgDelivery != null && (
+                        <span
+                          className={`font-data text-xs ${
+                            c.avgDelivery >= 1 ? "text-emerald-600" : "text-amber-600"
+                          }`}
+                          title="Delivered views against what was predicted"
+                        >
+                          {Math.round(c.avgDelivery * 100)}%
+                        </span>
+                      )}
+                      <span className="font-data font-semibold text-sm text-slate-900 w-20 text-right">
+                        {moneyCpm(c.avgActualCpm)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {rows.some((r) => r.isFinal && !r.category) && (
+                  <p className="text-xs text-slate-400 mt-2.5">
+                    {rows.filter((r) => r.isFinal && !r.category).length} settled row(s) have no
+                    category — set one on the creator&apos;s profile to include them.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Per-deal table */}
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
               <table className="w-full text-sm">
@@ -127,6 +184,7 @@ export default function BenchmarksPage() {
                   <tr className="text-left label-caps text-slate-500 border-b border-slate-200">
                     <th className="px-4 py-3 font-medium">Creator</th>
                     <th className="px-4 py-3 font-medium">Platform</th>
+                    <th className="px-4 py-3 font-medium">Category</th>
                     <th className="px-4 py-3 font-medium text-right">Paid</th>
                     <th className="px-4 py-3 font-medium text-right">Pred. views</th>
                     <th className="px-4 py-3 font-medium text-right">Actual views</th>
@@ -164,6 +222,7 @@ export default function BenchmarksPage() {
                           )}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-xs text-slate-500">{r.category ?? "—"}</td>
                       <td className="px-4 py-3 text-right font-data">{money(r.price)}</td>
                       <td className="px-4 py-3 text-right font-data text-slate-500">
                         {r.predictedViews != null ? fmtViews(r.predictedViews) : "—"}

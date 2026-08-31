@@ -1,6 +1,6 @@
 import PageHeader from "@/components/PageHeader";
 import NewDealForm from "@/components/new/NewDealForm";
-import { getCampaigns, getPartners, getSetting } from "@/lib/db";
+import { getCampaigns, getCreatorCategories, getPartners, getSetting } from "@/lib/db";
 import { partnerPrefillById } from "@/lib/partner-prefill";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +58,7 @@ export default async function NewDealPage({
             <NewDealForm
               campaigns={campaigns}
               partners={partners}
+              categories={getCreatorCategories()}
               presetPartner={presetPartner}
               stage={stage}
               defaultCommission={defaultCommission}

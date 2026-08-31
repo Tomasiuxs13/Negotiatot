@@ -7,8 +7,10 @@ import {
   deletePartnerChannel,
   findPartnerByName,
   updatePartner,
+  getCreatorCategories,
   upsertPartnerChannel,
 } from "@/lib/db";
+import { normalizeCategory } from "@/lib/categories";
 
 export async function createPartnerAction(fields: {
   name: string;
@@ -33,6 +35,7 @@ export async function updatePartnerAction(
     phone?: string | null;
     notes?: string | null;
     tags?: string[];
+    category?: string | null;
   }
 ): Promise<{ error?: string }> {
   if (fields.name !== undefined) {
@@ -41,9 +44,16 @@ export async function updatePartnerAction(
     const clash = findPartnerByName(name);
     if (clash && clash.id !== id) return { error: `"${name}" already exists.` };
   }
-  updatePartner(id, fields);
+  // Only a category from the managed list is stored; clearing it is still allowed.
+  // Anything else would be the second spelling that makes the grouping worthless.
+  const category =
+    fields.category === undefined
+      ? undefined
+      : normalizeCategory(fields.category, getCreatorCategories());
+  updatePartner(id, { ...fields, ...(category === undefined ? {} : { category }) });
   revalidatePath("/partners");
   revalidatePath(`/partners/${id}`);
+  revalidatePath("/benchmarks");
   return {};
 }
 

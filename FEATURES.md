@@ -236,6 +236,9 @@ and savings vs their first ask. Sortable, searchable, filterable by status.
 in-progress — an outstanding welcome email is a courtesy; an outstanding tracking link
 makes every result unattributable. A filter pill surfaces creators missing tracking setup.
 
+Each row and profile carries the creator's **category** from the managed list in Settings
+— searchable alongside tags, and the key Benchmarks groups its CPM averages on.
+
 `/partners/[id]` — profile with contact and legal details, per-platform channels and their
 average views, deal history, published/verified deliverables, on-time delivery rate,
 average revision rounds, and the creator's portal link (copied as a full URL — the same
@@ -279,8 +282,13 @@ timestamp shows a stale-analysis warning and a one-click re-analysis action.
 ### Benchmarks
 `/benchmarks` — *Calibrated from your closed deals*
 
-Win rate, predicted vs actual reach and CPM per closed deal, and real average CPM by
-platform. Results measured before the platform's views had settled are shown but
+Win rate, predicted vs actual reach and CPM per closed deal, real average CPM by
+platform, and **real CPM by creator category** — what a hunting channel costs you is not
+what a tech channel costs you, and one blended platform average hides exactly that. A
+bucket states its deal count and is marked *thin* below three, because two deals is not a
+benchmark. Categories come from the creator's partner record, so one edit on a profile
+re-buckets every deal that creator has ever done; settled rows without a category are
+counted out loud beneath the list rather than quietly dropped. Results measured before the platform's views had settled are shown but
 **excluded from the averages**, so a provisional number can't drag the calibration.
 ROAS here is explicitly labelled **fee ROAS**; the deal Actuals tab also shows **all-in
 ROAS**, whose denominator includes actual commission and gifted product cost.
@@ -293,6 +301,12 @@ cumulative API usage with an estimated cost (including tokens served from cache 
 tenth of input price). **API access**: generate, copy, rotate or revoke the key that
 switches the bulk-import endpoint on, with the endpoint URL and a copyable working
 example assembled for the host you are browsing on.
+
+**Creator categories** is the managed taxonomy every creator is grouped by — edited as a
+plain list, one per line, with a live count of how many creators sit in each. It is a
+fixed list rather than free text on purpose: "outdoors" and "Outdoor" typed a week apart
+are two buckets of one deal each, which is worth less than no grouping at all. Removing a
+category leaves the creators in it — they keep the label, and Settings says so.
 
 **Gmail inbox** shows whether the OAuth client is configured, gives the exact redirect URI
 needed in Google Cloud, and connects or disconnects one user-owned Gmail account. The required
@@ -514,6 +528,15 @@ manager's own client and no outbound message exists to key on. Recording a chase
 the card then reads `Follow-up 1 · today` — and the second draft says it is the last note,
 because a second chase that reads like the first one is how a sender gets filtered.
 
+**Category → Benchmarks.** The creator's category is set once on the partner — at intake
+or on their profile — and lives there, not on the deal, so editing it re-buckets that
+creator's whole history at once. Benchmarks groups its real CPM by it. Only a value from
+the managed list in Settings is ever stored: the intake picker, the profile picker and the
+partner action all normalise through `normalizeCategory`, so a category typed past a
+picker is refused rather than becoming the second spelling that splits a bucket. The
+category is not yet an input to pricing — the analysis prompt receives the Playbook's
+per-platform CPM ceilings, not the calibrated per-category figure.
+
 **Portal → your worklist.** A creator submitting a draft moves the item to *submitted*,
 which puts it on your board and in the attention panel with a review clock running from
 submission — not from when you happen to open the deal. A proposed publication date is a
@@ -576,14 +599,14 @@ centimetres away — but the two views of the same row do read differently.
 | Table | Holds |
 |---|---|
 | `deals` | The negotiation: stage, asks, offers, ladder numbers, audience metrics, rights (usage/whitelisting/exclusivity JSON), analysis, decline/revisit, actuals |
-| `partners` / `partner_channels` | Creators, legal details, portal token, per-platform average views |
+| `partners` / `partner_channels` | Creators, legal details, portal token, creator category, per-platform average views |
 | `partner_contacts` / `partner_source_records` | Secondary emails and provider-specific identity/evidence; imported data is auditable and never silently replaces manager-owned fields |
 | `creator_import_batches` / `creator_import_records` | Source file/manual intake audit trail and its per-row reconciliation outcome |
 | `email_connections` / `inbound_emails` | Encrypted Gmail OAuth credentials and a manager-reviewed local inbox queue, with sender/deal match outcome and import status |
 | `messages` | The negotiation thread, including Copilot recommendations |
 | `deal_followup_states` | A manager's temporary snooze, anchored to the outbound message it postpones; follow-up eligibility itself is derived from the deal and messages |
 | `campaigns` | Objective, primary KPI, target, named budget, per-campaign playbook overrides, brief and its extracted requirements |
-| `playbook` / `settings` | Per-platform rules; global rules, unit economics, brand profile, negotiation style, onboarding template, measurement windows |
+| `playbook` / `settings` | Per-platform rules; global rules, unit economics, brand profile, negotiation style, onboarding template, measurement windows, creator categories |
 | `contracts` / `contract_drafts` | Uploaded contracts and their parsed terms; generated drafts until signed |
 | `content_items` | Deliverables: deal-platform attribution, status, resolved/fixed/relative date rule, approved date override, pending creator date request/reason, draft/approval/posted URLs, revision round, transcript, check result, actual views/engagements/clicks/orders/revenue |
 | `onboarding_tasks` | Setup checklist, partner- or deal-scoped |

@@ -57,6 +57,7 @@ export default async function PartnersPage({
         (r) =>
           r.partner.name.toLowerCase().includes(needle) ||
           r.partner.email?.toLowerCase().includes(needle) ||
+          r.partner.category?.toLowerCase().includes(needle) ||
           r.tags.some((t) => t.toLowerCase().includes(needle))
       )
     : rows;
@@ -182,6 +183,11 @@ export default async function PartnersPage({
                       >
                         {partner.name}
                       </Link>
+                      {partner.category && (
+                        <span className="ml-2 text-[10px] font-semibold bg-brand-soft text-brand-dark rounded-full px-2 py-0.5">
+                          {partner.category}
+                        </span>
+                      )}
                       {tags.length > 0 && (
                         <span className="ml-2 inline-flex gap-1">
                           {tags.slice(0, 3).map((t) => (
