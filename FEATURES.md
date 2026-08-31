@@ -380,6 +380,22 @@ refused, so a file can never silently start model runs. Requires an API key sent
 copied, rotated and revoked in **Settings → API access**, which also shows the endpoint
 URL and a working example. No key configured means the API is off, not open.
 
+**Creator lookup and bulk categorisation** — two endpoints on the same key:
+
+- `GET /api/partners?handles=a,b,c` — resolves handles to `{handle, id, name, category}`.
+  Handles resolve through **channel records, never the partner's name**: an import files
+  creators under whatever the source called them, and matching "Emily" to "Emily" is what
+  silently dropped rows in Creator intake. A creator with no channel handle recorded comes
+  back in `missing` and must be addressed by id — which is why `GET /api/partners` with no
+  handles lists the whole book, including how many have no handle to match on.
+- `POST /api/partners/category` — `{dryRun, items:[{handle|id, category}]}`, at most 500,
+  one transaction. **Only the category column is written**: no read-modify-write, so a run
+  across the whole book cannot blank a phone number the way driving the profile form does.
+  The category is validated against the managed list in Settings before anything is
+  written, and an unknown value rejects the whole batch naming the offender. Results are
+  per item — `updated` (with `from`/`to`), `unchanged`, `missing`, `ambiguous` — never an
+  aggregate count.
+
 **Deal lookup and bulk edits** — three more endpoints, all requiring the same API key:
 
 - `GET /api/deals?handles=a,b,c` — resolves creator handles to `{handle, id, stage, live}`.

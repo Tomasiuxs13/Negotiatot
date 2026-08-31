@@ -24,6 +24,7 @@ import { DEFAULT_CATEGORIES, parseCategories } from "./categories";
 import { parseRecordLayout, type RecordLayout } from "./record-layout";
 import { normalizeQuery, rankBy, SEARCH_MIN_CHARS } from "./search";
 import { parseColumns, type PartnerColumnKey } from "./partner-columns";
+import type { PartnerHandleRow } from "./api-resolve";
 
 const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -1179,6 +1180,28 @@ export function searchRecords(query: string, limit = 5): SearchHit[] {
     }));
 
   return [...partnerHits, ...dealHits];
+}
+
+/**
+ * Every creator with the handles they can be addressed by, for the partner API.
+ *
+ * Archived partners are included: a bulk categorisation is data maintenance, and hiding
+ * half the book from it would leave rows that can never be fixed through the API.
+ */
+export function getPartnersWithHandles(): PartnerHandleRow[] {
+  const partners = db
+    .prepare("SELECT id, name, category FROM partners ORDER BY id")
+    .all() as { id: number; name: string; category: string | null }[];
+  const byId = new Map<number, PartnerHandleRow>(
+    partners.map((p) => [p.id, { id: p.id, name: p.name, category: p.category, handles: [] }])
+  );
+  const channels = db
+    .prepare(
+      "SELECT partner_id, handle FROM partner_channels WHERE handle IS NOT NULL AND TRIM(handle) != ''"
+    )
+    .all() as { partner_id: number; handle: string }[];
+  for (const channel of channels) byId.get(channel.partner_id)?.handles.push(channel.handle);
+  return [...byId.values()];
 }
 
 /** Which columns the Partners table shows. See partner-columns.ts. */

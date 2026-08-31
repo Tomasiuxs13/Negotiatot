@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   matchHandles,
+  matchPartnerHandles,
   normalizeHandle,
+  parsePartnerCategory,
   parseDeclineReason,
   parseStage,
   resolveTarget,
@@ -134,5 +136,81 @@ describe("resolveTarget", () => {
 describe("normalizeHandle", () => {
   it("strips @, trims and lowercases", () => {
     expect(normalizeHandle("  @MixedCase ")).toBe("mixedcase");
+  });
+});
+
+describe("matchPartnerHandles", () => {
+  const partners = [
+    { id: 373, name: "blackhikerbabe", category: null, handles: ["blackhikerbabe"] },
+    { id: 354, name: "afghangstah", category: "Travel", handles: ["@Afghangstah"] },
+    { id: 353, name: "Andrew", category: "Travel", handles: ["a1swagyu"] },
+    // Reported live: a creator with no channel handle recorded at all.
+    { id: 143, name: "6thGenFarmer", category: "Home & DIY", handles: [] },
+  ];
+
+  it("resolves a handle to its creator, ignoring case and a leading @", () => {
+    const [plain, at] = matchPartnerHandles(["BlackHikerBabe", "@afghangstah"], partners);
+    expect(plain.id).toBe(373);
+    expect(at).toMatchObject({ id: 354, name: "afghangstah", category: "Travel" });
+  });
+
+  it("never matches on the partner's name — the failure that dropped Emily and Jay", () => {
+    // "Andrew" is this creator's name; their handle is a1swagyu. Names are not identity.
+    expect(matchPartnerHandles(["Andrew"], partners)[0].id).toBeNull();
+    expect(matchPartnerHandles(["a1swagyu"], partners)[0].id).toBe(353);
+  });
+
+  it("reports a creator with no channel handle as missing rather than guessing", () => {
+    expect(matchPartnerHandles(["6thGenFarmer"], partners)[0]).toEqual({
+      handle: "6thGenFarmer",
+      id: null,
+      name: null,
+      category: null,
+    });
+  });
+
+  it("refuses to choose when one handle belongs to two creators", () => {
+    const clash = matchPartnerHandles(["emily"], [
+      { id: 381, name: "Emily", category: null, handles: ["emily"] },
+      { id: 447, name: "Emily", category: null, handles: ["Emily"] },
+    ]);
+    expect(clash[0].id).toBeNull();
+    expect(clash[0].ambiguous).toEqual([
+      { id: 381, name: "Emily" },
+      { id: 447, name: "Emily" },
+    ]);
+  });
+
+  it("counts one creator once even when the handle repeats across their channels", () => {
+    const same = matchPartnerHandles(["dual"], [
+      { id: 9, name: "Dual", category: null, handles: ["dual", "@Dual"] },
+    ]);
+    expect(same[0].id).toBe(9);
+    expect(same[0].ambiguous).toBeUndefined();
+  });
+});
+
+describe("parsePartnerCategory", () => {
+  const allowed = ["Outdoors & hunting", "Camping & hiking", "Home & DIY"];
+
+  it("returns the list's own spelling for a case-insensitive match", () => {
+    expect(parsePartnerCategory("camping & HIKING", allowed)).toEqual({
+      ok: true,
+      category: "Camping & hiking",
+    });
+  });
+
+  it("names the offending value, in the style the deals API uses", () => {
+    const result = parsePartnerCategory("Camping", allowed);
+    expect(result).toEqual({
+      ok: false,
+      error: 'unknown category "Camping" — use one of: Outdoors & hunting, Camping & hiking, Home & DIY',
+    });
+  });
+
+  it("refuses an empty or non-string category rather than clearing one", () => {
+    expect(parsePartnerCategory("", allowed).ok).toBe(false);
+    expect(parsePartnerCategory(null, allowed).ok).toBe(false);
+    expect(parsePartnerCategory(42, allowed).ok).toBe(false);
   });
 });
