@@ -581,12 +581,19 @@ export default function NewDealForm({
             : "Creating deal…"
           : isLeadCapture
             ? stageChoice === "contacted" ? "Add contacted deal" : "Add prospect"
-            : "Create deal & run analysis"}
+            : fileName
+              ? "Create deal & analyze this report"
+              : "Create deal & run analysis"}
       </button>
+      {/* The button spends an API call, so what it is about to price on belongs next to
+          it: a report missed here becomes a verdict built on web research, and the two
+          look identical afterwards. */}
       <p className="text-xs text-slate-500 text-center">
         {isLeadCapture
           ? "Saved to the pipeline without spending an API call — run the analysis from the deal page when you're ready."
-          : "No inputs at all? The analysis will be rough — add a channel URL so Counterpart can research the creator, or fill in known stats."}
+          : fileName
+            ? `Priced on ${fileName} — a report's figures outrank estimates.`
+            : "No report attached — this will be priced on web research and whatever stats you filled in. Attach a PDF or screenshot under Creator evidence for real numbers."}
       </p>
 
       {error && <p className="text-xs text-red-600">{error}</p>}

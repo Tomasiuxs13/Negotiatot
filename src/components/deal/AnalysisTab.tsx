@@ -1,6 +1,7 @@
 import type { Deal, DealAnalysis } from "@/lib/types";
 import { money } from "@/lib/format";
 import RunAnalysisButton from "./RunAnalysisButton";
+import RunAnalysisBlock from "./RunAnalysisBlock";
 import AnalyzingProgress from "./AnalyzingProgress";
 
 /** The verdict as a single pill in the card header, not a tinted wrapper around
@@ -22,8 +23,11 @@ export default function AnalysisTab({
   deal,
   analyzedAt,
   playbookUpdatedAt,
+  hasMessage = false,
 }: {
   deal: Deal;
+  /** Whether the creator has written anything yet — one of the analysis inputs. */
+  hasMessage?: boolean;
   /** When this stored analysis was produced — null if it predates usage logging. */
   analyzedAt?: string | null;
   /** Last rule edit; a newer Playbook makes this stored verdict historical. */
@@ -35,14 +39,13 @@ export default function AnalysisTab({
 
   if (!deal.analysis) {
     return (
-      <div className="bg-white rounded-xl border border-dashed border-slate-300 p-10 text-center">
-        <p className="text-sm font-medium text-slate-700 mb-1">No analysis yet</p>
-        <p className="text-sm text-slate-500 mb-4">
-          Upload a report or add channel data, then run the analysis to get fair price, red flags,
-          and your four numbers.
-        </p>
-        <RunAnalysisButton dealId={deal.id} />
-      </div>
+      <RunAnalysisBlock
+        dealId={deal.id}
+        channelUrl={deal.channel_url}
+        avgViews={deal.avg_views}
+        engagementRate={deal.engagement_rate}
+        hasMessage={hasMessage}
+      />
     );
   }
 

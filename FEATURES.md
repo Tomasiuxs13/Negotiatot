@@ -402,6 +402,15 @@ properties between the header and the conversation. The **Audience & evidence** 
 collapsed by default with an issue count, then expands to show every value and reason;
 this keeps the recommendation and next action above the fold.
 
+**Nothing is priced silently.** The run action states its inputs at the moment you press
+it, because the commonest and least visible mistake was running the analysis with the
+Modash PDF still sitting on the desktop — the report upload used to be a separate card in
+another column, and a verdict priced on web research looks exactly like one priced on a
+report. With no report *and* no known views the block says so in amber before you spend
+the call, and the New Deal form's submit button does the same thing for the intake path.
+Once a deal has an analysis, the rail's **Analytics report** card takes over for
+re-pricing; before that there is only one uploader on the page.
+
 The right column is the **associated record**: a *Creator* card with their category and
 status, whether you have worked together before, what you paid last time, their real CPM,
 their on-time delivery rate — and, in amber, **anything else live with the same creator**.
@@ -411,7 +420,7 @@ sit beneath it.
 
 | Tab | What it holds |
 |---|---|
-| **Analysis** | Verdict (accept / negotiate / decline), reasoning, red flags, the four numbers with the arithmetic that produced them (written by `pricing.ts`, not narrated by the model), audience-data editor |
+| **Analysis** | Before the first run: **Run the analysis** — an evidence checklist (analytics report, known audience, channel URL, their message) with the report picker inside it, and a button that names what it is about to do (*Analyze with this report* / *Run analysis without a report*). After it: verdict (accept / negotiate / decline), reasoning, red flags, the four numbers with the arithmetic that produced them (written by `pricing.ts`, not narrated by the model), audience-data editor |
 | **Negotiation** | Round-by-round thread, the Copilot's recommendation with a single ready-to-send draft, on-demand tone rewrite, reply capture. Any message can be removed (mis-pastes happen) — deletion also removes recommendations generated from it and rewinds round, move, asks, stage and label to what the remaining thread supports |
 | **Fulfillment** *(signed deals)* | Contact strip (creator email + copyable portal URL), contract upload and parsing, generated contract draft, onboarding checklist with a generated welcome email, content items with the draft review loop and per-item nudge emails, integration check, product delivery, payments |
 | **Actuals** *(delivered deals, plus legacy posted records)* | The campaign's primary KPI and progress to target, plus views for price calibration. Engagements, clicks, orders and revenue are supported per item but non-primary diagnostics sit under **Additional metrics**; measurement-window state, fee-only ROAS and all-in ROAS remain available |

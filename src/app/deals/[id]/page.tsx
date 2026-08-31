@@ -535,7 +535,7 @@ export default async function DealPage({
               />
             )}
             {!workspace && <RightsEditor dealId={deal.id} rightsJson={deal.rights ?? null} />}
-            <AttachReportBlock dealId={deal.id} />
+            {deal.analysis && <AttachReportBlock dealId={deal.id} />}
             <DealNotes dealId={deal.id} initialNotes={deal.notes ?? ""} />
             <RemindersBlock
               reminders={getRemindersFor({ dealId: deal.id })}
@@ -550,6 +550,7 @@ export default async function DealPage({
                 deal={deal}
                 analyzedAt={analyzedAt}
                 playbookUpdatedAt={playbookUpdatedAt}
+                hasMessage={messages.some((m) => m.sender === "them")}
               />
             ) },
           { name: "Negotiation", node: <NegotiationTab deal={deal} messages={messages} followUp={followUp} /> },
