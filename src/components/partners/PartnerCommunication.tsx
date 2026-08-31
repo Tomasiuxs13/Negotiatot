@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Message, Stage } from "@/lib/types";
+import MessageBody from "@/components/MessageBody";
 import { STAGE_LABELS } from "@/lib/types";
 
 export interface PartnerCommunicationMessage extends Message {
@@ -50,7 +51,6 @@ function MessageRow({
   const fromPartner = message.sender === "them";
   const meta = metadata(message.meta);
   const at = messageTime(message.created_at);
-  const longMessage = message.body.length > 420 || message.body.split("\n").length > 7;
   const dealName = message.deal_deliverables ?? message.deal_format ?? "Deal";
 
   return (
@@ -90,17 +90,10 @@ function MessageRow({
 
       <div className={`mt-2 rounded-lg border px-3 py-2.5 ${fromPartner ? "border-slate-200 bg-white" : "border-brand/20 bg-brand/[0.04]"}`}>
         {meta.subject && <p className="mb-1 text-xs font-semibold text-slate-700">{meta.subject}</p>}
-        <p className={`${longMessage ? "line-clamp-4" : ""} whitespace-pre-wrap text-sm leading-6 text-slate-600`}>
-          {message.body}
-        </p>
-        {longMessage && (
-          <details className="mt-2 border-t border-slate-100 pt-2">
-            <summary className="cursor-pointer list-none text-xs font-semibold text-brand-dark hover:underline">
-              Show full message
-            </summary>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{message.body}</p>
-          </details>
-        )}
+        {/* Same reader as the negotiation thread: the quoted chain folds, and a long
+            message clamps. One rule for both, so a message does not look different
+            depending on which tab you opened it from. */}
+        <MessageBody body={message.body} className="text-sm leading-6 text-slate-600" />
       </div>
     </article>
   );

@@ -9,7 +9,14 @@ const LONG_MESSAGE_CHARS = 700;
  *
  * Both toggles are native <details> — no client component, and they work before hydration.
  */
-export default function MessageBody({ body }: { body: string }) {
+export default function MessageBody({
+  body,
+  className = "text-slate-800",
+}: {
+  body: string;
+  /** Type styling for the message itself, so each surface keeps its own voice. */
+  className?: string;
+}) {
   const { latest, quoted, quotedLines } = splitQuotedReply(body);
   const long = latest.length > LONG_MESSAGE_CHARS;
 
@@ -18,7 +25,7 @@ export default function MessageBody({ body }: { body: string }) {
       {long ? (
         <details className="group">
           <summary className="cursor-pointer list-none">
-            <p className="whitespace-pre-line text-slate-800 line-clamp-6 group-open:line-clamp-none">
+            <p className={`whitespace-pre-line line-clamp-6 group-open:line-clamp-none ${className}`}>
               {latest}
             </p>
             <span className="mt-1 inline-block text-xs font-semibold text-brand-dark hover:underline">
@@ -28,7 +35,7 @@ export default function MessageBody({ body }: { body: string }) {
           </summary>
         </details>
       ) : (
-        <p className="whitespace-pre-line text-slate-800">{latest}</p>
+        <p className={`whitespace-pre-line ${className}`}>{latest}</p>
       )}
 
       {quoted && (

@@ -5,7 +5,7 @@ import { buildRounds, currentGap } from "@/lib/negotiation";
 import CopilotCard from "./CopilotCard";
 import ReplyForm from "./ReplyForm";
 import DeleteMessageButton from "./DeleteMessageButton";
-import MessageBody from "./MessageBody";
+import MessageBody from "@/components/MessageBody";
 import GenerateOfferButton from "./GenerateOfferButton";
 import RegenerateRecoButton from "./RegenerateRecoButton";
 import FollowUpComposer from "./FollowUpComposer";
