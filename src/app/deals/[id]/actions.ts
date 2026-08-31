@@ -12,6 +12,7 @@ import { getSetting } from "@/lib/db";
 import { hasApiKey } from "@/lib/claude";
 import { performAnalysis, performRecommendation, platformsOf } from "@/lib/engine";
 import { recommendationGuardError } from "@/lib/recommendation-guard";
+import { stageAfterOffer, stageAfterTheirReply } from "@/lib/stage-advance";
 
 const NO_KEY_ERROR =
   "No ANTHROPIC_API_KEY configured — add it to counterpart/.env.local and restart the dev server.";
@@ -33,7 +34,7 @@ export async function markDraftAsSent(dealId: number, text: string, proposedOffe
   updateDeal(dealId, {
     current_offer: proposedOffer,
     your_move: 0,
-    stage: deal.stage === "analyzing" ? "offer_sent" : deal.stage,
+    stage: stageAfterOffer(deal.stage),
     status_label: `Round ${Math.max(deal.round, 1)} · waiting on them`,
     status_tone: "neutral",
   });
@@ -58,7 +59,7 @@ export async function addTheirReply(dealId: number, text: string) {
   updateDeal(dealId, {
     round,
     your_move: 1,
-    stage: deal.stage === "offer_sent" || deal.stage === "analyzing" ? "negotiating" : deal.stage,
+    stage: stageAfterTheirReply(deal.stage, deal.current_offer != null),
     status_label: `Round ${round} · your move`,
     status_tone: "warn",
   });
@@ -70,13 +71,19 @@ export async function addTheirReply(dealId: number, text: string) {
     return { error: `Message saved, but recommendations are unavailable: ${NO_KEY_ERROR}` };
   }
 
-  if (!setJob(dealId, "recommending")) {
+  // Their rate arriving on a deal that was never priced is the analysis trigger, not a
+  // negotiation move: there is nothing to counter with until the deal has been priced,
+  // and the analysis is what reads their number out of this very message.
+  const needsPricing = deal.analysis == null;
+  if (!setJob(dealId, needsPricing ? "analyzing" : "recommending")) {
     return { error: "Message saved — but the Copilot is already working on this deal. Regenerate when it finishes." };
   }
   // "Drafting" is only claimed once the job actually is — a refused job that left this
   // label up promised a draft that was never coming.
-  updateDeal(dealId, { status_label: `Round ${round} · Copilot drafting…` });
-  after(() => performRecommendation(dealId));
+  updateDeal(dealId, {
+    status_label: needsPricing ? "Their ask is in · analyzing…" : `Round ${round} · Copilot drafting…`,
+  });
+  after(() => (needsPricing ? performAnalysis(dealId) : performRecommendation(dealId)));
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/");
   revalidatePath("/pipeline");

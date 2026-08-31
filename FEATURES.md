@@ -111,6 +111,16 @@ Board and list views over all deals.
   messages in the thread, dated from `contacted_at` until the first chase is logged.
 - Filters: platform, stage, campaign, free-text search.
 
+**What moves a deal between stages** is the conversation, not the tooling. Their reply
+lands a *Contacted* deal in **To review** — a first reply is an ask to be priced, not a
+counter to be negotiated — and lands it in **Negotiating** only once a number of ours is
+already on the table. Sending an offer means **Offer sent** from any pre-offer stage.
+Running the analysis moves nothing on its own: a deal is routinely priced before the
+creator ever answers, and calling that "ready for a decision" would claim the manager was
+holding it up when it was still waiting on the creator. The rules live in one place
+(`src/lib/stage-advance.ts`) so a pasted reply, a Gmail-synced reply and a sent offer
+cannot disagree.
+
 Signed deals show a **phase** rather than a stage — "Producing 2/3", "Payment to approve",
 "Ready to wrap" — because a deal is routinely mid-onboarding *and* mid-production *and*
 awaiting payment at once. A `behind` note names anything earlier that was skipped over.

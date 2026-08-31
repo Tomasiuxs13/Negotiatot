@@ -9,8 +9,14 @@ import type { Deal } from "../types";
 const deal = (
   id: number,
   stage: Deal["stage"],
-  over: Partial<Pick<Deal, "round" | "contacted_at">> = {}
-) => ({ id, stage, round: over.round ?? 0, contacted_at: over.contacted_at ?? null });
+  over: Partial<Pick<Deal, "round" | "contacted_at" | "current_offer">> = {}
+) => ({
+  id,
+  stage,
+  round: over.round ?? 0,
+  contacted_at: over.contacted_at ?? null,
+  current_offer: over.current_offer ?? null,
+});
 
 describe("automatic Gmail deal matching", () => {
   it("accepts one active negotiation and ignores terminal history", () => {
@@ -46,5 +52,18 @@ describe("automatic Gmail stage updates", () => {
       your_move: 1,
       status_label: "Round 3 · your move",
     });
+  });
+
+  it("prices an unanswered outreach rather than negotiating against nothing", () => {
+    // Their first mail back is their ask. Calling that a negotiation skips the step
+    // where the deal gets a number of its own to answer with.
+    expect(automaticReplyStageUpdate(deal(1, "contacted"))).toMatchObject({
+      stage: "analyzing",
+      round: 1,
+      your_move: 1,
+    });
+    expect(
+      automaticReplyStageUpdate(deal(1, "contacted", { current_offer: 800 }))
+    ).toMatchObject({ stage: "negotiating" });
   });
 });

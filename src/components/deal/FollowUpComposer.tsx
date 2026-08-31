@@ -71,7 +71,13 @@ export default function FollowUpComposer({
           </p>
         </div>
         <span className="text-xs text-slate-500">
-          {followUp.stage === "offer_sent" ? "Proposal sent" : "Negotiation in progress"}
+          {followUp.stage === "contacted"
+            ? followUp.followUpNumber === 1
+              ? "Outreach sent"
+              : `Follow-up ${followUp.followUpNumber - 1} sent`
+            : followUp.stage === "offer_sent"
+              ? "Proposal sent"
+              : "Negotiation in progress"}
         </span>
       </div>
       <div className="p-4">

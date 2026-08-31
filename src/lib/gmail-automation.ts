@@ -1,5 +1,6 @@
 import type { Deal, Stage } from "./types";
 import { TERMINAL_STAGES } from "./types";
+import { stageAfterTheirReply } from "./stage-advance";
 
 const NEGOTIATION_STAGES: Stage[] = [
   "lead",
@@ -9,7 +10,7 @@ const NEGOTIATION_STAGES: Stage[] = [
   "negotiating",
 ];
 
-type MatchableDeal = Pick<Deal, "id" | "stage" | "round" | "contacted_at">;
+type MatchableDeal = Pick<Deal, "id" | "stage" | "round" | "contacted_at" | "current_offer">;
 
 /**
  * Mail automation is intentionally stricter than the inbox review queue. There must be
@@ -43,10 +44,9 @@ export function automaticReplyStageUpdate(deal: MatchableDeal): Record<string, u
   return {
     round,
     your_move: 1,
-    stage:
-      deal.stage === "offer_sent" || deal.stage === "analyzing"
-        ? "negotiating"
-        : deal.stage,
+    // Same rule as a pasted reply: their first message is an ask to be priced, and only
+    // becomes a negotiation once a number of ours is on the table.
+    stage: stageAfterTheirReply(deal.stage, deal.current_offer != null),
     status_label: `Round ${round} · your move`,
     status_tone: "warn",
   };
