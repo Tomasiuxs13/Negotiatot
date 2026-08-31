@@ -61,6 +61,27 @@ export default function AnalysisTab({
       new Date(playbookUpdatedAt).getTime() > new Date(analyzedAt.replace(" ", "T") + "Z").getTime()
   );
   const flagged = analysis.metrics.filter((m) => m.tone === "crit" || m.tone === "warn").slice(0, 4);
+  // What the collapsed card has to carry: the verdict, and how much is behind it.
+  const crit = analysis.redFlags.filter((f) => f.severity === "crit").length;
+  const warn = analysis.redFlags.filter((f) => f.severity === "warn").length;
+  const passed = analysis.redFlags.length - crit - warn;
+  const counts = [
+    crit > 0 ? `${crit} critical` : null,
+    warn > 0 ? `${warn} to weigh` : null,
+    passed > 0 ? `${passed} passed` : null,
+  ].filter(Boolean).join(" · ");
+  /**
+   * Open while the decision is still live, folded once it has been made.
+   *
+   * The reasoning is the longest thing on the page and it is read closely exactly once —
+   * when you are deciding what to offer. After that it is reference, and leaving it
+   * expanded pushed the thread and the numbers below the fold on every later visit.
+   */
+  const undecided =
+    deal.current_offer == null &&
+    deal.stage !== "agreed" &&
+    deal.stage !== "completed" &&
+    deal.stage !== "declined";
 
   return (
     <div className="@container flex flex-col gap-6">
@@ -83,25 +104,48 @@ export default function AnalysisTab({
           <RunAnalysisButton dealId={deal.id} compact />
         </div>
       )}
-      <div className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
-          <h3 className="font-headline font-semibold text-lg text-slate-900">Why this verdict</h3>
-          <div className="flex items-center gap-3">
+      <details
+        className="group bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden"
+        open={undecided}
+      >
+        <summary className="flex cursor-pointer list-none items-start justify-between gap-3 px-5 py-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-headline font-semibold text-slate-900">Why this verdict</span>
+              <span
+                className={`text-[11px] font-semibold rounded-full px-2.5 py-1 tracking-wide ${v.className}`}
+              >
+                {v.label}
+              </span>
+              {counts && (
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                  {counts}
+                </span>
+              )}
+            </div>
+            {/* One line of the reasoning, so the folded card still says something. */}
+            <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{analysis.verdictSummary}</p>
+          </div>
+          <span
+            className="material-symbols-outlined shrink-0 text-slate-400 transition-transform group-open:rotate-180"
+            style={{ fontSize: 20 }}
+            aria-hidden
+          >
+            expand_more
+          </span>
+        </summary>
+
+        <div className="border-t border-slate-100 p-6">
+          {/* Re-running belongs with the reasoning it replaces. It cannot sit in the
+              summary: a button inside one toggles the panel as well as firing. */}
+          <div className="mb-4 flex items-center justify-end gap-3">
             {analyzedAt && (
               <span className="text-xs text-slate-400">
                 Analyzed <span className="font-tabular">{analyzedAt.slice(0, 16)}</span>
               </span>
             )}
             <RunAnalysisButton dealId={deal.id} compact />
-            <span
-              className={`text-[11px] font-semibold rounded-full px-2.5 py-1 tracking-wide ${v.className}`}
-            >
-              {v.label}
-            </span>
           </div>
-        </div>
-
-        <div className="p-6">
           {/* The decision-critical figures stay chips: a ten-line paragraph buries
               "cost blows past the cap" in the middle of a sentence. */}
           {flagged.length > 0 && (
@@ -152,7 +196,7 @@ export default function AnalysisTab({
             })}
           </ul>
         </div>
-      </div>
+      </details>
 
       <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-6">
         <h3 className="font-headline text-sm font-semibold text-slate-900 mb-3">
