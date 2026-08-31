@@ -20,7 +20,12 @@ export default function AppShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const isPublic = pathname.startsWith("/ship") || pathname.startsWith("/portal");
+  // /login joins them: signing in is not CRM work, and a nav rail offering links you
+  // cannot follow — with a Sign out button, no less — is worse than no chrome at all.
+  const isPublic =
+    pathname.startsWith("/ship") ||
+    pathname.startsWith("/portal") ||
+    pathname.startsWith("/login");
 
   if (isPublic) {
     return <div className="flex-1 h-screen overflow-y-auto bg-slate-50">{children}</div>;
