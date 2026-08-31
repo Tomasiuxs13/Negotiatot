@@ -61,6 +61,9 @@ from data*, never maintained by hand, and spans every domain:
 - Agreed deals missing a confirmed source contract, content plan, or payment schedule
 - Blocking onboarding steps a deal has already outrun
 - Silent negotiations, verdicts nobody acted on, your move, stale leads
+- Outreach that never got a reply (5+ days since `contacted_at`), rolled into one
+  line when a batch went out together — the fix for all of them is the same trip to
+  the contacted column
 - Declined deals whose revisit date has arrived, and deals ready to wrap up
 
 Items are **grouped** — Content, Money, Setup & delivery, Negotiation, Follow-ups —
@@ -101,6 +104,8 @@ Board and list views over all deals.
   dragging is a convenience rather than the only path. Declined deals are not a column,
   but stay reachable via a link beneath the board.
 - **List** — sortable table with their ask, our number, status and last activity.
+- A contacted card leads with **how long the creator has been silent** (`contacted 6d
+  ago`), stamped when the deal enters the stage and never reset by later edits.
 - Filters: platform, stage, campaign, free-text search.
 
 Signed deals show a **phase** rather than a stage — "Producing 2/3", "Payment to approve",

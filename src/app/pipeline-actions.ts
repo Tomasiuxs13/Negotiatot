@@ -65,6 +65,12 @@ export async function moveDealStage(dealId: number, stage: Stage) {
     status_tone: STAGE_STATUS[stage].tone,
     your_move: stage === "negotiating" ? deal.your_move : 0,
   };
+  // Stamp when outreach went out, once. Re-entering the stage after a detour through
+  // Analyzing must not reset the clock — the question the board answers is "how long
+  // has this creator been silent", and that started at the first contact.
+  if (stage === "contacted" && deal.contacted_at == null) {
+    fields.contacted_at = new Date().toISOString().slice(0, 19).replace("T", " ");
+  }
   // Moving into Agreed locks the agreed price to the latest offer if we have one.
   if (stage === "agreed" && deal.agreed_price == null) {
     fields.agreed_price = deal.current_offer ?? deal.current_ask ?? null;

@@ -637,3 +637,61 @@ describe("groupAttention", () => {
     expect(groupAttention([])).toEqual([]);
   });
 });
+
+describe("outreach with no reply", () => {
+  it("stays quiet inside the waiting window", () => {
+    const items = attentionItems({
+      ...base,
+      deals: [deal({ stage: "contacted", contacted_at: "2026-07-19 10:00:00" })],
+    });
+    expect(items.filter((i) => i.id.startsWith("no-reply-"))).toEqual([]);
+  });
+
+  it("chases once the outreach has gone unanswered", () => {
+    const items = attentionItems({
+      ...base,
+      deals: [deal({ stage: "contacted", contacted_at: "2026-07-15 10:00:00" })],
+    });
+    const hit = items.find((i) => i.id.startsWith("no-reply-"));
+    expect(hit?.title).toContain("no reply for 7 days");
+    expect(hit?.severity).toBe("info");
+    expect(hit?.owner).toBe("creator");
+  });
+
+  it("escalates when the silence has run twice as long", () => {
+    const items = attentionItems({
+      ...base,
+      deals: [deal({ stage: "contacted", contacted_at: "2026-07-01 10:00:00" })],
+    });
+    expect(items.find((i) => i.id.startsWith("no-reply-"))?.severity).toBe("warning");
+  });
+
+  it("falls back to updated_at for rows that predate the column", () => {
+    const items = attentionItems({
+      ...base,
+      deals: [deal({ stage: "contacted", updated_at: "2026-07-10 10:00:00" })],
+    });
+    expect(items.find((i) => i.id.startsWith("no-reply-"))?.title).toContain("12 days");
+  });
+});
+
+describe("outreach roll-up", () => {
+  it("collapses a batch into one line rather than repeating itself", () => {
+    const items = attentionItems({
+      ...base,
+      deals: [
+        deal({ id: 1, stage: "contacted", contacted_at: "2026-07-15 10:00:00" }),
+        deal({ id: 2, stage: "contacted", contacted_at: "2026-07-15 10:00:00" }),
+        deal({ id: 3, stage: "contacted", contacted_at: "2026-07-02 10:00:00" }),
+        // Inside the window — not silent yet, and must not be counted.
+        deal({ id: 4, stage: "contacted", contacted_at: "2026-07-21 10:00:00" }),
+      ],
+    });
+    const rolled = items.filter((i) => i.id.startsWith("no-reply-"));
+    expect(rolled).toHaveLength(1);
+    expect(rolled[0].title).toBe("3 creators — no reply for 5+ days");
+    expect(rolled[0].detail).toContain("Longest silent 20 days");
+    expect(rolled[0].href).toBe("/pipeline?view=list&stage=contacted");
+    expect(rolled[0].severity).toBe("warning");
+  });
+});

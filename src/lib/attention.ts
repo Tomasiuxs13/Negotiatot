@@ -65,6 +65,7 @@ const CLASSIFY: [prefix: string, group: AttentionGroup, owner: TaskOwner | null]
   ["setup-gap-", "delivery", "us"],
   ["onboarding-", "delivery", "us"],
   ["follow-up-", "negotiation", "creator"],
+  ["no-reply-", "negotiation", "creator"],
   ["verdict-", "negotiation", "us"],
   ["your-move-", "negotiation", "us"],
   ["stale-lead-", "negotiation", "us"],
@@ -139,6 +140,8 @@ export interface AttentionInput {
   today?: string;
   /** Days of silence before we flag other time-based negotiation work. */
   silentDays?: number;
+  /** Days after outreach with no reply before a contacted deal needs chasing. */
+  noReplyDays?: number;
   /** Days in transit before a shipment looks stuck. */
   stuckDays?: number;
   /** How long each platform's views need to settle before they're worth reading. */
@@ -171,6 +174,7 @@ export function attentionItems({
   draftLeadDays = DEFAULT_DRAFT_LEAD_DAYS,
   today = new Date().toISOString().slice(0, 10),
   silentDays = 3,
+  noReplyDays = 5,
   stuckDays = 7,
   windows = {},
 }: AttentionInput): AttentionItem[] {
@@ -339,6 +343,38 @@ export function attentionItems({
       title: `${d.creator} — your move`,
       detail: `Round ${d.round} · recommendation ready to send`,
       href: `/deals/${d.id}?tab=negotiation`,
+    });
+  }
+
+  // Outreach that never got an answer. Nothing else catches this: the follow-up rule
+  // keys on the last outbound message, and outreach emails are sent from the manager's
+  // own client, so contacted_at is the only record that anything went out at all.
+  //
+  // Rolled up once there is more than one. Outreach goes out in batches, so a per-deal
+  // item would put seventy identical lines on a list meant to be read in a minute — and
+  // the answer to all seventy is the same trip to the contacted column.
+  const silentOutreach = deals
+    .filter((d) => d.stage === "contacted")
+    .map((d) => ({ deal: d, waiting: daysBetween(d.contacted_at ?? d.updated_at, today) }))
+    .filter((x) => x.waiting >= noReplyDays)
+    .sort((a, b) => b.waiting - a.waiting);
+  if (silentOutreach.length === 1) {
+    const { deal: d, waiting } = silentOutreach[0];
+    items.push({
+      id: `no-reply-${d.id}`,
+      severity: waiting >= noReplyDays * 2 ? "warning" : "info",
+      title: `${d.creator} — no reply for ${waiting} days`,
+      detail: "Follow up on the outreach, or drop the deal",
+      href: `/deals/${d.id}`,
+    });
+  } else if (silentOutreach.length > 1) {
+    const longest = silentOutreach[0].waiting;
+    items.push({
+      id: "no-reply-batch",
+      severity: longest >= noReplyDays * 2 ? "warning" : "info",
+      title: `${silentOutreach.length} creators — no reply for ${noReplyDays}+ days`,
+      detail: `Longest silent ${longest} days · follow up or drop them`,
+      href: "/pipeline?view=list&stage=contacted",
     });
   }
 

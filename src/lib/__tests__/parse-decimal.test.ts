@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseDecimal } from "../format";
+import { parseDecimal, shortAgo } from "../format";
 
 describe("parseDecimal", () => {
   it("accepts the comma as a decimal mark — the reported case", () => {
@@ -43,5 +43,27 @@ describe("parseDecimal", () => {
     expect(parseDecimal("12")).toBe(12);
     expect(parseDecimal(",5")).toBe(0.5);
     expect(parseDecimal(".5")).toBe(0.5);
+  });
+});
+
+describe("shortAgo", () => {
+  const TODAY = "2026-07-22";
+
+  it("says today rather than 0d — an outreach sent this morning is not stale", () => {
+    expect(shortAgo("2026-07-22 08:00:00", TODAY)).toBe("today");
+  });
+
+  it("counts whole calendar days, ignoring the time of day", () => {
+    expect(shortAgo("2026-07-21 23:30:00", TODAY)).toBe("1d ago");
+    expect(shortAgo("2026-07-16 07:00:00", TODAY)).toBe("6d ago");
+  });
+
+  it("switches to months once days stop being readable", () => {
+    expect(shortAgo("2026-04-22", TODAY)).toBe("3mo ago");
+  });
+
+  it("returns null when there is nothing to date — the caller shows no chip", () => {
+    expect(shortAgo(null, TODAY)).toBeNull();
+    expect(shortAgo("", TODAY)).toBeNull();
   });
 });

@@ -155,6 +155,11 @@ export async function createDealAction(
     updateDeal(id, {
       status_label: stageRaw === "contacted" ? "Reached out · awaiting reply" : "New lead",
       status_tone: "neutral",
+      // Imported as already-contacted means the outreach is out; the clock starts now.
+      contacted_at:
+        stageRaw === "contacted"
+          ? new Date().toISOString().slice(0, 19).replace("T", " ")
+          : null,
     });
     return { id };
   }

@@ -52,3 +52,22 @@ export function parseDecimal(raw: string | null | undefined): number | null {
   if (!Number.isFinite(n)) return null;
   return Math.round(n * 100) / 100;
 }
+
+/**
+ * "6d ago" — compact elapsed time for places a full "6 days ago" won't fit, like the
+ * figures line on a board card. Counts whole calendar days, so outreach sent at 23:00
+ * yesterday reads "1d ago" rather than "today". `today` is injectable for tests.
+ */
+export function shortAgo(
+  timestamp: string | null | undefined,
+  today: string = new Date().toISOString().slice(0, 10)
+): string | null {
+  if (!timestamp) return null;
+  const then = new Date(timestamp.slice(0, 10) + "T00:00:00Z").getTime();
+  const now = new Date(today.slice(0, 10) + "T00:00:00Z").getTime();
+  if (!Number.isFinite(then) || !Number.isFinite(now)) return null;
+  const days = Math.round((now - then) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days < 60) return `${days}d ago`;
+  return `${Math.round(days / 30)}mo ago`;
+}

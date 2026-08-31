@@ -172,6 +172,17 @@ CREATE TABLE IF NOT EXISTS usage_log (
   // Usage rights, whitelisting and exclusivity, marked at intake so they can shape the
   // price — JSON, parsed by rights.ts. One column, not seven: the shape will evolve.
   if (!cols.includes("rights")) db.exec("ALTER TABLE deals ADD COLUMN rights TEXT");
+  // When outreach actually went out. updated_at cannot answer this — it moves on every
+  // edit, so a deal touched today would look freshly contacted however long it had been
+  // silent. Backfilled from updated_at for rows that predate the column, which is exact
+  // for imported deals (created and last-touched at the same moment) and the best
+  // available guess for the rest.
+  if (!cols.includes("contacted_at")) {
+    db.exec("ALTER TABLE deals ADD COLUMN contacted_at TEXT");
+    db.exec(
+      "UPDATE deals SET contacted_at = COALESCE(updated_at, created_at) WHERE contacted_at IS NULL AND stage NOT IN ('lead')"
+    );
+  }
   if (!cols.includes("job_status")) db.exec("ALTER TABLE deals ADD COLUMN job_status TEXT");
   if (!cols.includes("job_error")) db.exec("ALTER TABLE deals ADD COLUMN job_error TEXT");
   if (!cols.includes("job_started_at")) db.exec("ALTER TABLE deals ADD COLUMN job_started_at TEXT");
@@ -1992,7 +2003,7 @@ export function updateDeal(dealId: number, fields: Record<string, unknown>) {
   const allowed = [
     "stage", "round", "your_move", "first_ask", "current_ask", "current_offer",
     "agreed_price", "agreed_at", "anchor", "target", "walkaway", "breakeven", "avg_views",
-    "engagement_rate", "audience_locked", "notes", "rights", "status_label", "status_tone", "campaign", "analysis", "channel_url",
+    "engagement_rate", "audience_locked", "notes", "rights", "contacted_at", "status_label", "status_tone", "campaign", "analysis", "channel_url",
     "actual_views", "actual_engagements", "actual_clicks", "actual_orders", "actual_revenue", "actuals_logged_at",
     "job_status", "job_error", "job_started_at",
     "partner_id", "campaign_id", "deal_type",

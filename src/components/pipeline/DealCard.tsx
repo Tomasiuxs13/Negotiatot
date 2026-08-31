@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { Deal, Stage } from "@/lib/types";
 import type { DealPhase } from "@/lib/deal-phase";
 import { PLATFORM_META, STAGES, dealPlatforms } from "@/lib/types";
-import { money, views as fmtViews } from "@/lib/format";
+import { money, shortAgo, views as fmtViews } from "@/lib/format";
 
 const AVATAR_COLORS = [
   "bg-indigo-100 text-indigo-700",
@@ -54,6 +54,10 @@ export default function DealCard({
    */
   const facts: string[] = [];
   if (deal.stage === "lead" || deal.stage === "contacted") {
+    // How long they have been silent is the figure that decides what to do with a
+    // contacted deal, so it leads — ahead of reach and their ask.
+    const since = deal.stage === "contacted" ? shortAgo(deal.contacted_at) : null;
+    if (since) facts.push(since === "today" ? "contacted today" : `contacted ${since}`);
     if (deal.avg_views != null) facts.push(`${fmtViews(deal.avg_views)} views`);
     if (deal.current_ask != null) facts.push(`asks ${money(deal.current_ask)}`);
   } else if (deal.stage === "analyzing") {

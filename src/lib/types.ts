@@ -130,6 +130,8 @@ export interface Deal {
   breakeven: number | null;
   avg_views: number | null;
   engagement_rate: number | null;
+  /** When outreach actually went out; updated_at moves on every edit and can't answer this. */
+  contacted_at?: string | null;
   /** When the deal was won; monthly KPIs key on this, never on updated_at. */
   agreed_at?: string | null;
   /** 1 when the manager set the audience figures by hand; re-runs must not overwrite them. */
