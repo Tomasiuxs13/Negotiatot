@@ -11,6 +11,8 @@ import {
   upsertPartnerChannel,
 } from "@/lib/db";
 import { normalizeCategory } from "@/lib/categories";
+import { parseColumns } from "@/lib/partner-columns";
+import { setSetting } from "@/lib/db";
 
 export async function createPartnerAction(fields: {
   name: string;
@@ -91,5 +93,15 @@ export async function saveChannelAction(fields: {
 export async function deleteChannelAction(channelId: number, partnerId: number) {
   deletePartnerChannel(channelId);
   revalidatePath(`/partners/${partnerId}`);
+  return {};
+}
+
+/**
+ * Which columns the Partners table shows. Stored rather than kept in the URL: a chosen
+ * view is a working preference, not a thing you want to re-pick on every visit.
+ */
+export async function savePartnerColumnsAction(columns: string[]): Promise<{ error?: string }> {
+  setSetting("partner_columns", parseColumns(columns));
+  revalidatePath("/partners");
   return {};
 }

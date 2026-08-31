@@ -23,6 +23,7 @@ import type { FollowUpState } from "./followups";
 import { DEFAULT_CATEGORIES, parseCategories } from "./categories";
 import { parseRecordLayout, type RecordLayout } from "./record-layout";
 import { normalizeQuery, rankBy, SEARCH_MIN_CHARS } from "./search";
+import { parseColumns, type PartnerColumnKey } from "./partner-columns";
 
 const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -1178,6 +1179,11 @@ export function searchRecords(query: string, limit = 5): SearchHit[] {
     }));
 
   return [...partnerHits, ...dealHits];
+}
+
+/** Which columns the Partners table shows. See partner-columns.ts. */
+export function getPartnerColumns(): PartnerColumnKey[] {
+  return parseColumns(getSetting<unknown>("partner_columns"));
 }
 
 /** How record pages arrange themselves. See record-layout.ts. */

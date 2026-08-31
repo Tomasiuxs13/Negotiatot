@@ -1,7 +1,7 @@
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import NewPartnerButton from "@/components/partners/NewPartnerButton";
-import { getPartnerChannels, getPartnerDeals, getPartners } from "@/lib/db";
+import { getCreatorCategories, getPartnerChannels, getPartnerColumns, getPartnerDeals, getPartners } from "@/lib/db";
 import { getAllOnboardingTasks } from "@/lib/fulfillment";
 import { setupProgress, setupState } from "@/lib/setup-progress";
 import { blockingLabel } from "@/lib/fulfillment-types";
@@ -13,6 +13,14 @@ import { money, moneyCpm } from "@/lib/format";
 import FilterPills, { SortHeader } from "@/components/FilterBar";
 import { PARTNER_STATUS_LABEL, type PartnerStatus } from "@/lib/partners";
 import { buildQuery, nextDir, sortBy, type SortDir } from "@/lib/table-sort";
+import ColumnPicker from "@/components/partners/ColumnPicker";
+import {
+  ADDED_RANGES,
+  addedWithin,
+  PARTNER_COLUMNS,
+  parseAddedRange,
+  type PartnerColumnKey,
+} from "@/lib/partner-columns";
 
 const PARTNER_STATUSES: PartnerStatus[] = [
   "delivering",
@@ -27,10 +35,22 @@ export const dynamic = "force-dynamic";
 export default async function PartnersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; setup?: string; sort?: string; dir?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    status?: string;
+    setup?: string;
+    category?: string;
+    added?: string;
+    platform?: string;
+    sort?: string;
+    dir?: string;
+  }>;
 }) {
   const params = await searchParams;
-  const { q = "", status = "", setup = "", sort = "", dir = "desc" } = params;
+  const { q = "", status = "", setup = "", category = "", platform = "", sort = "", dir = "desc" } = params;
+  const added = parseAddedRange(params.added);
+  const columns = getPartnerColumns();
+  const visible = PARTNER_COLUMNS.filter((column) => columns.includes(column.key));
   const needle = q.trim().toLowerCase();
 
   // Onboarding is partner-scoped by design, so "is this creator ready" belongs here
@@ -62,6 +82,15 @@ export default async function PartnersPage({
       )
     : rows;
   if (status) filtered = filtered.filter((r) => r.status === status);
+  // Properties you can filter on without displaying them — the point of having a
+  // catalogue rather than a fixed row of columns.
+  if (category)
+    filtered = filtered.filter((r) =>
+      category === "none" ? !r.partner.category : r.partner.category === category
+    );
+  if (added) filtered = filtered.filter((r) => addedWithin(r.partner.created_at, added));
+  if (platform)
+    filtered = filtered.filter((r) => r.channels.some((c) => c.platform === platform));
   if (setup === "blocked") filtered = filtered.filter((r) => r.setup === "blocked");
   else if (setup === "incomplete")
     filtered = filtered.filter((r) => r.setup === "blocked" || r.setup === "in_progress");
@@ -81,10 +110,20 @@ export default async function PartnersPage({
                 ? r.stats.savedVsAsk
                 : sort === "deals"
                   ? r.stats.totalDeals
-                  : r.partner.name,
+                  : sort === "added"
+                    ? r.partner.created_at
+                    : sort === "category"
+                      ? (r.partner.category ?? "")
+                      : r.partner.name,
       dir as SortDir
     );
   }
+
+  const categories = getCreatorCategories();
+  /** Only platforms this book actually has, so the filter never offers an empty result. */
+  const platformsPresent = [
+    ...new Set(rows.flatMap((r) => r.channels.map((c) => c.platform))),
+  ].sort() as Platform[];
 
   const href = (changes: Record<string, string>) =>
     buildQuery("/partners", params as Record<string, string>, changes, { dir: "desc" });
@@ -138,7 +177,62 @@ export default async function PartnersPage({
               {rows.filter((r) => r.setup === "blocked").length} missing tracking setup
             </Link>
           )}
-          {(q || status || setup || sort) && (
+          {/* Property filters. GET forms with an auto-submit, so a filtered view is a URL
+              you can keep, and the back button undoes a filter like it undoes anything. */}
+          <form className="flex items-center gap-2">
+            {q && <input type="hidden" name="q" value={q} />}
+            {status && <input type="hidden" name="status" value={status} />}
+            {setup && <input type="hidden" name="setup" value={setup} />}
+            {sort && <input type="hidden" name="sort" value={sort} />}
+            {categories.length > 0 && (
+              <select
+                name="category"
+                defaultValue={category}
+                aria-label="Filter by category"
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700"
+              >
+                <option value="">All categories</option>
+                {categories.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+                <option value="none">No category</option>
+              </select>
+            )}
+            <select
+              name="added"
+              defaultValue={added}
+              aria-label="Filter by date added"
+              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700"
+            >
+              {ADDED_RANGES.map((range) => (
+                <option key={range.value} value={range.value}>
+                  {range.label}
+                </option>
+              ))}
+            </select>
+            {platformsPresent.length > 1 && (
+              <select
+                name="platform"
+                defaultValue={platform}
+                aria-label="Filter by platform"
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700"
+              >
+                <option value="">All platforms</option>
+                {platformsPresent.map((p) => (
+                  <option key={p} value={p}>
+                    {PLATFORM_META[p]?.label ?? p}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800">
+              Apply
+            </button>
+          </form>
+          <ColumnPicker visible={columns} />
+          {(q || status || setup || sort || category || added || platform) && (
             <Link href="/partners" className="text-xs text-slate-500 hover:text-slate-800">
               Clear
             </Link>
@@ -161,126 +255,170 @@ export default async function PartnersPage({
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left label-caps text-slate-500 border-b border-slate-200">
-                  <SortHeader label="Partner" href={sortHref("name")} active={sort === "name"} dir={dir as SortDir} />
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Setup</th>
-                  <th className="px-4 py-3 font-medium">Channels</th>
-                  <SortHeader label="Deals" align="right" href={sortHref("deals")} active={sort === "deals"} dir={dir as SortDir} />
-                  <SortHeader label="Committed" align="right" href={sortHref("committed")} active={sort === "committed"} dir={dir as SortDir} />
-                  <SortHeader label="Paid" align="right" href={sortHref("paid")} active={sort === "paid"} dir={dir as SortDir} />
-                  <SortHeader label="Actual CPM" align="right" href={sortHref("cpm")} active={sort === "cpm"} dir={dir as SortDir} />
-                  <SortHeader label="Saved" align="right" href={sortHref("saved")} active={sort === "saved"} dir={dir as SortDir} />
+                  {visible.map((column) =>
+                    column.sortable ? (
+                      <SortHeader
+                        key={column.key}
+                        label={column.label}
+                        align={column.align}
+                        href={sortHref(column.key)}
+                        active={sort === column.key}
+                        dir={dir as SortDir}
+                      />
+                    ) : (
+                      <th
+                        key={column.key}
+                        className={`px-4 py-3 font-medium${column.align === "right" ? " text-right" : ""}`}
+                      >
+                        {column.label}
+                      </th>
+                    )
+                  )}
                   <th className="px-4 py-3 font-medium text-right" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(({ partner, tags, channels, status: rowStatus, stats, progress, setup: rowSetup }) => (
-                  <tr key={partner.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/partners/${partner.id}`}
-                        className="font-medium text-slate-900 hover:text-brand"
-                      >
-                        {partner.name}
-                      </Link>
-                      {partner.category && (
-                        <span className="ml-2 text-[10px] font-semibold bg-brand-soft text-brand-dark rounded-full px-2 py-0.5">
-                          {partner.category}
-                        </span>
-                      )}
-                      {tags.length > 0 && (
-                        <span className="ml-2 inline-flex gap-1">
-                          {tags.slice(0, 3).map((t) => (
-                            <span
-                              key={t}
-                              className="text-[10px] font-medium bg-slate-100 text-slate-600 rounded-full px-2 py-0.5"
-                            >
-                              {t}
-                            </span>
-                          ))}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <PartnerStatusPill status={rowStatus} />
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {rowSetup === "none" ? (
-                        <span className="text-slate-200">—</span>
-                      ) : rowSetup === "ready" ? (
-                        <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5">
-                          Ready
-                        </span>
-                      ) : rowSetup === "blocked" ? (
-                        <span
-                          className="text-[11px] font-semibold text-red-700 bg-red-50 rounded-full px-2 py-0.5"
-                          title={`Missing: ${blockingLabel(progress!.blockingLeft)}`}
-                        >
-                          No {blockingLabel(progress!.blockingLeft)}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] font-medium text-slate-500 font-data">
-                          {progress!.done}/{progress!.total} done
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-2 text-slate-500">
-                        {channels.map((c) => (
-                          <span
-                            key={c.id}
-                            title={PLATFORM_META[c.platform as Platform]?.label ?? c.platform}
-                            className="flex items-center"
+                {filtered.map((row) => {
+                  const { partner, tags, channels, status: rowStatus, stats, progress, setup: rowSetup } = row;
+                  const dash = <span className="text-slate-200">—</span>;
+                  /** One cell per property in the catalogue. */
+                  const cell = (key: PartnerColumnKey) => {
+                    switch (key) {
+                      case "name":
+                        return (
+                          <Link
+                            href={`/partners/${partner.id}`}
+                            className="font-medium text-slate-900 hover:text-brand"
                           >
-                            <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
-                              {PLATFORM_META[c.platform as Platform]?.icon ?? "public"}
-                            </span>
+                            {partner.name}
+                          </Link>
+                        );
+                      case "category":
+                        return partner.category ? (
+                          <span className="text-[10px] font-semibold bg-brand-soft text-brand-dark rounded-full px-2 py-0.5">
+                            {partner.category}
                           </span>
-                        ))}
-                        {channels.length === 0 && <span className="text-xs text-slate-400">—</span>}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right font-data whitespace-nowrap">
-                      {stats.totalDeals}
-                      {stats.activeDeals > 0 && (
-                        <span className="text-xs text-amber-600 ml-1.5">
-                          · {stats.activeDeals} active
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-data">
-                      {stats.committed > 0 ? (
-                        money(stats.committed)
-                      ) : (
-                        <span className="text-slate-200">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-data text-slate-500">
-                      {stats.paid > 0 ? money(stats.paid) : <span className="text-slate-200">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right font-data text-slate-500">
-                      {stats.actualCpm != null ? (
-                        moneyCpm(stats.actualCpm)
-                      ) : (
-                        <span className="text-slate-200">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-data text-emerald-600">
-                      {stats.savedVsAsk > 0 ? (
-                        money(stats.savedVsAsk)
-                      ) : (
-                        <span className="text-slate-200">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <DeletePartnerButton
-                        id={partner.id}
-                        name={partner.name}
-                        dealCount={stats.totalDeals}
-                      />
-                    </td>
-                  </tr>
-                ))}
+                        ) : (
+                          dash
+                        );
+                      case "status":
+                        return <PartnerStatusPill status={rowStatus} />;
+                      case "setup":
+                        return rowSetup === "none" ? (
+                          dash
+                        ) : rowSetup === "ready" ? (
+                          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5">
+                            Ready
+                          </span>
+                        ) : rowSetup === "blocked" ? (
+                          <span
+                            className="text-[11px] font-semibold text-red-700 bg-red-50 rounded-full px-2 py-0.5"
+                            title={`Missing: ${blockingLabel(progress!.blockingLeft)}`}
+                          >
+                            No {blockingLabel(progress!.blockingLeft)}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-medium text-slate-500 font-data">
+                            {progress!.done}/{progress!.total} done
+                          </span>
+                        );
+                      case "channels":
+                        return (
+                          <span className="inline-flex items-center gap-2 text-slate-500">
+                            {channels.map((c) => (
+                              <span
+                                key={c.id}
+                                title={PLATFORM_META[c.platform as Platform]?.label ?? c.platform}
+                                className="flex items-center"
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
+                                  {PLATFORM_META[c.platform as Platform]?.icon ?? "public"}
+                                </span>
+                              </span>
+                            ))}
+                            {channels.length === 0 && <span className="text-xs text-slate-400">—</span>}
+                          </span>
+                        );
+                      case "email":
+                        return partner.email ? (
+                          <a href={`mailto:${partner.email}`} className="text-xs text-slate-600 hover:text-brand">
+                            {partner.email}
+                          </a>
+                        ) : (
+                          dash
+                        );
+                      case "added":
+                        return (
+                          <span className="font-data text-xs text-slate-500">
+                            {partner.created_at?.slice(0, 10) ?? "—"}
+                          </span>
+                        );
+                      case "tags":
+                        return tags.length > 0 ? (
+                          <span className="inline-flex flex-wrap gap-1">
+                            {tags.slice(0, 3).map((t) => (
+                              <span
+                                key={t}
+                                className="text-[10px] font-medium bg-slate-100 text-slate-600 rounded-full px-2 py-0.5"
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          dash
+                        );
+                      case "deals":
+                        return (
+                          <span className="font-data whitespace-nowrap">
+                            {stats.totalDeals}
+                            {stats.activeDeals > 0 && (
+                              <span className="text-xs text-amber-600 ml-1.5">· {stats.activeDeals} active</span>
+                            )}
+                          </span>
+                        );
+                      case "committed":
+                        return stats.committed > 0 ? <span className="font-data">{money(stats.committed)}</span> : dash;
+                      case "paid":
+                        return stats.paid > 0 ? (
+                          <span className="font-data text-slate-500">{money(stats.paid)}</span>
+                        ) : (
+                          dash
+                        );
+                      case "cpm":
+                        return stats.actualCpm != null ? (
+                          <span className="font-data text-slate-500">{moneyCpm(stats.actualCpm)}</span>
+                        ) : (
+                          dash
+                        );
+                      case "saved":
+                        return stats.savedVsAsk > 0 ? (
+                          <span className="font-data text-emerald-600">{money(stats.savedVsAsk)}</span>
+                        ) : (
+                          dash
+                        );
+                    }
+                  };
+                  return (
+                    <tr key={partner.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                      {visible.map((column) => (
+                        <td
+                          key={column.key}
+                          className={`px-4 py-3${column.align === "right" ? " text-right" : ""}`}
+                        >
+                          {cell(column.key)}
+                        </td>
+                      ))}
+                      <td className="px-4 py-3 text-right">
+                        <DeletePartnerButton
+                          id={partner.id}
+                          name={partner.name}
+                          dealCount={stats.totalDeals}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

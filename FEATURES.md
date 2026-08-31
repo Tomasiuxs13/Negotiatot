@@ -251,7 +251,18 @@ differently: a date nobody set, a deadline nobody met, and a draft nobody review
 
 Table of all creators with lifecycle status (Prospect / In negotiation / Delivering /
 Worked with / Lapsed), **setup status**, channels, deal count, committed, paid, actual CPM
-and savings vs their first ask. Sortable, searchable, filterable by status.
+and savings vs their first ask.
+
+**Columns are chosen, not fixed.** A catalogue (`partner-columns.ts`) defines every
+property the table can show — the standard set plus email, date added and tags — and the
+**Columns** picker turns each on or off. The choice is stored, so a view survives a click
+into a creator and back; *Partner* cannot be switched off, because a table of creators you
+cannot name is not a view.
+
+**Filters run on properties whether or not they are displayed**, the way a CRM should:
+category (including *No category*), date added (last 7 / 30 / 90 days), platform, lifecycle
+status, missing tracking setup, and free-text over name, email, category and tags. Sortable
+by name, category, date added, deals, committed, paid, CPM and savings.
 
 **Setup** reads the onboarding checklist, which is partner-scoped by design: `Ready`,
 `N/M done`, or `No tracking link` in red. "Blocked" is kept distinct from merely
