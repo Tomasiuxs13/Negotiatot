@@ -47,6 +47,7 @@ import ContractDraftBlock from "@/components/deal/ContractDraftBlock";
 import DealStageBar from "@/components/deal/DealStageBar";
 import { getFollowUpCandidate } from "@/lib/followups";
 import { outreachStatus } from "@/lib/outreach";
+import { handleAddsIdentity, handleForDeal } from "@/lib/creator-label";
 import DealPartnerCard from "@/components/deal/DealPartnerCard";
 import PartnerCommunication from "@/components/partners/PartnerCommunication";
 import { otherLiveDeals, partnerOperationalStats, partnerStatus, priorDeals } from "@/lib/partners";
@@ -281,6 +282,13 @@ export default async function DealPage({
       item.actual_views != null
   );
 
+  // The handle, when the deal's name is not it — an imported creator can be filed as
+  // "Mo" while the channel says @_morgan.miles_.
+  const creatorHandle = (() => {
+    const handle = handleForDeal(deal.platform, channels);
+    return handle && handleAddsIdentity(deal.creator, handle) ? handle.replace(/^@/, "") : null;
+  })();
+
   // Who this is. Shared by both record layouts — the workspace column and the classic
   // full-width cockpit show the same block, in different places.
   const identity = (
@@ -303,6 +311,9 @@ export default async function DealPage({
             <h1 className="font-headline text-base @sm:text-2xl font-semibold text-slate-900 tracking-tight [overflow-wrap:anywhere]">
               {deal.creator}
             </h1>
+          )}
+          {creatorHandle && (
+            <span className="font-data text-xs text-slate-500 -mt-1">@{creatorHandle}</span>
           )}
           <div className="flex flex-wrap gap-1.5 items-center">
             <span className="text-[11px] font-semibold bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 flex items-center gap-1">

@@ -116,11 +116,15 @@ Board and list views over all deals.
   dragging is a convenience rather than the only path. Declined deals are not a column,
   but stay reachable via a link beneath the board.
 - **List** — sortable table with their ask, our number, status and last activity.
+- A card and row show the creator's **handle** whenever the stored name is not it. An
+  import files people under whatever the source called them — "Mo", "Andrew" — while
+  `@_morgan.miles_` goes to the channel record, which made new cards unidentifiable among
+  168 handles. Shown on the deal page too, and never when the name already is the handle.
 - A contacted card and row say **which touch the creator is on** — `Reached out · 7d
   ago`, then `Follow-up 1 · 3d ago`, `Follow-up 2 · today` — instead of a status typed
   at outreach that read the same on day one and day thirty. Counted from the outbound
   messages in the thread, dated from `contacted_at` until the first chase is logged.
-- Filters: platform, stage, campaign, free-text search.
+- Filters: platform, stage, campaign, and a free-text search over creator, **handle**, **email**, campaign and deliverables — an imported creator is recognised by their handle, so searching one used to return an empty board.
 
 **What moves a deal between stages** is the conversation, not the tooling. Their reply
 lands a *Contacted* deal in **To review** — a first reply is an ask to be priced, not a

@@ -29,6 +29,7 @@ export default function DealsTable({
   deals,
   phases = {},
   outreach = {},
+  handles = {},
   sort = "",
   dir = "desc",
   hrefFor,
@@ -37,6 +38,8 @@ export default function DealsTable({
   phases?: Record<number, DealPhase>;
   /** Per-deal "Follow-up 2 · 3d ago", for contacted rows. */
   outreach?: Record<number, string>;
+  /** Per-deal creator handle, when the name alone does not identify them. */
+  handles?: Record<number, string>;
   sort?: string;
   dir?: SortDir;
   hrefFor?: (changes: Record<string, string>) => string;
@@ -88,6 +91,11 @@ export default function DealsTable({
                 {d.your_move === 1 && (
                   <span className="ml-2 text-[10px] font-semibold bg-amber-50 text-amber-700 rounded-full px-1.5 py-0.5">
                     your move
+                  </span>
+                )}
+                {handles[d.id] && (
+                  <span className="block font-data text-[11px] text-slate-500">
+                    @{handles[d.id].replace(/^@/, "")}
                   </span>
                 )}
               </td>

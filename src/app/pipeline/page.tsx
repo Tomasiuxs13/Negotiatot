@@ -2,7 +2,7 @@ import Link from "next/link";
 import PageHeader, { NewDealButton } from "@/components/PageHeader";
 import PipelineBoard from "@/components/pipeline/PipelineBoard";
 import DealsTable from "@/components/pipeline/DealsTable";
-import { getCampaigns, getDeals, getFollowUpMessages } from "@/lib/db";
+import { getCampaigns, getDeals, getFollowUpMessages, getPartnerIdentities } from "@/lib/db";
 import {
   getAllContentItems,
   getAllOnboardingTasks,
@@ -11,6 +11,8 @@ import {
 } from "@/lib/fulfillment";
 import { dealPhase, type DealPhase } from "@/lib/deal-phase";
 import { outreachStatus } from "@/lib/outreach";
+import { creatorSearchFields, handleAddsIdentity, handleForDeal } from "@/lib/creator-label";
+import { scoreMatch } from "@/lib/search";
 import { STAGES, STAGE_HELP, dealPlatforms, type Message } from "@/lib/types";
 import { buildQuery, sortBy, type SortDir } from "@/lib/table-sort";
 
@@ -62,12 +64,23 @@ export default async function PipelinePage({
   // Matched by name: deals carry the campaign as text and may never have been linked to
   // a campaign record, so filtering on the id alone would silently match nothing.
   if (campaign) deals = deals.filter((d) => campaignNameOf(d) === campaign);
-  const needle = q.trim().toLowerCase();
+  // Who each creator is, beyond the name typed on the deal.
+  const identities = getPartnerIdentities();
+  const handleOf = (deal: { partner_id: number | null; platform: string | null }) =>
+    deal.partner_id != null
+      ? handleForDeal(deal.platform, identities.get(deal.partner_id)?.channels ?? [])
+      : null;
+
+  const needle = q.trim();
   if (needle) {
+    // Handle and email included on purpose: they are what an imported card and an email
+    // thread actually show you, and searching either used to return an empty board.
     deals = deals.filter(
       (d) =>
-        d.creator.toLowerCase().includes(needle) ||
-        (d.deliverables ?? "").toLowerCase().includes(needle)
+        scoreMatch(
+          needle,
+          creatorSearchFields(d, handleOf(d), d.partner_id != null ? identities.get(d.partner_id)?.email ?? null : null)
+        ) > 0
     );
   }
 
@@ -107,6 +120,14 @@ export default async function PipelinePage({
       const status = outreachStatus(d, threads.get(d.id) ?? []);
       if (status) outreach[d.id] = status.line;
     }
+  }
+
+  // "@_morgan.miles_" under a card that says "Mo" — shown only when it tells you
+  // something the name does not.
+  const handles: Record<number, string> = {};
+  for (const d of deals) {
+    const handle = handleOf(d);
+    if (handle && handleAddsIdentity(d.creator, handle)) handles[d.id] = handle;
   }
 
   const query = (over: Record<string, string>) =>
@@ -237,7 +258,7 @@ export default async function PipelinePage({
             <input
               name="q"
               defaultValue={q}
-              placeholder="Search creator or deliverable…"
+              placeholder="Search creator, handle, email…"
               className="min-w-48 flex-1 border border-slate-200 rounded-lg bg-white px-3 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand sm:w-56 sm:flex-none"
             />
             {campaignNames.length > 0 && (
@@ -275,13 +296,14 @@ export default async function PipelinePage({
           )}
         </div>
         {isList ? (
-          <DealsTable deals={listed} phases={phases} outreach={outreach} sort={sort} dir={dir as SortDir} hrefFor={query} />
+          <DealsTable deals={listed} phases={phases} outreach={outreach} handles={handles} sort={sort} dir={dir as SortDir} hrefFor={query} />
         ) : (
           <PipelineBoard
             key={deals.map((deal) => `${deal.id}:${deal.stage}:${deal.updated_at}`).join("|")}
             deals={deals}
             phases={phases}
             outreach={outreach}
+            handles={handles}
           />
         )}
 

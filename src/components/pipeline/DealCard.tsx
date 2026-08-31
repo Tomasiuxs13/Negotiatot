@@ -37,6 +37,7 @@ export default function DealCard({
   deal,
   phase,
   outreach,
+  handle,
   moving = false,
   onMove,
 }: {
@@ -44,6 +45,8 @@ export default function DealCard({
   phase?: DealPhase;
   /** "Follow-up 2 · 3d ago" — which touch this creator is on, and how long ago. */
   outreach?: string;
+  /** The creator's handle, passed only when the deal's name does not identify them. */
+  handle?: string;
   moving?: boolean;
   onMove: (stage: Stage) => void;
 }) {
@@ -96,6 +99,13 @@ export default function DealCard({
               <h4 className="font-semibold text-[13px] text-slate-900 leading-tight truncate">
                 {deal.creator}
               </h4>
+              {/* An imported creator can arrive named "Mo". The handle is what the
+                  manager recognises, so it is shown when the name is not it. */}
+              {handle && (
+                <span className="block truncate font-data text-[11px] text-slate-500" title={handle}>
+                  @{handle.replace(/^@/, "")}
+                </span>
+              )}
               <span className="text-slate-400 flex items-center gap-1 mt-0.5">
                 {platforms.map((p) => (
                   <span

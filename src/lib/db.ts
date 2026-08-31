@@ -1068,6 +1068,38 @@ export function getPartnerCommunication(partnerId: number): PartnerMessage[] {
     .all(partnerId) as PartnerMessage[];
 }
 
+export interface PartnerIdentity {
+  email: string | null;
+  channels: { platform: string; handle: string }[];
+}
+
+/**
+ * How every creator can be recognised: their email and their handles, keyed by partner.
+ *
+ * The board needs this in one query — 338 partners means 338 round trips otherwise — and
+ * needs it at all because a deal only stores a name, which for an imported creator can
+ * be "Mo" while the recognisable thing lives on the channel.
+ */
+export function getPartnerIdentities(): Map<number, PartnerIdentity> {
+  const identities = new Map<number, PartnerIdentity>();
+  for (const partner of db.prepare("SELECT id, email FROM partners").all() as {
+    id: number;
+    email: string | null;
+  }[]) {
+    identities.set(partner.id, { email: partner.email, channels: [] });
+  }
+  const channels = db
+    .prepare(
+      "SELECT partner_id, platform, handle FROM partner_channels WHERE handle IS NOT NULL AND TRIM(handle) != ''"
+    )
+    .all() as { partner_id: number; platform: string; handle: string }[];
+  for (const channel of channels) {
+    const identity = identities.get(channel.partner_id);
+    if (identity) identity.channels.push({ platform: channel.platform, handle: channel.handle });
+  }
+  return identities;
+}
+
 export interface SearchHit {
   kind: "partner" | "deal";
   id: number;
