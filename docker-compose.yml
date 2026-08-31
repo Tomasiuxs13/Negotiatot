@@ -1,10 +1,16 @@
 # Counterpart on the VPS, as its own project alongside the existing stacks.
 #
-# Published at https://counterpart.srv956307.hstgr.cloud through the host's Traefik,
-# behind HTTP basic auth. The auth is NOT decoration: this app has no login of its own,
-# so without a gate in front every deal, creator email, contract and the Playbook's
-# margins would be readable by anyone who found the hostname — and the Anthropic key
-# would be theirs to spend. Traefik supplies the gate the app lacks.
+# Published at https://counterpart.srv956307.hstgr.cloud through the host's Traefik.
+#
+# The gate is the app's own login — src/proxy.ts, with COUNTERPART_PASSWORD in .env. It
+# replaced the basic-auth middleware this file used to declare, which existed only
+# because the app had none of its own; the middleware came off after the replacement was
+# deployed and proven, never before. Do not remove the app gate without putting something
+# equivalent in front: every deal, creator email, contract and the Playbook's margins are
+# behind this hostname, and the Anthropic key is spendable by anyone who reaches it.
+#
+# COUNTERPART_PASSWORD is required. With it unset the app refuses to serve in production
+# rather than serving openly.
 #
 # Port 3100 stays bound to the loopback as well, so the SSH tunnel keeps working for
 # local debugging without going through the proxy.
@@ -31,10 +37,9 @@ services:
       traefik.http.routers.counterpart.entrypoints: "web,websecure"
       traefik.http.routers.counterpart.tls: "true"
       traefik.http.routers.counterpart.tls.certresolver: "mytlschallenge"
-      traefik.http.routers.counterpart.middlewares: "counterpart-auth@docker,counterpart-headers@docker"
+      traefik.http.routers.counterpart.middlewares: "counterpart-headers@docker"
       # The container listens on 3000; without this Traefik guesses and can pick wrong.
       traefik.http.services.counterpart.loadbalancer.server.port: "3000"
-      traefik.http.middlewares.counterpart-auth.basicauth.users: "tomas:$$2y$$05$$aiMf8xUeIqM17YZZ1M0I3uLzgiIN5QSRHXz1la9ZAgymhddwWuOJG"
       traefik.http.middlewares.counterpart-headers.headers.SSLRedirect: "true"
       traefik.http.middlewares.counterpart-headers.headers.STSSeconds: "315360000"
       traefik.http.middlewares.counterpart-headers.headers.contentTypeNosniff: "true"
