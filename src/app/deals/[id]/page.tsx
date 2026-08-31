@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ensurePartnerPortalToken, getCampaign, getContractDraft, getDeal, getFollowUpState, getMessages, getNegotiationStyle, getPartner, getPartnerChannels, getPartnerDeals, getRecordLayout, getPlaybook, getLastRunAt, getRemindersFor, getSetting, getUnitEconomics, getUsageTotals } from "@/lib/db";
+import { ensurePartnerPortalToken, getCampaign, getContractDraft, getDeal, getFollowUpState, getMessages, getNegotiationStyle, getPartner, getPartnerChannels, getPartnerCommunication, getPartnerDeals, getRecordLayout, getPlaybook, getLastRunAt, getRemindersFor, getSetting, getUnitEconomics, getUsageTotals } from "@/lib/db";
 import ContactStrip from "@/components/deal/ContactStrip";
 import RightsEditor from "@/components/deal/RightsEditor";
 import AttachReportBlock from "@/components/deal/AttachReportBlock";
@@ -48,6 +48,7 @@ import DealStageBar from "@/components/deal/DealStageBar";
 import { getFollowUpCandidate } from "@/lib/followups";
 import { outreachStatus } from "@/lib/outreach";
 import DealPartnerCard from "@/components/deal/DealPartnerCard";
+import PartnerCommunication from "@/components/partners/PartnerCommunication";
 import { otherLiveDeals, partnerOperationalStats, partnerStatus, priorDeals } from "@/lib/partners";
 
 export const dynamic = "force-dynamic";
@@ -364,7 +365,7 @@ export default async function DealPage({
 
       <DealWorkspace
         defaultTab={
-          ({ analysis: "Analysis", negotiation: "Negotiation", fulfillment: "Fulfillment", actuals: "Actuals", history: "History" } as Record<string, string>)[tab ?? ""] ??
+          ({ analysis: "Analysis", negotiation: "Negotiation", communication: "Communication", fulfillment: "Fulfillment", actuals: "Actuals", history: "History" } as Record<string, string>)[tab ?? ""] ??
           (deal.stage === "agreed"
             ? "Fulfillment"
             : deal.stage === "negotiating" || deal.stage === "offer_sent"
@@ -554,6 +555,21 @@ export default async function DealPage({
               />
             ) },
           { name: "Negotiation", node: <NegotiationTab deal={deal} messages={messages} followUp={followUp} /> },
+          // What has actually been said to this creator, across every deal with them —
+          // the same panel their profile carries. The Negotiation tab is this deal's
+          // thread as bubbles; this is the correspondence, with subjects, Gmail
+          // provenance and the deal each message belongs to.
+          ...(deal.partner_id != null
+            ? [{
+                name: "Communication",
+                node: (
+                  <PartnerCommunication
+                    partnerName={partnerRecord?.name ?? deal.creator}
+                    messages={getPartnerCommunication(deal.partner_id)}
+                  />
+                ),
+              }]
+            : []),
           ...(showFulfillment
             ? [{ name: "Fulfillment", node: (
                 <div className="space-y-4 max-w-4xl">

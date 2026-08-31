@@ -14,7 +14,7 @@ import {
   type PlatformKey,
 } from "./playbook-defaults";
 import type { Campaign } from "./campaigns";
-import type { Partner, PartnerChannel, PartnerContact, PartnerSourceRecord } from "./partners";
+import type { Partner, PartnerChannel, PartnerContact, PartnerMessage, PartnerSourceRecord } from "./partners";
 import type { Reminder } from "./reminders";
 import { normalizeEmail, normalizeProfileUrl } from "./creator-identity";
 import type { CreatorImportCandidate, ImportSource } from "./creator-import";
@@ -1045,6 +1045,26 @@ export function getPartners(includeArchived = false): Partner[] {
 export function getCreatorCategories(): string[] {
   const stored = getSetting<unknown>("creator_categories");
   return stored == null ? DEFAULT_CATEGORIES : parseCategories(stored);
+}
+
+/**
+ * Every human message exchanged with a creator, across all of their deals, newest first.
+ *
+ * Deal-scoped `getMessages` cannot answer "what have we actually said to this person",
+ * which is the question you have while negotiating with them. Copilot output is excluded:
+ * it was never sent to anybody.
+ */
+export function getPartnerCommunication(partnerId: number): PartnerMessage[] {
+  return db
+    .prepare(
+      `SELECT m.*, d.creator AS deal_creator, d.campaign AS deal_campaign, d.stage AS deal_stage,
+              d.deliverables AS deal_deliverables, d.format AS deal_format
+         FROM messages m
+         JOIN deals d ON d.id = m.deal_id
+        WHERE d.partner_id = ? AND m.sender IN ('us', 'them')
+        ORDER BY m.created_at DESC, m.id DESC`
+    )
+    .all(partnerId) as PartnerMessage[];
 }
 
 /** How record pages arrange themselves. See record-layout.ts. */

@@ -1,4 +1,4 @@
-import type { Deal, Platform } from "./types";
+import type { Deal, Message, Platform, Stage } from "./types";
 import { dealPlatforms, TERMINAL_STAGES } from "./types";
 import type { ContentItem } from "./fulfillment-types";
 
@@ -108,6 +108,19 @@ export interface PartnerPrefill {
   deliveredContent: number;
   onTimeRate: number | null;
   averageRevisionRounds: number | null;
+}
+
+/**
+ * A message with the deal it belongs to, for the cross-deal view of a creator's
+ * correspondence. Structurally what the communication panel takes, declared here because
+ * the query lives in the data layer and the data layer must not import components.
+ */
+export interface PartnerMessage extends Message {
+  deal_creator: string;
+  deal_campaign: string | null;
+  deal_stage: Stage;
+  deal_deliverables: string | null;
+  deal_format: string | null;
 }
 
 export type PartnerStatus = "prospect" | "negotiating" | "delivering" | "past" | "lapsed";
