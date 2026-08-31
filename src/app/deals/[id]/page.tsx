@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ensurePartnerPortalToken, getCampaign, getContractDraft, getDeal, getFollowUpState, getMessages, getNegotiationStyle, getPartner, getPartnerChannels, getPlaybook, getLastRunAt, getRemindersFor, getSetting, getUnitEconomics, getUsageTotals } from "@/lib/db";
+import { ensurePartnerPortalToken, getCampaign, getContractDraft, getDeal, getFollowUpState, getMessages, getNegotiationStyle, getPartner, getPartnerChannels, getPartnerDeals, getRecordLayout, getPlaybook, getLastRunAt, getRemindersFor, getSetting, getUnitEconomics, getUsageTotals } from "@/lib/db";
 import ContactStrip from "@/components/deal/ContactStrip";
 import RightsEditor from "@/components/deal/RightsEditor";
 import AttachReportBlock from "@/components/deal/AttachReportBlock";
@@ -47,6 +47,8 @@ import ContractDraftBlock from "@/components/deal/ContractDraftBlock";
 import DealStageBar from "@/components/deal/DealStageBar";
 import { getFollowUpCandidate } from "@/lib/followups";
 import { outreachStatus } from "@/lib/outreach";
+import DealPartnerCard from "@/components/deal/DealPartnerCard";
+import { otherLiveDeals, partnerOperationalStats, partnerStatus, priorDeals } from "@/lib/partners";
 
 export const dynamic = "force-dynamic";
 
@@ -222,6 +224,48 @@ export default async function DealPage({
     };
   })();
 
+  // Which record layout to draw. A setting, so switching back is a click in Settings
+  // rather than a deploy — see record-layout.ts.
+  const workspace = getRecordLayout() === "workspace";
+
+  /**
+   * The associated record: who this deal is with. Everything here was already computed
+   * somewhere in the app — the intake form has used it for years to recognise a
+   * returning creator — but the deal page itself never showed any of it.
+   */
+  const partnerRecord = deal.partner_id != null ? getPartner(deal.partner_id) : undefined;
+  const partnerCard = (() => {
+    if (!partnerRecord) return null;
+    const partnerDeals = getPartnerDeals(partnerRecord.id);
+    const history = priorDeals(partnerDeals, deal.id);
+    const last = history[0] ?? null;
+    const operations = partnerOperationalStats(
+      partnerDeals,
+      partnerDeals.flatMap((d) => getContentItems(d.id))
+    );
+    return (
+      <DealPartnerCard
+        partnerId={partnerRecord.id}
+        name={partnerRecord.name}
+        category={partnerRecord.category ?? null}
+        email={partnerRecord.email}
+        status={partnerStatus(partnerDeals)}
+        priorCount={history.length}
+        lastAgreedPrice={last?.agreedPrice ?? null}
+        lastDealDate={last?.date ?? null}
+        lastActualCpm={last?.actualCpm ?? null}
+        onTimeRate={operations.onTimeRate}
+        promisedContent={operations.promisedContent}
+        deliveredContent={operations.deliveredContent}
+        otherLive={otherLiveDeals(partnerDeals, deal.id).map((d) => ({
+          id: d.id,
+          stage: d.stage,
+          label: d.status_label,
+        }))}
+      />
+    );
+  })();
+
   const campaign = deal.campaign_id != null ? getCampaign(deal.campaign_id) : undefined;
   const campaignOverrides = campaign ? describeOverrides(parseOverrides(campaign.overrides)) : [];
   /** The campaign brief's checkable obligations, for grading posted videos. */
@@ -234,6 +278,84 @@ export default async function DealPage({
       item.status === "verified" ||
       item.posted_at != null ||
       item.actual_views != null
+  );
+
+  // Who this is. Shared by both record layouts — the workspace column and the classic
+  // full-width cockpit show the same block, in different places.
+  const identity = (
+    // Sized against its own column, not the window: the same block sits in a ~290px
+    // properties column and in a ~430px cockpit cell, and a handle like
+    // "TheOldCoupleOutdoors" at 24px overflows the narrow one.
+    <div className="@container flex items-start gap-3 @sm:gap-4 min-w-0">
+        <div className="w-11 h-11 @sm:w-16 @sm:h-16 rounded-lg bg-brand/10 text-brand-dark flex items-center justify-center font-bold text-lg @sm:text-2xl shrink-0">
+          {deal.creator.charAt(0)}
+        </div>
+        <div className="flex flex-col gap-2 min-w-0">
+          {deal.partner_id != null ? (
+            <Link
+              href={`/partners/${deal.partner_id}`}
+              className="font-headline text-base @sm:text-2xl font-semibold text-slate-900 tracking-tight [overflow-wrap:anywhere] hover:text-brand"
+            >
+              {deal.creator}
+            </Link>
+          ) : (
+            <h1 className="font-headline text-base @sm:text-2xl font-semibold text-slate-900 tracking-tight [overflow-wrap:anywhere]">
+              {deal.creator}
+            </h1>
+          )}
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <span className="text-[11px] font-semibold bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 flex items-center gap-1">
+              {platforms.map((pf) => (
+                <span key={pf} className="flex items-center gap-0.5">
+                  <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
+                    {PLATFORM_META[pf].icon}
+                  </span>
+                  {PLATFORM_META[pf].label}
+                </span>
+              ))}
+            </span>
+            {dealCommission(deal).type !== "none" && (
+              <span
+                className="text-[11px] font-semibold bg-sky-50 text-sky-700 rounded-full px-2 py-0.5"
+                title="Paid on top of the fixed fee — the fee is priced net of this"
+              >
+                + {describeCommission(dealCommission(deal))}
+              </span>
+            )}
+            {(campaign?.name ?? deal.campaign) && (
+              <span
+                className="max-w-full truncate rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700"
+                title={
+                  campaignOverrides.length > 0
+                    ? `Campaign overrides — ${campaignOverrides.join(" · ")}`
+                    : undefined
+                }
+              >
+                {campaign?.name ?? deal.campaign}
+                {campaign && campaignGoalLabel(campaign) ? ` · ${campaignGoalLabel(campaign)}` : ""}
+                {campaignOverrides.length > 0
+                  ? ` · ${campaignOverrides.length} override${campaignOverrides.length > 1 ? "s" : ""}`
+                  : ""}
+              </span>
+            )}
+            {deal.round > 0 && !closed && (
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASS_BORDERED[DEAL_STAGE_TONE[deal.stage]]}`}>
+                Round {deal.round}
+              </span>
+            )}
+            {deal.job_status && (
+              <JobChip
+                label={deal.job_status === "analyzing" ? "Analyzing…" : "Copilot drafting…"}
+              />
+            )}
+          </div>
+          {scope && (
+            <p className="line-clamp-3 text-xs leading-relaxed text-slate-500" title={scope}>
+              {scope}
+            </p>
+          )}
+        </div>
+    </div>
   );
 
   return (
@@ -339,78 +461,11 @@ export default async function DealPage({
         ) : (
           /* The cockpit: who this is, what the numbers are, and whether we can afford
              it — the three things needed to decide an offer, side by side rather than
-             stacked down the page with the money furthest from the identity. */
-          <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 grid grid-cols-1 md:grid-cols-12 gap-6 xl:gap-8 items-start">
-            <div className="md:col-span-6 xl:col-span-4 flex items-start gap-4 min-w-0">
-              <div className="w-16 h-16 rounded-lg bg-brand/10 text-brand-dark flex items-center justify-center font-bold text-2xl shrink-0">
-                {deal.creator.charAt(0)}
-              </div>
-              <div className="flex flex-col gap-2 min-w-0">
-                {deal.partner_id != null ? (
-                  <Link
-                    href={`/partners/${deal.partner_id}`}
-                    className="font-headline text-2xl font-semibold text-slate-900 tracking-tight hover:text-brand"
-                  >
-                    {deal.creator}
-                  </Link>
-                ) : (
-                  <h1 className="font-headline text-2xl font-semibold text-slate-900 tracking-tight">
-                    {deal.creator}
-                  </h1>
-                )}
-                <div className="flex flex-wrap gap-1.5 items-center">
-                  <span className="text-[11px] font-semibold bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 flex items-center gap-1">
-                    {platforms.map((pf) => (
-                      <span key={pf} className="flex items-center gap-0.5">
-                        <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
-                          {PLATFORM_META[pf].icon}
-                        </span>
-                        {PLATFORM_META[pf].label}
-                      </span>
-                    ))}
-                  </span>
-                  {dealCommission(deal).type !== "none" && (
-                    <span
-                      className="text-[11px] font-semibold bg-sky-50 text-sky-700 rounded-full px-2 py-0.5"
-                      title="Paid on top of the fixed fee — the fee is priced net of this"
-                    >
-                      + {describeCommission(dealCommission(deal))}
-                    </span>
-                  )}
-                  {(campaign?.name ?? deal.campaign) && (
-                    <span
-                      className="max-w-full truncate rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700"
-                      title={
-                        campaignOverrides.length > 0
-                          ? `Campaign overrides — ${campaignOverrides.join(" · ")}`
-                          : undefined
-                      }
-                    >
-                      {campaign?.name ?? deal.campaign}
-                      {campaign && campaignGoalLabel(campaign) ? ` · ${campaignGoalLabel(campaign)}` : ""}
-                      {campaignOverrides.length > 0
-                        ? ` · ${campaignOverrides.length} override${campaignOverrides.length > 1 ? "s" : ""}`
-                        : ""}
-                    </span>
-                  )}
-                  {deal.round > 0 && !closed && (
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASS_BORDERED[DEAL_STAGE_TONE[deal.stage]]}`}>
-                      Round {deal.round}
-                    </span>
-                  )}
-                  {deal.job_status && (
-                    <JobChip
-                      label={deal.job_status === "analyzing" ? "Analyzing…" : "Copilot drafting…"}
-                    />
-                  )}
-                </div>
-                {scope && (
-                  <p className="line-clamp-3 text-xs leading-relaxed text-slate-500" title={scope}>
-                    {scope}
-                  </p>
-                )}
-              </div>
-            </div>
+             stacked down the page with the money furthest from the identity.
+             The workspace layout shows the same three in its properties column instead,
+             so this band would be a duplicate there. */
+          <section className={`bg-white rounded-xl border border-slate-200 shadow-sm p-6 grid grid-cols-1 md:grid-cols-12 gap-6 xl:gap-8 items-start${workspace ? " hidden" : ""}`}>
+            <div className="md:col-span-6 xl:col-span-4 min-w-0">{identity}</div>
 
             <div className="md:col-span-6 xl:col-span-4 min-w-0">
               <CockpitNumbers deal={deal} />
@@ -433,18 +488,53 @@ export default async function DealPage({
             <MetricBand metrics={parsedAnalysis.metrics} />
           ) : undefined
         }
+        about={
+          workspace ? (
+            <>
+              {/* What the deal IS, kept on screen while the middle column changes: who,
+                  the four numbers, what it costs, and what it was priced from. */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                {identity}
+                {!closed && deal.stage !== "declined" && (
+                  <div className="mt-4 border-t border-slate-100 pt-4">
+                    <CockpitNumbers deal={deal} />
+                  </div>
+                )}
+              </div>
+              {!closed && deal.stage !== "declined" && (
+                <AffordabilityPanel
+                  totalCost={dealCost.total}
+                  fee={costFee}
+                  maxPerDeal={maxPerDeal}
+                  breakeven={deal.breakeven}
+                />
+              )}
+              <AudienceDataEditor
+                dealId={deal.id}
+                avgViews={deal.avg_views}
+                engagementRate={deal.engagement_rate}
+                suspect={suspectAudienceData({ avgViews: deal.avg_views, followers })}
+              />
+              <RightsEditor dealId={deal.id} rightsJson={deal.rights ?? null} />
+            </>
+          ) : undefined
+        }
         rail={
           <>
             {/* Reference data and private context, visible from every tab — a note or a
                 promise like "ask again in three months" shouldn't hide behind whichever
-                tab happened to be open. */}
-            <AudienceDataEditor
-              dealId={deal.id}
-              avgViews={deal.avg_views}
-              engagementRate={deal.engagement_rate}
-              suspect={suspectAudienceData({ avgViews: deal.avg_views, followers })}
-            />
-            <RightsEditor dealId={deal.id} rightsJson={deal.rights ?? null} />
+                tab happened to be open. In the workspace layout this column is the
+                related-record side: who the deal is with comes first. */}
+            {workspace && partnerCard}
+            {!workspace && (
+              <AudienceDataEditor
+                dealId={deal.id}
+                avgViews={deal.avg_views}
+                engagementRate={deal.engagement_rate}
+                suspect={suspectAudienceData({ avgViews: deal.avg_views, followers })}
+              />
+            )}
+            {!workspace && <RightsEditor dealId={deal.id} rightsJson={deal.rights ?? null} />}
             <AttachReportBlock dealId={deal.id} />
             <DealNotes dealId={deal.id} initialNotes={deal.notes ?? ""} />
             <RemindersBlock

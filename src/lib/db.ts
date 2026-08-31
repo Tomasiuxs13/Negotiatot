@@ -21,6 +21,7 @@ import type { CreatorImportCandidate, ImportSource } from "./creator-import";
 import type { EmailProvider, GmailConnectionSummary, InboxEmail, InboxEmailStatus, InboxMatchKind, OutboundEmail } from "./email-inbox";
 import type { FollowUpState } from "./followups";
 import { DEFAULT_CATEGORIES, parseCategories } from "./categories";
+import { parseRecordLayout, type RecordLayout } from "./record-layout";
 
 const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -1044,6 +1045,11 @@ export function getPartners(includeArchived = false): Partner[] {
 export function getCreatorCategories(): string[] {
   const stored = getSetting<unknown>("creator_categories");
   return stored == null ? DEFAULT_CATEGORIES : parseCategories(stored);
+}
+
+/** How record pages arrange themselves. See record-layout.ts. */
+export function getRecordLayout(): RecordLayout {
+  return parseRecordLayout(getSetting<unknown>("record_layout"));
 }
 
 export function getPartner(id: number): Partner | undefined {

@@ -1,9 +1,10 @@
 import PageHeader from "@/components/PageHeader";
-import { getCreatorCategories, getDeals, getPartners, getUsageTotals } from "@/lib/db";
+import { getCreatorCategories, getDeals, getPartners, getRecordLayout, getUsageTotals } from "@/lib/db";
 import { hasApiKey, MODEL } from "@/lib/claude";
 import { usageCostUsd, totalTokens } from "@/lib/usage-cost";
 import ApiAccessBlock from "@/components/settings/ApiAccessBlock";
 import CreatorCategoriesBlock from "@/components/settings/CreatorCategoriesBlock";
+import RecordLayoutBlock from "@/components/settings/RecordLayoutBlock";
 import { categoryUsage } from "@/lib/categories";
 import { getSetting } from "@/lib/db";
 import GmailConnectionBlock from "@/components/settings/GmailConnectionBlock";
@@ -87,6 +88,7 @@ export default async function SettingsPage({
             connection={gmailConnection}
             oauthStatus={gmailOAuthStatus(query.gmail)}
           />
+          <RecordLayoutBlock current={getRecordLayout()} />
           <CreatorCategoriesBlock categories={categories} usage={categoryCounts} />
           <ApiAccessBlock currentKey={getSetting<string>("api_key")} />
         </div>

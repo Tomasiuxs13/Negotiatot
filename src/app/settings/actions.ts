@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { getSetting, setSetting } from "@/lib/db";
 import { parseCategories } from "@/lib/categories";
+import { parseRecordLayout, type RecordLayout } from "@/lib/record-layout";
 import { generateApiKey } from "@/lib/api-auth";
 import { disconnectGmail } from "@/lib/gmail";
 
@@ -51,5 +52,18 @@ export async function saveCreatorCategoriesAction(raw: string): Promise<{ error?
   revalidatePath("/new");
   revalidatePath("/partners");
   revalidatePath("/benchmarks");
+  return {};
+}
+
+/**
+ * The record-page layout. Every page that reads it is revalidated, so the switch takes
+ * effect on the next click rather than after a deploy — which is the whole point of it
+ * being a setting.
+ */
+export async function saveRecordLayoutAction(value: RecordLayout): Promise<{ error?: string }> {
+  setSetting("record_layout", parseRecordLayout(value));
+  revalidatePath("/settings");
+  revalidatePath("/deals", "layout");
+  revalidatePath("/partners", "layout");
   return {};
 }

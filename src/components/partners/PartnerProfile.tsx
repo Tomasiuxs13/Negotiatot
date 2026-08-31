@@ -150,10 +150,12 @@ export default function PartnerProfile({
         </div>
       ) : (
         <>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="font-headline text-lg font-semibold text-slate-900">{partner.name}</h2>
-              <p className="text-sm text-slate-500 mt-0.5">
+          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+            <div className="min-w-0">
+              <h2 className="font-headline text-lg font-semibold text-slate-900 [overflow-wrap:anywhere]">
+                {partner.name}
+              </h2>
+              <p className="text-sm text-slate-500 mt-0.5 [overflow-wrap:anywhere]">
                 {partner.email || "no email"}
                 {partner.phone ? ` · ${partner.phone}` : ""}
               </p>
@@ -208,13 +210,13 @@ export default function PartnerProfile({
 
         <div className="space-y-1.5">
           {channels.map((c) => (
-            <div key={c.id} className="flex items-center gap-2.5 text-sm">
+            <div key={c.id} className="flex min-w-0 items-center gap-2.5 text-sm">
               <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 16 }}>
                 {PLATFORM_META[c.platform]?.icon ?? "public"}
               </span>
               <span className="text-slate-700">{c.handle || PLATFORM_META[c.platform]?.label || c.platform}</span>
               {c.url && (
-                <a href={c.url} target="_blank" rel="noreferrer" className="text-xs text-brand-dark hover:underline truncate max-w-[16rem]">
+                <a href={c.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-xs text-brand-dark hover:underline">
                   {c.url}
                 </a>
               )}

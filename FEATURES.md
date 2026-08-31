@@ -239,6 +239,10 @@ makes every result unattributable. A filter pill surfaces creators missing track
 Each row and profile carries the creator's **category** from the managed list in Settings
 — searchable alongside tags, and the key Benchmarks groups its CPM averages on.
 
+The profile uses the same three-column record layout as a deal: identity, contact and
+channels on the left; deal history in the middle; lifetime numbers, program setup and
+reminders on the right.
+
 `/partners/[id]` — profile with contact and legal details, per-platform channels and their
 average views, deal history, published/verified deliverables, on-time delivery rate,
 average revision rounds, and the creator's portal link (copied as a full URL — the same
@@ -301,6 +305,12 @@ cumulative API usage with an estimated cost (including tokens served from cache 
 tenth of input price). **API access**: generate, copy, rotate or revoke the key that
 switches the bulk-import endpoint on, with the endpoint URL and a copyable working
 example assembled for the host you are browsing on.
+
+**Record layout** switches deal and creator pages between **Workspace** (three columns:
+what it is, the work, who it is with) and **Classic** (one wide body beside a single
+rail). Both layouts render exactly the same blocks — nothing is reachable from only one of
+them — so it is a preference, not a migration, and switching back is one click with no
+deploy.
 
 **Creator categories** is the managed taxonomy every creator is grouped by — edited as a
 plain list, one per line, with a live count of how many creators sit in each. It is a
@@ -379,11 +389,25 @@ A sticky app bar carrying the breadcrumb, tab strip and primary deal actions; se
 decline/delete actions live under **More**. A stage guide immediately below the bar shows
 the full lifecycle, explains the current stage and its next step, and lets the manager
 move between active negotiation stages without returning to Pipeline. Agreement and
-completion retain their guarded actions. Below it sits the **cockpit** (anchor, target,
-walk-away, breakeven; total deal cost; affordability). The **Audience & evidence** band
+completion retain their guarded actions.
+
+Below that the page is a **CRM record** in three columns (see *Record layout* in
+Settings): **what the deal is** on the left — who, the four numbers, total cost and
+affordability, what it was priced from, rights — **the work** in the middle, which is the
+only part the tabs change, and **who it is with** on the right. The properties therefore
+stay on screen while you move between the thread, the verdict and the paperwork. Below
+`xl` the columns stack with the work first, so a phone does not put a screen of
+properties between the header and the conversation. The **Audience & evidence** band
 (average views, engagement, audience geo, followers, fake-follower share, view trend) is
 collapsed by default with an issue count, then expands to show every value and reason;
 this keeps the recommendation and next action above the fold.
+
+The right column is the **associated record**: a *Creator* card with their category and
+status, whether you have worked together before, what you paid last time, their real CPM,
+their on-time delivery rate — and, in amber, **anything else live with the same creator**.
+Two open deals with one person is how they receive two different offers in a week, and
+nothing on this page used to mention it. Notes, reminders and the analytics-report upload
+sit beneath it.
 
 | Tab | What it holds |
 |---|---|
@@ -606,7 +630,7 @@ centimetres away — but the two views of the same row do read differently.
 | `messages` | The negotiation thread, including Copilot recommendations |
 | `deal_followup_states` | A manager's temporary snooze, anchored to the outbound message it postpones; follow-up eligibility itself is derived from the deal and messages |
 | `campaigns` | Objective, primary KPI, target, named budget, per-campaign playbook overrides, brief and its extracted requirements |
-| `playbook` / `settings` | Per-platform rules; global rules, unit economics, brand profile, negotiation style, onboarding template, measurement windows, creator categories |
+| `playbook` / `settings` | Per-platform rules; global rules, unit economics, brand profile, negotiation style, onboarding template, measurement windows, creator categories, record layout |
 | `contracts` / `contract_drafts` | Uploaded contracts and their parsed terms; generated drafts until signed |
 | `content_items` | Deliverables: deal-platform attribution, status, resolved/fixed/relative date rule, approved date override, pending creator date request/reason, draft/approval/posted URLs, revision round, transcript, check result, actual views/engagements/clicks/orders/revenue |
 | `onboarding_tasks` | Setup checklist, partner- or deal-scoped |

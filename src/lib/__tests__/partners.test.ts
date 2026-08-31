@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  otherLiveDeals,
   parseTags,
   partnerOperationalStats,
   partnerStats,
@@ -164,5 +165,30 @@ describe("partnerOperationalStats", () => {
       onTimeRate: null,
       averageRevisionRounds: null,
     });
+  });
+});
+
+describe("otherLiveDeals", () => {
+  const d = (over: Partial<Deal>): Deal =>
+    ({ id: 1, creator: "Marta", stage: "negotiating", updated_at: "2026-07-01 09:00:00", ...over }) as Deal;
+
+  it("names what else is running with this creator, newest first", () => {
+    const others = otherLiveDeals(
+      [
+        d({ id: 1, stage: "negotiating" }),
+        d({ id: 2, stage: "contacted", updated_at: "2026-07-05 09:00:00" }),
+        d({ id: 3, stage: "offer_sent", updated_at: "2026-07-09 09:00:00" }),
+      ],
+      1
+    );
+    expect(others.map((o) => o.id)).toEqual([3, 2]);
+  });
+
+  it("counts history as history — only a live deal is a collision", () => {
+    const others = otherLiveDeals(
+      [d({ id: 2, stage: "completed" }), d({ id: 3, stage: "declined" }), d({ id: 4, stage: "agreed" })],
+      1
+    );
+    expect(others.map((o) => o.id)).toEqual([4]);
   });
 });

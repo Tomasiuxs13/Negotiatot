@@ -23,6 +23,7 @@ export default function DealWorkspace({
   workflow,
   cockpit,
   band,
+  about,
   rail,
   tabs,
   defaultTab,
@@ -32,6 +33,11 @@ export default function DealWorkspace({
   workflow: React.ReactNode;
   cockpit: React.ReactNode;
   band?: React.ReactNode;
+  /**
+   * The properties column. Supplied only by the workspace layout — its presence is what
+   * turns the body into three columns, so the classic layout needs no flag of its own.
+   */
+  about?: React.ReactNode;
   rail: React.ReactNode;
   tabs: { name: string; node: React.ReactNode }[];
   defaultTab?: string;
@@ -91,11 +97,26 @@ export default function DealWorkspace({
       <div className={`p-4 md:p-6 flex flex-col gap-6 ${PAGE_WIDTH}`}>
         {workflow}
         {cockpit}
-        {band}
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,68%)_minmax(0,32%)] gap-6 items-start">
-          <div className="min-w-0">{tabs.find((t) => t.name === tab)?.node}</div>
-          <aside className="flex flex-col gap-6">{rail}</aside>
-        </div>
+        {about ? (
+          /* Below xl the work comes first: on a phone, scrolling past a screen of
+             properties to reach the thread is worse than losing the side-by-side. */
+          <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,23%)_minmax(0,48%)_minmax(0,29%)]">
+            <aside className="order-2 flex min-w-0 flex-col gap-4 xl:order-1">{about}</aside>
+            <div className="order-1 flex min-w-0 flex-col gap-5 xl:order-2">
+              {band}
+              {tabs.find((t) => t.name === tab)?.node}
+            </div>
+            <aside className="order-3 flex min-w-0 flex-col gap-4">{rail}</aside>
+          </div>
+        ) : (
+          <>
+            {band}
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,68%)_minmax(0,32%)] gap-6 items-start">
+              <div className="min-w-0">{tabs.find((t) => t.name === tab)?.node}</div>
+              <aside className="flex flex-col gap-6">{rail}</aside>
+            </div>
+          </>
+        )}
       </div>
     </>
   );

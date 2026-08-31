@@ -1,5 +1,5 @@
 import type { Deal, Platform } from "./types";
-import { dealPlatforms } from "./types";
+import { dealPlatforms, TERMINAL_STAGES } from "./types";
 import type { ContentItem } from "./fulfillment-types";
 
 export interface Partner {
@@ -178,6 +178,19 @@ export function priorDeals(deals: Deal[], excludeDealId?: number): PriorDeal[] {
       actualCpm:
         d.actual_views && d.agreed_price ? (d.agreed_price / d.actual_views) * 1000 : null,
     }));
+}
+
+/**
+ * Everything else live with this creator right now.
+ *
+ * A deal page that never mentions the other negotiation running with the same person is
+ * how you send two offers to one creator in a week. Terminal stages are history, not
+ * conflicts, so only live ones count.
+ */
+export function otherLiveDeals(deals: Deal[], excludeDealId: number): Deal[] {
+  return deals
+    .filter((d) => d.id !== excludeDealId && !TERMINAL_STAGES.includes(d.stage))
+    .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
 }
 
 /** Lifetime numbers for a partner, computed from their deals. */
