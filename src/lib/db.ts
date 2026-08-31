@@ -2,9 +2,9 @@ import Database from "better-sqlite3";
 import { randomBytes } from "crypto";
 import path from "path";
 import fs from "fs";
-import type { Deal, Message } from "./types";
+import type { Deal, Message, Stage } from "./types";
 import { usageCostUsd } from "./usage-cost";
-import { ALL_PLATFORMS, ALL_STAGES } from "./types";
+import { ALL_PLATFORMS, ALL_STAGES, STAGE_LABELS } from "./types";
 import {
   DEFAULT_BRAND_PROFILE,
   DEFAULT_GLOBAL_RULES,
@@ -22,6 +22,7 @@ import type { EmailProvider, GmailConnectionSummary, InboxEmail, InboxEmailStatu
 import type { FollowUpState } from "./followups";
 import { DEFAULT_CATEGORIES, parseCategories } from "./categories";
 import { parseRecordLayout, type RecordLayout } from "./record-layout";
+import { normalizeQuery, rankBy, SEARCH_MIN_CHARS } from "./search";
 
 const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -1065,6 +1066,86 @@ export function getPartnerCommunication(partnerId: number): PartnerMessage[] {
         ORDER BY m.created_at DESC, m.id DESC`
     )
     .all(partnerId) as PartnerMessage[];
+}
+
+export interface SearchHit {
+  kind: "partner" | "deal";
+  id: number;
+  title: string;
+  /** What tells this row apart from the others with the same name. */
+  detail: string;
+  href: string;
+}
+
+/**
+ * One search across the records a manager actually navigates to.
+ *
+ * Creators and deals share names — there are 248 partners and 247 deals here, mostly the
+ * same people — so both are returned and each row says which it is and where it stands.
+ * Ranking happens in JS (see search.ts) because SQL LIKE cannot tell "Joe Holland" from
+ * "a deal whose deliverables mention joe".
+ */
+export function searchRecords(query: string, limit = 5): SearchHit[] {
+  const needle = normalizeQuery(query);
+  if (needle.length < SEARCH_MIN_CHARS) return [];
+  const like = `%${needle.replace(/[%_]/g, "")}%`;
+
+  const partners = db
+    .prepare(
+      `SELECT DISTINCT p.id, p.name, p.email, p.category
+         FROM partners p
+         LEFT JOIN partner_channels c ON c.partner_id = p.id
+        WHERE p.archived = 0
+          AND (lower(p.name) LIKE ? OR lower(COALESCE(p.email, '')) LIKE ?
+               OR lower(COALESCE(p.category, '')) LIKE ? OR lower(COALESCE(c.handle, '')) LIKE ?)
+        ORDER BY p.updated_at DESC
+        LIMIT 40`
+    )
+    .all(like, like, like, like) as {
+    id: number;
+    name: string;
+    email: string | null;
+    category: string | null;
+  }[];
+
+  const deals = db
+    .prepare(
+      `SELECT id, creator, stage, deliverables, campaign
+         FROM deals
+        WHERE lower(creator) LIKE ? OR lower(COALESCE(deliverables, '')) LIKE ?
+           OR lower(COALESCE(campaign, '')) LIKE ?
+        ORDER BY updated_at DESC
+        LIMIT 40`
+    )
+    .all(like, like, like) as {
+    id: number;
+    creator: string;
+    stage: Stage;
+    deliverables: string | null;
+    campaign: string | null;
+  }[];
+
+  const partnerHits: SearchHit[] = rankBy(needle, partners, (p) => [p.name, p.email, p.category])
+    .slice(0, limit)
+    .map((p) => ({
+      kind: "partner" as const,
+      id: p.id,
+      title: p.name,
+      detail: [p.category, p.email].filter(Boolean).join(" · ") || "Creator",
+      href: `/partners/${p.id}`,
+    }));
+
+  const dealHits: SearchHit[] = rankBy(needle, deals, (d) => [d.creator, d.deliverables, d.campaign])
+    .slice(0, limit)
+    .map((d) => ({
+      kind: "deal" as const,
+      id: d.id,
+      title: d.creator,
+      detail: [STAGE_LABELS[d.stage], d.campaign, d.deliverables].filter(Boolean).join(" · "),
+      href: `/deals/${d.id}`,
+    }));
+
+  return [...partnerHits, ...dealHits];
 }
 
 /** How record pages arrange themselves. See record-layout.ts. */

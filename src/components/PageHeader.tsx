@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SearchBar } from "./GlobalSearch";
 
 export default function PageHeader({
   title,
@@ -17,7 +18,12 @@ export default function PageHeader({
         </h2>
         {subtitle && <p className="mt-0.5 truncate text-xs text-slate-500 md:text-sm">{subtitle}</p>}
       </div>
-      {actions && <div className="flex min-w-0 shrink-0 items-center gap-2 overflow-x-auto">{actions}</div>}
+      <div className="flex min-w-0 shrink-0 items-center gap-3">
+        <div className="hidden w-56 lg:block xl:w-72">
+          <SearchBar />
+        </div>
+        {actions && <div className="flex min-w-0 items-center gap-2 overflow-x-auto">{actions}</div>}
+      </div>
     </header>
   );
 }

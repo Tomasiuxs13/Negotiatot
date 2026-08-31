@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import GlobalSearch from "./GlobalSearch";
 
 /**
  * Splits the app into two surfaces: the CRM (sidebar plus content) and public pages.
@@ -27,6 +28,9 @@ export default function AppShell({
   return (
     <>
       {sidebar}
+      {/* One palette for the whole CRM. Public /ship and /portal pages return above
+          this line and never mount it — a creator must not be able to search the book. */}
+      <GlobalSearch />
       {/* Offset matches the sidebar's 220px rail exactly — they are changed together. */}
       <div className="app-shell-content ml-0 md:ml-[220px] pt-14 md:pt-0 flex-1 flex flex-col h-screen overflow-hidden bg-slate-50">
         {children}

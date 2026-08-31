@@ -72,6 +72,17 @@ ordered by whatever is most urgent rather than a fixed menu, so grouping can nev
 critical item. Each item carries an **owner**: things that are somebody else's move are
 tagged `chase`, and the header states `N to do · N to chase`.
 
+### Search
+Everywhere — the bar in the page header, or **⌘K / Ctrl-K** from any screen including the
+deal workspace, which has its own top bar and would otherwise be the one page you cannot
+search from. Matches creators by name, handle, email and category, and deals by creator,
+campaign and deliverables; results are grouped and each row says which record it is and
+where that deal stands, because the same person is usually both. Ranked whole-field
+first, then prefix, then substring — "Joe" finds *Joe Holland Fishing* before a deal whose
+deliverables merely contain the letters. Arrow keys move, Enter opens, Esc closes. The
+palette is mounted in the CRM shell only: the public `/ship` and `/portal` pages never
+load it, so a creator cannot search the book.
+
 ### Approvals
 `/approvals` — *Decisions ready for you*
 
