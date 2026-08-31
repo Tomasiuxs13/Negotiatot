@@ -49,20 +49,26 @@ export default function DealWorkspace({
   return (
     <>
       <header className="bg-white border-b border-slate-200 px-4 md:px-6 sticky top-0 z-30 shadow-sm">
-        <div className="flex items-center justify-between gap-6 h-16">
-          <div className="flex items-center gap-8 min-w-0">
-            <div className="shrink-0">{breadcrumb}</div>
-            <nav className="hidden md:flex items-center gap-6 self-end" role="tablist">
+        <div className="flex items-center justify-between gap-4 h-16">
+          {/* The breadcrumb is the only thing here that may shrink. It used to be the one
+              thing that could not, which is why "History" ended up clipped behind the
+              actions on a 900px window. */}
+          <div className="flex min-w-0 items-center gap-4 lg:gap-6">
+            <div className="min-w-0 truncate">{breadcrumb}</div>
+            <nav
+              className="hidden shrink-0 items-center gap-1 rounded-lg bg-slate-100 p-1 md:flex"
+              role="tablist"
+            >
               {tabs.map((t) => (
                 <button
                   key={t.name}
                   role="tab"
                   aria-selected={tab === t.name}
                   onClick={() => setTab(t.name)}
-                  className={`pb-[18px] border-b-2 text-sm transition-colors ${
+                  className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
                     tab === t.name
-                      ? "text-brand-dark font-semibold border-brand"
-                      : "text-slate-500 border-transparent hover:text-slate-800"
+                      ? "bg-white font-semibold text-brand-dark shadow-sm ring-1 ring-slate-200"
+                      : "font-medium text-slate-500 hover:bg-white/70 hover:text-slate-900"
                   }`}
                 >
                   {t.name}
@@ -70,22 +76,25 @@ export default function DealWorkspace({
               ))}
             </nav>
           </div>
-          <div className="flex items-center gap-3 min-w-0 overflow-x-auto">{actions}</div>
+          <div className="flex shrink-0 items-center gap-3 overflow-x-auto">{actions}</div>
         </div>
 
         {/* Below md the strip drops out of the bar rather than squeezing the actions
             off-screen; it reappears here so the tabs are never unreachable. */}
-        <nav className="md:hidden flex gap-4 overflow-x-auto pb-2 -mt-1" role="tablist">
+        <nav
+          className="-mt-1 mb-2 flex gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 md:hidden"
+          role="tablist"
+        >
           {tabs.map((t) => (
             <button
               key={t.name}
               role="tab"
               aria-selected={tab === t.name}
               onClick={() => setTab(t.name)}
-              className={`whitespace-nowrap pb-1 border-b-2 text-sm ${
+              className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm ${
                 tab === t.name
-                  ? "text-brand-dark font-semibold border-brand"
-                  : "text-slate-500 border-transparent"
+                  ? "bg-white font-semibold text-brand-dark shadow-sm ring-1 ring-slate-200"
+                  : "font-medium text-slate-500"
               }`}
             >
               {t.name}
