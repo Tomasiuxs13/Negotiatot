@@ -103,6 +103,7 @@ describe("attentionItems", () => {
       dealId: 1,
       creator: "Marta",
       stage: "offer_sent",
+      followUpNumber: 1,
       anchorMessageId: 5,
       anchorAt: "2026-07-18 09:00:00",
       daysWaiting: 4,
@@ -638,60 +639,68 @@ describe("groupAttention", () => {
   });
 });
 
-describe("outreach with no reply", () => {
-  it("stays quiet inside the waiting window", () => {
-    const items = attentionItems({
-      ...base,
-      deals: [deal({ stage: "contacted", contacted_at: "2026-07-19 10:00:00" })],
-    });
-    expect(items.filter((i) => i.id.startsWith("no-reply-"))).toEqual([]);
-  });
-
-  it("chases once the outreach has gone unanswered", () => {
-    const items = attentionItems({
-      ...base,
-      deals: [deal({ stage: "contacted", contacted_at: "2026-07-15 10:00:00" })],
-    });
-    const hit = items.find((i) => i.id.startsWith("no-reply-"));
-    expect(hit?.title).toContain("no reply for 7 days");
-    expect(hit?.severity).toBe("info");
-    expect(hit?.owner).toBe("creator");
-  });
-
-  it("escalates when the silence has run twice as long", () => {
-    const items = attentionItems({
-      ...base,
-      deals: [deal({ stage: "contacted", contacted_at: "2026-07-01 10:00:00" })],
-    });
-    expect(items.find((i) => i.id.startsWith("no-reply-"))?.severity).toBe("warning");
-  });
-
-  it("falls back to updated_at for rows that predate the column", () => {
-    const items = attentionItems({
-      ...base,
-      deals: [deal({ stage: "contacted", updated_at: "2026-07-10 10:00:00" })],
-    });
-    expect(items.find((i) => i.id.startsWith("no-reply-"))?.title).toContain("12 days");
-  });
+const chase = (over: Partial<FollowUpCandidate>): FollowUpCandidate => ({
+  dealId: 1,
+  creator: "Marta",
+  stage: "contacted",
+  followUpNumber: 1,
+  anchorMessageId: null,
+  anchorAt: "2026-07-15 09:00:00",
+  daysWaiting: 7,
+  draft: "Hi Marta",
+  ...over,
 });
 
-describe("outreach roll-up", () => {
+describe("outreach with no reply", () => {
+  it("chases the one silent creator by name, and says which follow-up is due", () => {
+    const items = attentionItems({ ...base, followUps: [chase({})] });
+    const hit = items.find((i) => i.id.startsWith("no-reply-"));
+    expect(hit?.title).toBe("Marta — no reply for 7 days");
+    expect(hit?.detail).toBe("Send the first follow-up");
+    expect(hit?.owner).toBe("creator");
+    expect(hit?.severity).toBe("info");
+  });
+
+  it("stops nudging and offers the exit once they have been chased twice", () => {
+    const items = attentionItems({ ...base, followUps: [chase({ followUpNumber: 3 })] });
+    const hit = items.find((i) => i.id.startsWith("no-reply-"));
+    expect(hit?.detail).toContain("drop it");
+    expect(hit?.severity).toBe("warning");
+  });
+
   it("collapses a batch into one line rather than repeating itself", () => {
     const items = attentionItems({
       ...base,
-      deals: [
-        deal({ id: 1, stage: "contacted", contacted_at: "2026-07-15 10:00:00" }),
-        deal({ id: 2, stage: "contacted", contacted_at: "2026-07-15 10:00:00" }),
-        deal({ id: 3, stage: "contacted", contacted_at: "2026-07-02 10:00:00" }),
-        // Inside the window — not silent yet, and must not be counted.
-        deal({ id: 4, stage: "contacted", contacted_at: "2026-07-21 10:00:00" }),
+      followUps: [
+        chase({ dealId: 1, daysWaiting: 7 }),
+        chase({ dealId: 2, daysWaiting: 20 }),
+        chase({ dealId: 3, daysWaiting: 9 }),
       ],
     });
     const rolled = items.filter((i) => i.id.startsWith("no-reply-"));
     expect(rolled).toHaveLength(1);
-    expect(rolled[0].title).toBe("3 creators — no reply for 5+ days");
+    expect(rolled[0].title).toBe("3 creators — no reply since outreach");
     expect(rolled[0].detail).toContain("Longest silent 20 days");
+    expect(rolled[0].detail).toContain("send the next follow-up");
     expect(rolled[0].href).toBe("/pipeline?view=list&stage=contacted");
-    expect(rolled[0].severity).toBe("warning");
+  });
+
+  it("says how many are out of chases, because clearing those is a different job", () => {
+    const items = attentionItems({
+      ...base,
+      followUps: [chase({ dealId: 1 }), chase({ dealId: 2, followUpNumber: 3, daysWaiting: 30 })],
+    });
+    const rolled = items.find((i) => i.id === "no-reply-batch");
+    expect(rolled?.detail).toContain("1 already chased twice");
+    expect(rolled?.severity).toBe("warning");
+  });
+
+  it("keeps live negotiations out of the roll-up — those are named individually", () => {
+    const items = attentionItems({
+      ...base,
+      followUps: [chase({ dealId: 1 }), chase({ dealId: 2, stage: "negotiating", daysWaiting: 4 })],
+    });
+    expect(items.filter((i) => i.id.startsWith("no-reply-"))).toHaveLength(1);
+    expect(items.some((i) => i.id === "follow-up-2")).toBe(true);
   });
 });

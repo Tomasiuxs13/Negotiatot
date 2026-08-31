@@ -28,12 +28,15 @@ function ago(timestamp: string): string {
 export default function DealsTable({
   deals,
   phases = {},
+  outreach = {},
   sort = "",
   dir = "desc",
   hrefFor,
 }: {
   deals: Deal[];
   phases?: Record<number, DealPhase>;
+  /** Per-deal "Follow-up 2 · 3d ago", for contacted rows. */
+  outreach?: Record<number, string>;
   sort?: string;
   dir?: SortDir;
   hrefFor?: (changes: Record<string, string>) => string;
@@ -118,7 +121,7 @@ export default function DealsTable({
               <td className="px-4 py-3 text-slate-500 text-xs">
                 {phases[d.id] && phases[d.id].key !== "nothing_tracked"
                   ? phases[d.id].label
-                  : (d.status_label ?? "—")}
+                  : (outreach[d.id] ?? d.status_label ?? "—")}
                 {phases[d.id]?.behind && (
                   <span className="block text-amber-600">{phases[d.id].behind}</span>
                 )}

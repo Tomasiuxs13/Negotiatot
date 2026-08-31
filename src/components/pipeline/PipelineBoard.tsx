@@ -12,9 +12,12 @@ const COMPLETED_PREVIEW = 5;
 export default function PipelineBoard({
   deals,
   phases = {},
+  outreach = {},
 }: {
   deals: Deal[];
   phases?: Record<number, DealPhase>;
+  /** Per-deal "Follow-up 2 · 3d ago", for contacted cards. */
+  outreach?: Record<number, string>;
 }) {
   // Optimistic local copy so cards move instantly on drop.
   const [items, setItems] = useState(deals);
@@ -115,6 +118,7 @@ export default function PipelineBoard({
                   <DealCard
                     deal={deal}
                     phase={phases[deal.id]}
+                    outreach={outreach[deal.id]}
                     moving={movingId === deal.id}
                     onMove={(next) => moveItem(deal.id, next)}
                   />

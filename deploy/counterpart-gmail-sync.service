@@ -1,0 +1,8 @@
+[Unit]
+Description=Poll Gmail for Counterpart communication events
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/counterpart-gmail-sync

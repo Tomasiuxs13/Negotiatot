@@ -18,7 +18,7 @@ import type { Partner, PartnerChannel, PartnerContact, PartnerSourceRecord } fro
 import type { Reminder } from "./reminders";
 import { normalizeEmail, normalizeProfileUrl } from "./creator-identity";
 import type { CreatorImportCandidate, ImportSource } from "./creator-import";
-import type { EmailProvider, GmailConnectionSummary, InboxEmail, InboxEmailStatus, InboxMatchKind } from "./email-inbox";
+import type { EmailProvider, GmailConnectionSummary, InboxEmail, InboxEmailStatus, InboxMatchKind, OutboundEmail } from "./email-inbox";
 import type { FollowUpState } from "./followups";
 
 const dataDir = path.join(process.cwd(), "data");
@@ -270,8 +270,19 @@ CREATE TABLE IF NOT EXISTS usage_log (
     scopes TEXT NOT NULL,
     connected_at TEXT NOT NULL DEFAULT (datetime('now')),
     last_sync_at TEXT,
+    automation_started_at TEXT,
+    last_automatic_sync_at TEXT,
     last_error TEXT
   )`);
+  const emailConnectionCols = (db.prepare("PRAGMA table_info(email_connections)").all() as { name: string }[]).map(
+    (column) => column.name
+  );
+  if (!emailConnectionCols.includes("automation_started_at")) {
+    db.exec("ALTER TABLE email_connections ADD COLUMN automation_started_at TEXT");
+  }
+  if (!emailConnectionCols.includes("last_automatic_sync_at")) {
+    db.exec("ALTER TABLE email_connections ADD COLUMN last_automatic_sync_at TEXT");
+  }
   db.exec(`CREATE TABLE IF NOT EXISTS inbound_emails (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     provider TEXT NOT NULL,
@@ -287,12 +298,36 @@ CREATE TABLE IF NOT EXISTS usage_log (
     match_kind TEXT NOT NULL CHECK (match_kind IN ('deal','partner_only','unmatched')),
     status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','imported','ignored')),
     imported_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+    auto_eligible INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(provider, provider_message_id)
   )`);
+  const inboundEmailCols = (db.prepare("PRAGMA table_info(inbound_emails)").all() as { name: string }[]).map(
+    (column) => column.name
+  );
+  if (!inboundEmailCols.includes("auto_eligible")) {
+    db.exec("ALTER TABLE inbound_emails ADD COLUMN auto_eligible INTEGER NOT NULL DEFAULT 0");
+  }
   db.exec("CREATE INDEX IF NOT EXISTS idx_inbound_emails_status ON inbound_emails(status, received_at DESC)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_inbound_emails_partner ON inbound_emails(partner_id)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_inbound_emails_deal ON inbound_emails(deal_id)");
+  db.exec(`CREATE TABLE IF NOT EXISTS outbound_emails (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    provider_message_id TEXT NOT NULL,
+    provider_thread_id TEXT,
+    to_email TEXT,
+    subject TEXT,
+    body TEXT NOT NULL,
+    sent_at TEXT NOT NULL,
+    partner_id INTEGER REFERENCES partners(id) ON DELETE SET NULL,
+    deal_id INTEGER REFERENCES deals(id) ON DELETE SET NULL,
+    match_kind TEXT NOT NULL CHECK (match_kind IN ('deal','partner_only','unmatched')),
+    imported_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(provider, provider_message_id)
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_outbound_emails_deal ON outbound_emails(deal_id, sent_at DESC)");
   // Follow-ups are derived from the negotiation thread. This tiny state table stores
   // only an intentional temporary exception — the manager's snooze — tied to the
   // exact outbound message it postpones.
@@ -1227,6 +1262,8 @@ export function getGmailConnection(): (GmailConnectionSummary & { encrypted_toke
         scopes: string;
         connected_at: string;
         last_sync_at: string | null;
+        automation_started_at: string | null;
+        last_automatic_sync_at: string | null;
         last_error: string | null;
       }
     | undefined;
@@ -1237,20 +1274,27 @@ export function getGmailConnection(): (GmailConnectionSummary & { encrypted_toke
     scopes: row.scopes,
     connectedAt: row.connected_at,
     lastSyncAt: row.last_sync_at,
+    automationStartedAt: row.automation_started_at,
+    lastAutomaticSyncAt: row.last_automatic_sync_at,
     lastError: row.last_error,
   };
 }
 
 export function saveGmailConnection(fields: { accountEmail: string; encryptedTokens: string; scopes: string }) {
   db.prepare(
-    `INSERT INTO email_connections (provider, account_email, encrypted_tokens, scopes, connected_at, last_sync_at, last_error)
-     VALUES ('gmail', ?, ?, ?, datetime('now'), NULL, NULL)
+    `INSERT INTO email_connections (
+       provider, account_email, encrypted_tokens, scopes, connected_at, last_sync_at,
+       automation_started_at, last_automatic_sync_at, last_error
+     )
+     VALUES ('gmail', ?, ?, ?, datetime('now'), NULL, NULL, NULL, NULL)
      ON CONFLICT(provider) DO UPDATE SET
        account_email = excluded.account_email,
        encrypted_tokens = excluded.encrypted_tokens,
        scopes = excluded.scopes,
        connected_at = datetime('now'),
        last_sync_at = NULL,
+       automation_started_at = NULL,
+       last_automatic_sync_at = NULL,
        last_error = NULL`
   ).run(fields.accountEmail, fields.encryptedTokens, fields.scopes);
 }
@@ -1263,6 +1307,28 @@ export function markGmailSync(fields: { error?: string | null }) {
   db.prepare(
     "UPDATE email_connections SET last_sync_at = CASE WHEN ? IS NULL THEN datetime('now') ELSE last_sync_at END, last_error = ? WHERE provider = 'gmail'"
   ).run(fields.error ?? null, fields.error ?? null);
+}
+
+export function startGmailAutomation(startedAt: string): string {
+  db.prepare(
+    `UPDATE email_connections
+     SET automation_started_at = COALESCE(automation_started_at, ?)
+     WHERE provider = 'gmail'`
+  ).run(startedAt);
+  const row = db
+    .prepare("SELECT automation_started_at FROM email_connections WHERE provider = 'gmail'")
+    .get() as { automation_started_at: string | null } | undefined;
+  return row?.automation_started_at ?? startedAt;
+}
+
+export function markGmailAutomaticSync(fields: { error?: string | null }) {
+  db.prepare(
+    `UPDATE email_connections SET
+       last_sync_at = CASE WHEN ? IS NULL THEN datetime('now') ELSE last_sync_at END,
+       last_automatic_sync_at = CASE WHEN ? IS NULL THEN datetime('now') ELSE last_automatic_sync_at END,
+       last_error = ?
+     WHERE provider = 'gmail'`
+  ).run(fields.error ?? null, fields.error ?? null, fields.error ?? null);
 }
 
 export function deleteGmailConnection() {
@@ -1318,13 +1384,14 @@ export function saveInboundEmail(fields: {
   partnerId?: number | null;
   dealId?: number | null;
   matchKind: InboxMatchKind;
+  autoEligible?: boolean;
 }) {
   const result = db
     .prepare(
       `INSERT INTO inbound_emails (
         provider, provider_message_id, provider_thread_id, from_email, from_name, subject,
-        body, received_at, partner_id, deal_id, match_kind
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        body, received_at, partner_id, deal_id, match_kind, auto_eligible
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(provider, provider_message_id) DO NOTHING`
     )
     .run(
@@ -1338,7 +1405,8 @@ export function saveInboundEmail(fields: {
       fields.receivedAt,
       fields.partnerId ?? null,
       fields.dealId ?? null,
-      fields.matchKind
+      fields.matchKind,
+      fields.autoEligible ? 1 : 0
     );
   return Number(result.lastInsertRowid);
 }
@@ -1352,6 +1420,52 @@ export function setInboundEmailStatus(fields: {
     fields.status,
     fields.importedMessageId ?? null,
     fields.id
+  );
+}
+
+export function getOutboundEmail(provider: EmailProvider, providerMessageId: string): OutboundEmail | undefined {
+  return db
+    .prepare("SELECT * FROM outbound_emails WHERE provider = ? AND provider_message_id = ?")
+    .get(provider, providerMessageId) as OutboundEmail | undefined;
+}
+
+export function saveOutboundEmail(fields: {
+  provider: EmailProvider;
+  providerMessageId: string;
+  providerThreadId?: string | null;
+  toEmail?: string | null;
+  subject?: string | null;
+  body: string;
+  sentAt: string;
+  partnerId?: number | null;
+  dealId?: number | null;
+  matchKind: InboxMatchKind;
+}): OutboundEmail {
+  db.prepare(
+    `INSERT INTO outbound_emails (
+       provider, provider_message_id, provider_thread_id, to_email, subject, body,
+       sent_at, partner_id, deal_id, match_kind
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(provider, provider_message_id) DO NOTHING`
+  ).run(
+    fields.provider,
+    fields.providerMessageId,
+    fields.providerThreadId ?? null,
+    normalizeEmail(fields.toEmail) ?? null,
+    fields.subject?.trim().slice(0, 500) || null,
+    fields.body.slice(0, 40_000),
+    fields.sentAt,
+    fields.partnerId ?? null,
+    fields.dealId ?? null,
+    fields.matchKind
+  );
+  return getOutboundEmail(fields.provider, fields.providerMessageId)!;
+}
+
+export function setOutboundEmailImported(id: number, importedMessageId: number) {
+  db.prepare("UPDATE outbound_emails SET imported_message_id = ? WHERE id = ?").run(
+    importedMessageId,
+    id
   );
 }
 
@@ -1993,6 +2107,23 @@ export function addMessage(
     meta ? JSON.stringify(meta) : null
   );
   touchDeal(dealId);
+}
+
+/** Store provider-originated mail at its real timestamp and return its durable message id. */
+export function addSyncedMessage(
+  dealId: number,
+  sender: "them" | "us",
+  body: string,
+  createdAt: string,
+  meta: Record<string, unknown>
+): number {
+  const result = db
+    .prepare(
+      "INSERT INTO messages (deal_id, sender, body, meta, created_at) VALUES (?, ?, ?, ?, ?)"
+    )
+    .run(dealId, sender, body, JSON.stringify(meta), createdAt);
+  touchDeal(dealId);
+  return Number(result.lastInsertRowid);
 }
 
 export function touchDeal(dealId: number) {

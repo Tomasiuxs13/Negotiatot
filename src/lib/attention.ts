@@ -140,8 +140,6 @@ export interface AttentionInput {
   today?: string;
   /** Days of silence before we flag other time-based negotiation work. */
   silentDays?: number;
-  /** Days after outreach with no reply before a contacted deal needs chasing. */
-  noReplyDays?: number;
   /** Days in transit before a shipment looks stuck. */
   stuckDays?: number;
   /** How long each platform's views need to settle before they're worth reading. */
@@ -156,6 +154,13 @@ function daysBetween(from: string, to: string): number {
   const a = new Date(from.slice(0, 10) + "T00:00:00Z").getTime();
   const b = new Date(to.slice(0, 10) + "T00:00:00Z").getTime();
   return Math.round((b - a) / (24 * 60 * 60 * 1000));
+}
+
+/** What to say about one silent outreach — the advice changes as the chases stack up. */
+function chaseDetail(followUp: FollowUpCandidate): string {
+  if (followUp.followUpNumber >= 3) return "Chased twice already — drop it or keep waiting";
+  if (followUp.followUpNumber === 2) return "Send the last follow-up, or drop it";
+  return "Send the first follow-up";
 }
 
 /**
@@ -174,7 +179,6 @@ export function attentionItems({
   draftLeadDays = DEFAULT_DRAFT_LEAD_DAYS,
   today = new Date().toISOString().slice(0, 10),
   silentDays = 3,
-  noReplyDays = 5,
   stuckDays = 7,
   windows = {},
 }: AttentionInput): AttentionItem[] {
@@ -306,6 +310,7 @@ export function attentionItems({
   // note should never buy someone another three days of silence. The draft itself is
   // shown after this link, in the negotiation workspace where it can be edited first.
   for (const followUp of followUps) {
+    if (followUp.stage === "contacted") continue; // rolled up below
     items.push({
       id: `follow-up-${followUp.dealId}`,
       severity: followUp.daysWaiting >= 7 ? "warning" : "info",
@@ -346,34 +351,39 @@ export function attentionItems({
     });
   }
 
-  // Outreach that never got an answer. Nothing else catches this: the follow-up rule
-  // keys on the last outbound message, and outreach emails are sent from the manager's
-  // own client, so contacted_at is the only record that anything went out at all.
+  // Outreach that never got an answer. It needs its own rule because the deal has no
+  // conversation yet: the emails go out from the manager's own client, so there is no
+  // reply to be waiting for and nothing else on the dashboard would ever mention it.
   //
-  // Rolled up once there is more than one. Outreach goes out in batches, so a per-deal
-  // item would put seventy identical lines on a list meant to be read in a minute — and
-  // the answer to all seventy is the same trip to the contacted column.
-  const silentOutreach = deals
-    .filter((d) => d.stage === "contacted")
-    .map((d) => ({ deal: d, waiting: daysBetween(d.contacted_at ?? d.updated_at, today) }))
-    .filter((x) => x.waiting >= noReplyDays)
-    .sort((a, b) => b.waiting - a.waiting);
-  if (silentOutreach.length === 1) {
-    const { deal: d, waiting } = silentOutreach[0];
+  // Rolled up once more than one is silent. Outreach goes out in batches, so a per-deal
+  // item put seventy identical lines on a list meant to be read in a minute — and the
+  // answer to all seventy is the same trip to the contacted column.
+  const outreach = [...followUps]
+    .filter((f) => f.stage === "contacted")
+    .sort((a, b) => b.daysWaiting - a.daysWaiting);
+  if (outreach.length === 1) {
+    const only = outreach[0];
     items.push({
-      id: `no-reply-${d.id}`,
-      severity: waiting >= noReplyDays * 2 ? "warning" : "info",
-      title: `${d.creator} — no reply for ${waiting} days`,
-      detail: "Follow up on the outreach, or drop the deal",
-      href: `/deals/${d.id}`,
+      id: `no-reply-${only.dealId}`,
+      severity: only.followUpNumber >= 3 ? "warning" : "info",
+      title: `${only.creator} — no reply for ${only.daysWaiting} days`,
+      detail: chaseDetail(only),
+      href: `/deals/${only.dealId}?tab=negotiation`,
     });
-  } else if (silentOutreach.length > 1) {
-    const longest = silentOutreach[0].waiting;
+  } else if (outreach.length > 1) {
+    const longest = outreach[0];
+    // How many are on their last chase decides whether this is "keep nudging" work or
+    // "clear these out" work, and those are different jobs.
+    const exhausted = outreach.filter((f) => f.followUpNumber >= 3).length;
     items.push({
       id: "no-reply-batch",
-      severity: longest >= noReplyDays * 2 ? "warning" : "info",
-      title: `${silentOutreach.length} creators — no reply for ${noReplyDays}+ days`,
-      detail: `Longest silent ${longest} days · follow up or drop them`,
+      severity: exhausted > 0 ? "warning" : "info",
+      title: `${outreach.length} creators — no reply since outreach`,
+      detail:
+        `Longest silent ${longest.daysWaiting} days · ` +
+        (exhausted > 0
+          ? `${exhausted} already chased twice — drop or keep`
+          : "send the next follow-up"),
       href: "/pipeline?view=list&stage=contacted",
     });
   }

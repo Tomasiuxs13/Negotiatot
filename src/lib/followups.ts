@@ -8,6 +8,13 @@ import type { Deal, Message } from "./types";
  */
 export const DEFAULT_FOLLOW_UP_DELAY_DAYS = 3;
 
+/**
+ * Outreach waits longer than a live conversation. Nobody owes you a reply to a first
+ * email in three days, and chasing that fast is how a promising creator learns to
+ * ignore you.
+ */
+export const OUTREACH_FOLLOW_UP_DELAY_DAYS = 5;
+
 export interface FollowUpState {
   deal_id: number;
   anchor_message_id: number | null;
@@ -19,7 +26,9 @@ export interface FollowUpState {
 export interface FollowUpCandidate {
   dealId: number;
   creator: string;
-  stage: "offer_sent" | "negotiating";
+  stage: "contacted" | "offer_sent" | "negotiating";
+  /** Which chase this would be: 1 for the first one after the outreach itself. */
+  followUpNumber: number;
   /** The outbound message that started the waiting window; null for legacy threads. */
   anchorMessageId: number | null;
   anchorAt: string;
@@ -47,7 +56,20 @@ function lastConversationMessage(messages: Message[]): Message | undefined {
     .at(-1);
 }
 
-function followUpDraft(creator: string, stage: FollowUpCandidate["stage"]): string {
+function followUpDraft(
+  creator: string,
+  stage: FollowUpCandidate["stage"],
+  followUpNumber: number
+): string {
+  if (stage === "contacted") {
+    // A second chase that reads like the first one is what gets a sender filtered. The
+    // last one says so plainly, which is both more honest and more likely to be answered.
+    if (followUpNumber >= 2) {
+      return `Hi ${creator},\n\nLast note from me on this — I know inboxes get busy. If a collaboration isn't the right fit right now, no problem at all; just let me know and I'll close it out. If the timing is simply off, tell me when to come back and I will.\n\nBest,`;
+    }
+    return `Hi ${creator},\n\nJust floating my note back to the top of your inbox in case it got buried. We'd love to work with you and I'm happy to share the details, budget range and timing — or answer anything that would help you decide.\n\nBest,`;
+  }
+
   if (stage === "offer_sent") {
     return `Hi ${creator},\n\nI wanted to follow up on the proposal I sent. We’d love to work together and are happy to answer any questions or talk through the details.\n\nBest,`;
   }
@@ -80,12 +102,18 @@ export function getFollowUpCandidate(
     delayDays?: number;
   } = {}
 ): FollowUpCandidate | null {
-  if ((deal.stage !== "offer_sent" && deal.stage !== "negotiating") || deal.your_move === 1) {
+  const stage = deal.stage;
+  if (
+    (stage !== "contacted" && stage !== "offer_sent" && stage !== "negotiating") ||
+    deal.your_move === 1
+  ) {
     return null;
   }
 
   const today = options.today ?? new Date().toISOString().slice(0, 10);
-  const delayDays = options.delayDays ?? DEFAULT_FOLLOW_UP_DELAY_DAYS;
+  const delayDays =
+    options.delayDays ??
+    (stage === "contacted" ? OUTREACH_FOLLOW_UP_DELAY_DAYS : DEFAULT_FOLLOW_UP_DELAY_DAYS);
   const outbound = latestOutbound(messages);
   const lastConversation = lastConversationMessage(messages);
 
@@ -94,8 +122,11 @@ export function getFollowUpCandidate(
   if (lastConversation && lastConversation.sender !== "us") return null;
 
   // Older deals do not have an outbound message in Counterpart yet. Their last known
-  // hand-off time is the least surprising fallback until the manager records one.
-  const anchorAt = outbound?.created_at ?? deal.updated_at;
+  // hand-off time is the least surprising fallback until the manager records one. For
+  // outreach that is contacted_at: the email left from the manager's own client, so the
+  // stage stamp is the only record that anything was ever sent.
+  const anchorAt =
+    outbound?.created_at ?? (stage === "contacted" ? deal.contacted_at : null) ?? deal.updated_at;
   const anchorMessageId = outbound?.id ?? null;
   const daysWaiting = calendarDaysBetween(anchorAt, today);
   if (daysWaiting < delayDays) return null;
@@ -108,15 +139,16 @@ export function getFollowUpCandidate(
     return null;
   }
 
-  const stage = deal.stage;
+  const followUpNumber = messages.filter((m) => m.sender === "us").length + 1;
   return {
     dealId: deal.id,
     creator: deal.creator,
     stage,
+    followUpNumber,
     anchorMessageId,
     anchorAt,
     daysWaiting,
-    draft: followUpDraft(deal.creator, stage),
+    draft: followUpDraft(deal.creator, stage, followUpNumber),
   };
 }
 

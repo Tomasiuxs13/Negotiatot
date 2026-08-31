@@ -2,20 +2,43 @@ import "server-only";
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
 import {
+  addSyncedMessage,
+  clearFollowUpState,
   deleteGmailConnection,
   findPartnerByEmail,
+  getDeal,
   getGmailConnection,
   getInboundEmail,
+  getMessages,
+  getOutboundEmail,
   getPartnerDeals,
+  inTransaction,
+  markGmailAutomaticSync,
   markGmailSync,
   saveGmailConnection,
   saveInboundEmail,
+  saveOutboundEmail,
+  setInboundEmailStatus,
+  setOutboundEmailImported,
+  startGmailAutomation,
+  updateDeal,
   updateGmailTokens,
 } from "./db";
+import {
+  automaticGmailDeal,
+  automaticReplyStageUpdate,
+  automaticSentStageUpdate,
+} from "./gmail-automation";
 import { normalizeEmail } from "./creator-identity";
 import type { GmailConnectionSummary, InboxMatchKind } from "./email-inbox";
 import { TERMINAL_STAGES } from "./types";
-import { gmailHeader, gmailMessageText, gmailSender, type GmailPayload } from "./gmail-parser";
+import {
+  gmailAddresses,
+  gmailHeader,
+  gmailMessageText,
+  gmailSender,
+  type GmailPayload,
+} from "./gmail-parser";
 
 export { gmailMessageText, gmailSender } from "./gmail-parser";
 
@@ -81,6 +104,8 @@ export function getGmailConnectionSummary(): GmailConnectionSummary | null {
     accountEmail: connection.accountEmail,
     connectedAt: connection.connectedAt,
     lastSyncAt: connection.lastSyncAt,
+    automationStartedAt: connection.automationStartedAt,
+    lastAutomaticSyncAt: connection.lastAutomaticSyncAt,
     lastError: connection.lastError,
   };
 }
@@ -213,6 +238,272 @@ async function gmailJson<T>(token: string, url: string): Promise<T> {
   const payload = (await response.json()) as T & { error?: { message?: string } };
   if (!response.ok) throw new Error(payload.error?.message || "Gmail could not read the inbox.");
   return payload;
+}
+
+export interface GmailAutomationResult {
+  started: boolean;
+  checked: number;
+  sentLogged: number;
+  repliesLogged: number;
+  dealsContacted: number;
+  reviewOnly: number;
+}
+
+function sqliteTimestamp(value: string | number | Date): string {
+  const date = value instanceof Date ? value : new Date(value);
+  return (Number.isNaN(date.valueOf()) ? new Date() : date)
+    .toISOString()
+    .slice(0, 19)
+    .replace("T", " ");
+}
+
+function sqliteUtcMillis(value: string): number {
+  const iso = value.includes("T") ? value : `${value.replace(" ", "T")}Z`;
+  const parsed = Date.parse(iso);
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
+function gmailMessageAt(message: GmailMessage): string {
+  const internalDate = Number(message.internalDate);
+  return sqliteTimestamp(Number.isFinite(internalDate) ? internalDate : Date.now());
+}
+
+function existingSyncedMessage(
+  dealId: number,
+  sender: "them" | "us",
+  body: string,
+  messageAt: string
+) {
+  const target = sqliteUtcMillis(messageAt);
+  return [...getMessages(dealId)]
+    .reverse()
+    .find((message) => {
+      if (message.sender !== sender || message.body.trim() !== body.trim()) return false;
+      return Math.abs(sqliteUtcMillis(message.created_at) - target) <= 24 * 60 * 60 * 1000;
+    });
+}
+
+async function gmailMessagesSince(
+  token: string,
+  labelId: "INBOX" | "SENT",
+  afterEpochSeconds: number
+): Promise<GmailMessage[]> {
+  const query = new URLSearchParams({
+    labelIds: labelId,
+    q: `${labelId === "INBOX" ? "in:inbox" : "in:sent"} after:${afterEpochSeconds}`,
+    maxResults: "50",
+  });
+  const list = await gmailJson<{ messages?: { id: string; threadId?: string }[] }>(
+    token,
+    `${GMAIL_API}/messages?${query}`
+  );
+  const full: GmailMessage[] = [];
+  for (const message of list.messages ?? []) {
+    full.push(
+      await gmailJson<GmailMessage>(
+        token,
+        `${GMAIL_API}/messages/${encodeURIComponent(message.id)}?format=full`
+      )
+    );
+  }
+  return full.sort((a, b) => Number(a.internalDate ?? 0) - Number(b.internalDate ?? 0));
+}
+
+function recordAutomaticReply(message: GmailMessage): "logged" | "review" | "duplicate" {
+  const existing = getInboundEmail("gmail", message.id);
+  if (existing?.status === "imported" || existing?.status === "ignored") return "duplicate";
+  // A row created by the earlier manual review flow remains a manager decision. An
+  // overlapping poll must not silently convert it into an automatic import.
+  if (existing && !existing.auto_eligible) return "duplicate";
+
+  const sender = gmailSender(gmailHeader(message.payload, "From"));
+  const partner = sender.email ? findPartnerByEmail(sender.email) : undefined;
+  const deal = partner ? automaticGmailDeal(getPartnerDeals(partner.id)) : null;
+  const matchKind: InboxMatchKind = deal ? "deal" : partner ? "partner_only" : "unmatched";
+  const body = gmailMessageText(message.payload) || "(No readable plain-text message body.)";
+  const receivedAt = gmailMessageAt(message);
+  const inboxId =
+    existing?.id ??
+    saveInboundEmail({
+      provider: "gmail",
+      providerMessageId: message.id,
+      providerThreadId: message.threadId ?? null,
+      fromEmail: sender.email,
+      fromName: sender.name,
+      subject: gmailHeader(message.payload, "Subject"),
+      body,
+      receivedAt,
+      partnerId: partner?.id ?? null,
+      dealId: deal?.id ?? null,
+      matchKind,
+      autoEligible: Boolean(deal),
+    });
+  if (!deal || !inboxId) return "review";
+
+  const currentDeal = getDeal(deal.id);
+  const stillSafe = partner ? automaticGmailDeal(getPartnerDeals(partner.id)) : null;
+  if (!currentDeal || stillSafe?.id !== currentDeal.id) return "review";
+
+  const duplicateMessage = existingSyncedMessage(currentDeal.id, "them", body, receivedAt);
+  inTransaction(() => {
+    const importedMessageId =
+      duplicateMessage?.id ??
+      addSyncedMessage(currentDeal.id, "them", body, receivedAt, {
+        source: "gmail",
+        providerMessageId: message.id,
+        providerThreadId: message.threadId ?? null,
+        subject: gmailHeader(message.payload, "Subject"),
+        automatic: true,
+      });
+    if (!duplicateMessage) {
+      clearFollowUpState(currentDeal.id);
+      updateDeal(currentDeal.id, automaticReplyStageUpdate(currentDeal));
+    }
+    setInboundEmailStatus({ id: inboxId, status: "imported", importedMessageId });
+  });
+  return duplicateMessage ? "duplicate" : "logged";
+}
+
+function recordAutomaticSent(message: GmailMessage): {
+  outcome: "logged" | "review" | "duplicate";
+  contacted: boolean;
+} {
+  const existing = getOutboundEmail("gmail", message.id);
+  if (existing?.imported_message_id) return { outcome: "duplicate", contacted: false };
+  if (existing && existing.match_kind !== "deal") {
+    return { outcome: "duplicate", contacted: false };
+  }
+
+  const recipients = gmailAddresses(gmailHeader(message.payload, "To"));
+  const partnerMatches = recipients
+    .map((email) => ({ email, partner: findPartnerByEmail(email) }))
+    .filter((entry) => entry.partner != null);
+  const uniquePartnerIds = [...new Set(partnerMatches.map((entry) => entry.partner!.id))];
+  const partner =
+    uniquePartnerIds.length === 1
+      ? partnerMatches.find((entry) => entry.partner!.id === uniquePartnerIds[0])?.partner
+      : undefined;
+  const deal = partner ? automaticGmailDeal(getPartnerDeals(partner.id)) : null;
+  const matchKind: InboxMatchKind = deal ? "deal" : partner ? "partner_only" : "unmatched";
+  const toEmail = partnerMatches.find((entry) => entry.partner?.id === partner?.id)?.email ?? null;
+  const body = gmailMessageText(message.payload) || "(No readable plain-text message body.)";
+  const sentAt = gmailMessageAt(message);
+  const outbound =
+    existing ??
+    saveOutboundEmail({
+      provider: "gmail",
+      providerMessageId: message.id,
+      providerThreadId: message.threadId ?? null,
+      toEmail,
+      subject: gmailHeader(message.payload, "Subject"),
+      body,
+      sentAt,
+      partnerId: partner?.id ?? null,
+      dealId: deal?.id ?? null,
+      matchKind,
+    });
+  if (!deal) return { outcome: "review", contacted: false };
+
+  const currentDeal = getDeal(deal.id);
+  const stillSafe = partner ? automaticGmailDeal(getPartnerDeals(partner.id)) : null;
+  if (!currentDeal || stillSafe?.id !== currentDeal.id) {
+    return { outcome: "review", contacted: false };
+  }
+
+  const duplicateMessage = existingSyncedMessage(currentDeal.id, "us", body, sentAt);
+  const stageUpdate = automaticSentStageUpdate(currentDeal, sentAt);
+  inTransaction(() => {
+    const importedMessageId =
+      duplicateMessage?.id ??
+      addSyncedMessage(currentDeal.id, "us", body, sentAt, {
+        source: "gmail",
+        providerMessageId: message.id,
+        providerThreadId: message.threadId ?? null,
+        subject: gmailHeader(message.payload, "Subject"),
+        automatic: true,
+      });
+    clearFollowUpState(currentDeal.id);
+    if (stageUpdate) updateDeal(currentDeal.id, stageUpdate);
+    setOutboundEmailImported(outbound.id, importedMessageId);
+  });
+  return { outcome: duplicateMessage ? "duplicate" : "logged", contacted: Boolean(stageUpdate) };
+}
+
+let automaticSyncInFlight: Promise<GmailAutomationResult> | null = null;
+
+/**
+ * Poll both Inbox and Sent through the existing read-only grant. The first call only
+ * establishes a watermark, preventing installation from replaying a month of old mail.
+ */
+export function syncGmailAutomation(origin: string): Promise<GmailAutomationResult> {
+  if (automaticSyncInFlight) return automaticSyncInFlight;
+  const sync = (async () => {
+    try {
+      const before = getGmailConnection();
+      if (!before) throw new Error("Connect Gmail before enabling automatic tracking.");
+      if (!before.automationStartedAt) {
+        startGmailAutomation(sqliteTimestamp(Date.now()));
+        markGmailAutomaticSync({});
+        return {
+          started: true,
+          checked: 0,
+          sentLogged: 0,
+          repliesLogged: 0,
+          dealsContacted: 0,
+          reviewOnly: 0,
+        };
+      }
+
+      const token = await accessToken(origin);
+      const since = before.lastAutomaticSyncAt ?? before.automationStartedAt;
+      const afterEpochSeconds = Math.max(
+        0,
+        Math.floor((sqliteUtcMillis(since) - 10 * 60 * 1000) / 1000)
+      );
+      const [inbox, sent] = await Promise.all([
+        gmailMessagesSince(token, "INBOX", afterEpochSeconds),
+        gmailMessagesSince(token, "SENT", afterEpochSeconds),
+      ]);
+      const automationStartedMs = sqliteUtcMillis(before.automationStartedAt);
+      const eligibleInbox = inbox.filter(
+        (message) => Number(message.internalDate ?? 0) >= automationStartedMs
+      );
+      const eligibleSent = sent.filter(
+        (message) => Number(message.internalDate ?? 0) >= automationStartedMs
+      );
+      const result: GmailAutomationResult = {
+        started: false,
+        checked: eligibleInbox.length + eligibleSent.length,
+        sentLogged: 0,
+        repliesLogged: 0,
+        dealsContacted: 0,
+        reviewOnly: 0,
+      };
+      for (const message of eligibleSent) {
+        const recorded = recordAutomaticSent(message);
+        if (recorded.outcome === "logged") result.sentLogged += 1;
+        if (recorded.outcome === "review") result.reviewOnly += 1;
+        if (recorded.contacted) result.dealsContacted += 1;
+      }
+      for (const message of eligibleInbox) {
+        const recorded = recordAutomaticReply(message);
+        if (recorded === "logged") result.repliesLogged += 1;
+        if (recorded === "review") result.reviewOnly += 1;
+      }
+      markGmailAutomaticSync({});
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message.slice(0, 500) : "Automatic Gmail sync failed.";
+      markGmailAutomaticSync({ error: message });
+      throw new Error(message);
+    }
+  })();
+  automaticSyncInFlight = sync;
+  const release = () => {
+    if (automaticSyncInFlight === sync) automaticSyncInFlight = null;
+  };
+  void sync.then(release, release);
+  return sync;
 }
 
 export async function syncGmailInbox(origin: string): Promise<{ added: number; matched: number; unmatched: number }> {

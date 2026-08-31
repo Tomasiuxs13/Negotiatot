@@ -2,7 +2,7 @@ import Link from "next/link";
 import PageHeader, { NewDealButton } from "@/components/PageHeader";
 import PipelineBoard from "@/components/pipeline/PipelineBoard";
 import DealsTable from "@/components/pipeline/DealsTable";
-import { getCampaigns, getDeals } from "@/lib/db";
+import { getCampaigns, getDeals, getFollowUpMessages } from "@/lib/db";
 import {
   getAllContentItems,
   getAllOnboardingTasks,
@@ -10,7 +10,8 @@ import {
   getAllShipments,
 } from "@/lib/fulfillment";
 import { dealPhase, type DealPhase } from "@/lib/deal-phase";
-import { STAGES, STAGE_HELP, dealPlatforms } from "@/lib/types";
+import { outreachStatus } from "@/lib/outreach";
+import { STAGES, STAGE_HELP, dealPlatforms, type Message } from "@/lib/types";
 import { buildQuery, sortBy, type SortDir } from "@/lib/table-sort";
 
 export const dynamic = "force-dynamic";
@@ -89,6 +90,23 @@ export default async function PipelinePage({
       contentItems,
       payments,
     });
+  }
+
+  // What has actually been sent to a creator we contacted, and when. "Reached out ·
+  // awaiting reply" read the same on day one and day thirty and never mentioned the
+  // chases already sent; this replaces it with "Follow-up 2 · 3d ago".
+  const outreach: Record<number, string> = {};
+  if (deals.some((d) => d.stage === "contacted")) {
+    const threads = new Map<number, Message[]>();
+    for (const message of getFollowUpMessages()) {
+      const thread = threads.get(message.deal_id);
+      if (thread) thread.push(message);
+      else threads.set(message.deal_id, [message]);
+    }
+    for (const d of deals) {
+      const status = outreachStatus(d, threads.get(d.id) ?? []);
+      if (status) outreach[d.id] = status.line;
+    }
   }
 
   const query = (over: Record<string, string>) =>
@@ -257,12 +275,13 @@ export default async function PipelinePage({
           )}
         </div>
         {isList ? (
-          <DealsTable deals={listed} phases={phases} sort={sort} dir={dir as SortDir} hrefFor={query} />
+          <DealsTable deals={listed} phases={phases} outreach={outreach} sort={sort} dir={dir as SortDir} hrefFor={query} />
         ) : (
           <PipelineBoard
             key={deals.map((deal) => `${deal.id}:${deal.stage}:${deal.updated_at}`).join("|")}
             deals={deals}
             phases={phases}
+            outreach={outreach}
           />
         )}
 

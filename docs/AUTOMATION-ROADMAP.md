@@ -128,6 +128,12 @@ Guardrails:
 - Keep source, retrieval time, measurement window, and manual overrides for every metric.
 - Failed connections create exceptions; they do not silently turn results into zero.
 
+Implemented 31 August 2026 for Gmail: read-only Inbox/Sent polling every five minutes through the
+Chrome extension, durable provider-message deduplication, exact-email plus single-active-deal
+matching, automatic Lead → Contacted on sent outreach, and reply logging without an automatic AI
+call. Ambiguous mail remains in the Inbox review queue. Approved sending, Gmail push delivery,
+Outlook and scheduled follow-ups remain future work.
+
 ### Phase 5 — Legal and financial integrations
 
 - E-signature provider with immutable document versions and signer events.

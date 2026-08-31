@@ -46,7 +46,14 @@ saveButton.addEventListener("click", async () => {
       counterpartServerUrl: serverUrl,
       counterpartApiKey: apiKey,
     });
-    showStatus("Connected. Open Gmail and select the C button.", "success");
+    const sync = await chrome.runtime.sendMessage({ type: "counterpart-sync-now" });
+    if (!sync?.ok) throw new Error(sync?.error || "Automatic Gmail tracking could not start.");
+    showStatus(
+      sync.payload?.started
+        ? "Connected. Automatic Gmail tracking is on; the first new mail will be checked within 5 minutes."
+        : "Connected. Automatic Gmail tracking is on and checks every 5 minutes.",
+      "success"
+    );
   } catch (error) {
     showStatus(error instanceof Error ? error.message : "Connection failed.", "error");
   } finally {

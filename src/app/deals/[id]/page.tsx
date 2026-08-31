@@ -46,6 +46,7 @@ import { parseRequirements } from "@/lib/brief-requirements";
 import ContractDraftBlock from "@/components/deal/ContractDraftBlock";
 import DealStageBar from "@/components/deal/DealStageBar";
 import { getFollowUpCandidate } from "@/lib/followups";
+import { outreachStatus } from "@/lib/outreach";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +102,8 @@ export default async function DealPage({
   const deal = found;
   const messages = getMessages(deal.id);
   const followUp = getFollowUpCandidate(deal, messages, getFollowUpState(deal.id));
+  // Which touch this creator is on, for a stage whose stored label never changes.
+  const outreach = outreachStatus(deal, messages);
   const platforms = dealPlatforms(deal);
   const scope = dealScope(deal);
   const contract = getContract(deal.id) ?? null;
@@ -285,7 +288,7 @@ export default async function DealPage({
             </details>
           </>
         }
-        workflow={<DealStageBar dealId={deal.id} stage={deal.stage} />}
+        workflow={<DealStageBar dealId={deal.id} stage={deal.stage} note={outreach?.line} />}
         cockpit={
           <>
         {deal.job_error && !deal.job_status && (

@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { addTheirReply } from "@/app/deals/[id]/actions";
 import { getInboxEmail, setInboundEmailStatus } from "@/lib/db";
-import { syncGmailInbox } from "@/lib/gmail";
+import { syncGmailAutomation, syncGmailInbox } from "@/lib/gmail";
 
 async function requestOrigin(): Promise<string> {
   const requestHeaders = await headers();
@@ -18,13 +18,27 @@ export async function syncGmailInboxAction(): Promise<{
   added?: number;
   matched?: number;
   unmatched?: number;
+  sentLogged?: number;
+  repliesLogged?: number;
+  dealsContacted?: number;
+  automationStarted?: boolean;
   error?: string;
 }> {
   try {
-    const result = await syncGmailInbox(await requestOrigin());
+    const origin = await requestOrigin();
+    const automatic = await syncGmailAutomation(origin);
+    const result = await syncGmailInbox(origin);
     revalidatePath("/inbox");
     revalidatePath("/settings");
-    return result;
+    revalidatePath("/pipeline");
+    revalidatePath("/");
+    return {
+      ...result,
+      sentLogged: automatic.sentLogged,
+      repliesLogged: automatic.repliesLogged,
+      dealsContacted: automatic.dealsContacted,
+      automationStarted: automatic.started,
+    };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Inbox sync failed." };
   }

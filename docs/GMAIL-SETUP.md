@@ -19,6 +19,8 @@ review queue but cannot send, archive, edit or delete Gmail messages.
    GMAIL_TOKEN_ENCRYPTION_KEY="a-long-random-secret"
    # Optional when deploying somewhere other than the current local URL:
    # GMAIL_REDIRECT_URI="https://counterpart.example.com/api/integrations/gmail/callback"
+   # Optional for the included VPS systemd timer:
+   # GMAIL_SYNC_SECRET="another-long-random-secret"
    ```
 
    Generate the encryption key with `openssl rand -base64 32`. Keep it stable: changing it
@@ -34,11 +36,27 @@ review queue but cannot send, archive, edit or delete Gmail messages.
 
 ## What happens after connecting
 
-**Inbox → Check Gmail for replies** reads up to 50 inbox messages from the last 30 days. A
-sender email is matched to Counterpart’s primary or secondary partner contacts. A message can
-be added in one click only when that partner has exactly one live deal; otherwise it remains in
-the review queue for a manager to resolve. Adding it records the reply and asks the Copilot for
-the next draft. It does not send a message through Gmail.
+Reload Counterpart's unpacked Chrome extension after installing version 0.2 or later, then use
+**Save and test** in its popup. The extension creates a five-minute alarm. While Chrome and
+Counterpart are running, that alarm asks the local app to read new Inbox and Sent messages through
+the OAuth connection. The extension never receives or stores the Google token.
+
+The first automatic check records a current-time watermark and imports nothing historical. From
+then on, an exact partner email plus exactly one active negotiation is required:
+
+- Sent mail is logged, and a Lead moves to Contacted.
+- A reply is logged and marked as the manager's move; an offered/analyzing deal moves to
+  Negotiating.
+- Multiple live deals, agreed work, partner-only matches and unknown senders stay review-only.
+
+**Inbox → Check now** runs the same new-mail pass immediately, then reads up to 50 previously
+unseen inbox messages from the last 30 days into the review queue. Counterpart does not start a
+Copilot run or send a message as part of automatic tracking.
+
+On the VPS, install `deploy/counterpart-gmail-sync`, its `.service` and `.timer`, and store the
+same `GMAIL_SYNC_SECRET` in the app environment and root-only
+`/etc/counterpart-gmail-sync.env`. The timer calls Counterpart through loopback, so Traefik basic
+auth remains intact and Chrome does not need to stay open.
 
 ## Workspace accounts
 

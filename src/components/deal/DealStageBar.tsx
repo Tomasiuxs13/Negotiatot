@@ -13,7 +13,16 @@ const NEGOTIATION_STAGES = STAGES.filter(
  * keyboard-accessible movement control. Agreement and completion keep their dedicated
  * guarded actions in the header because they have commercial and fulfillment effects.
  */
-export default function DealStageBar({ dealId, stage }: { dealId: number; stage: Stage }) {
+export default function DealStageBar({
+  dealId,
+  stage,
+  note,
+}: {
+  dealId: number;
+  stage: Stage;
+  /** Where this stage actually stands — e.g. "Follow-up 2 · 3d ago" while contacted. */
+  note?: string;
+}) {
   const current = stage;
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -41,6 +50,7 @@ export default function DealStageBar({ dealId, stage }: { dealId: number; stage:
             <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand-dark">
               {STAGE_LABELS[current]}
             </span>
+            {note && <span className="font-data text-xs text-slate-500">{note}</span>}
           </div>
           <p className="mt-1 text-sm font-medium text-slate-800">
             {STAGE_HELP[current].description}

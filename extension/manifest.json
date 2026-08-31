@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Counterpart for Gmail",
   "description": "See creator context and prepare negotiation replies from Gmail.",
-  "version": "0.1.1",
-  "permissions": ["storage"],
+  "version": "0.2.0",
+  "permissions": ["storage", "alarms"],
   "host_permissions": ["https://mail.google.com/*"],
   "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": {

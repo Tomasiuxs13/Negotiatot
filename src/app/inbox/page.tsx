@@ -10,7 +10,7 @@ export default function InboxPage() {
   const connection = getGmailConnectionSummary();
   return (
     <>
-      <PageHeader title="Inbox" subtitle="Review creator replies, then deliberately add them to the right deal" />
+      <PageHeader title="Inbox" subtitle="Automatic creator mail tracking, with ambiguous matches held for review" />
       <main className="flex-1 overflow-y-auto p-4 md:p-8">
         <div className="mx-auto max-w-5xl">
           {connection ? (

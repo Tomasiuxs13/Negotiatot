@@ -61,9 +61,10 @@ from data*, never maintained by hand, and spans every domain:
 - Agreed deals missing a confirmed source contract, content plan, or payment schedule
 - Blocking onboarding steps a deal has already outrun
 - Silent negotiations, verdicts nobody acted on, your move, stale leads
-- Outreach that never got a reply (5+ days since `contacted_at`), rolled into one
-  line when a batch went out together — the fix for all of them is the same trip to
-  the contacted column
+- Outreach that never got a reply (5+ days since the last thing we sent), rolled into
+  one line when a batch went out together — the fix for all of them is the same trip to
+  the contacted column. The advice changes as the chases stack up: send the first
+  follow-up, send the last one, then drop it or keep waiting
 - Declined deals whose revisit date has arrived, and deals ready to wrap up
 
 Items are **grouped** — Content, Money, Setup & delivery, Negotiation, Follow-ups —
@@ -104,8 +105,10 @@ Board and list views over all deals.
   dragging is a convenience rather than the only path. Declined deals are not a column,
   but stay reachable via a link beneath the board.
 - **List** — sortable table with their ask, our number, status and last activity.
-- A contacted card leads with **how long the creator has been silent** (`contacted 6d
-  ago`), stamped when the deal enters the stage and never reset by later edits.
+- A contacted card and row say **which touch the creator is on** — `Reached out · 7d
+  ago`, then `Follow-up 1 · 3d ago`, `Follow-up 2 · today` — instead of a status typed
+  at outreach that read the same on day one and day thirty. Counted from the outbound
+  messages in the thread, dated from `contacted_at` until the first chase is logged.
 - Filters: platform, stage, campaign, free-text search.
 
 Signed deals show a **phase** rather than a stage — "Producing 2/3", "Payment to approve",
@@ -115,23 +118,28 @@ awaiting payment at once. A `behind` note names anything earlier that was skippe
 ### Inbox
 `/inbox` — *Review creator replies before they change a negotiation*
 
-A manager connects a personal Gmail account with per-user OAuth and **read-only** access.
-**Check Gmail for replies** reads up to 50 inbox messages from the last 30 days, matches the
-sender email against a partner's primary and secondary contacts, and shows the email beside its
-single live deal when that match is unambiguous.
+A manager connects Gmail with per-user OAuth and **read-only** access. The Chrome extension asks
+Counterpart to poll Inbox and Sent every five minutes while Chrome and the local app are running.
+The first automatic check establishes a current-time watermark, so installing the feature never
+replays historical Sent mail into the pipeline.
 
-- **Safe match:** “Add reply & draft next move” records the email in that deal's negotiation
-  thread and asks the Copilot to prepare a response. It never sends through Gmail.
+- **Sent outreach:** when a recipient exactly matches a partner with exactly one active
+  negotiation, Counterpart records the outbound message. Only a Lead advances automatically,
+  and only to Contacted; later stages are never rewound or skipped.
+- **Incoming reply:** the same exact-email, single-active-negotiation rule records the reply,
+  marks it as the manager's move and advances an offered/analyzing deal to Negotiating. It does
+  not start a paid Copilot run or send anything.
 - **Partner only / no match:** the message stays in the queue, linked to the partner when
   possible, until the manager resolves the relationship. The app never guesses among several
-  live deals or based on a similar creator name.
+  live deals, attaches mail to an agreed collaboration, or matches based on a similar name.
+- **Check now:** the manual button runs the automatic Inbox/Sent pass immediately, then fills the
+  review queue with up to 50 inbox messages from the last 30 days that have not been seen before.
 - **Privacy and control:** OAuth credentials are encrypted at rest. Disconnecting removes
   Counterpart's local credentials and revokes the Google token when available; previously
-  imported review records remain as part of the deal history.
+  imported review and conversation records remain as part of the deal history. A durable Gmail
+  message ID prevents every poll from duplicating the same event.
 
-The initial sync is deliberately manual rather than a background inbox monitor: it makes the
-data boundary visible while the workflow is validated. The Google Cloud setup is documented in
-[Gmail setup](docs/GMAIL-SETUP.md).
+The Google Cloud setup is documented in [Gmail setup](docs/GMAIL-SETUP.md).
 
 **Counterpart for Gmail** is the companion Manifest V3 Chrome extension in `extension/`.
 It offers a lower-friction browser path when Gmail API access is unavailable: the user grants
@@ -142,11 +150,12 @@ can explicitly record the latest expanded creator message, ask Counterpart to dr
 move, and copy or insert a balanced, warm or firm draft into an already-open Gmail composer.
 The extension never chooses among ambiguous matches and never clicks Send.
 
-This is a foreground integration, not a background mailbox replacement: it sees only the Gmail
-conversation open in that Chrome browser. Mail received while Chrome is closed or handled on
-another device still requires Gmail API sync. The extension API is exposed through authenticated,
-CORS-enabled `/api/extension/status`, `/api/extension/context` and `/api/extension/replies`
-routes; no configured Counterpart API key means those routes are off.
+The Gmail sidebar remains a foreground integration that sees only the open conversation. Its
+service worker also schedules the read-only OAuth sync through Counterpart, so mail handled on
+another device is picked up after Chrome and Counterpart are running again. The extension API is
+exposed through authenticated, CORS-enabled `/api/extension/status`,
+`/api/extension/gmail-sync`, `/api/extension/context` and `/api/extension/replies` routes; no
+configured Counterpart API key means those routes are off.
 
 ### Creator intake
 `/imports` — *Reconcile a discovery list before it becomes relationship work*
@@ -283,7 +292,11 @@ the Workspace-admin boundary are documented in [Gmail setup](docs/GMAIL-SETUP.md
 button doubles as a permission check: after Google returns, Settings distinguishes a successful
 self-approved connection from a Workspace policy block, a declined request, an expired state or
 an OAuth configuration failure. A connection is saved only when Google confirms that the
-read-only Gmail scope was actually granted.
+read-only Gmail scope was actually granted. Once extension version 0.2 or later runs its first
+check, Settings shows **Automatic tracking on** and explains the five-minute, Chrome-and-app
+availability boundary. A deployed always-on instance can set `GMAIL_SYNC_SECRET` and use the
+included systemd timer, which polls the authenticated loopback endpoint every five minutes
+without depending on Chrome.
 
 ---
 
@@ -475,13 +488,21 @@ saved contact email, and can enter a negotiation only when that partner has exac
 deal and the manager chooses **Add reply & draft next move**. The captured reply follows the
 same stage, recommendation and attention-panel updates as a pasted response; no email is sent.
 
-**Outbound message → follow-up queue.** While a deal is in *Offer sent* or *Negotiating* and the
+**Outbound message → follow-up queue.** While a deal is in *Contacted*, *Offer sent* or
+*Negotiating* and the
 creator has the move, Counterpart waits three full calendar days from the last outbound message
 before placing a stage-specific, editable follow-up in the Dashboard. A manager can copy it for
 their email app, mark it sent (which starts a new waiting window), or snooze that exact message
 for two days. Deal edits never reset the window; nor does a stale follow-up survive an incoming
 reply or a newer outbound message. Until Gmail drafting is connected, this is intentionally
 copy-and-record only: no email is created or sent.
+
+*Contacted* deals run on the same machinery with two differences: outreach waits **five** days
+rather than three, because nobody owes you a reply to a first email in three; and the wait is
+dated from `contacted_at` until a chase is recorded, since the outreach email left from the
+manager's own client and no outbound message exists to key on. Recording a chase numbers it —
+the card then reads `Follow-up 1 · today` — and the second draft says it is the last note,
+because a second chase that reads like the first one is how a sender gets filtered.
 
 **Portal → your worklist.** A creator submitting a draft moves the item to *submitted*,
 which puts it on your board and in the attention panel with a review clock running from

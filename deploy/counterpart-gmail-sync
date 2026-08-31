@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+. /etc/counterpart-gmail-sync.env
+
+exec /usr/bin/curl \
+  --fail \
+  --silent \
+  --show-error \
+  --max-time 60 \
+  --request POST \
+  --header "X-Counterpart-Sync-Secret: ${GMAIL_SYNC_SECRET}" \
+  http://127.0.0.1:3100/api/extension/gmail-sync

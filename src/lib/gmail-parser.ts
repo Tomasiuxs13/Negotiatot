@@ -56,6 +56,18 @@ export function gmailSender(value: string | null): { email: string | null; name:
   return { email: validEmail, name: name || null };
 }
 
+/** Extract every mailbox from a To/Cc-style header without trusting display names. */
+export function gmailAddresses(value: string | null): string[] {
+  if (!value) return [];
+  return [
+    ...new Set(
+      [...value.matchAll(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g)].map((match) =>
+        match[0].toLowerCase()
+      )
+    ),
+  ];
+}
+
 export function gmailHeader(payload: GmailPayload | undefined, name: string): string | null {
   return payload?.headers?.find((item) => item.name?.toLowerCase() === name.toLowerCase())?.value?.trim() || null;
 }

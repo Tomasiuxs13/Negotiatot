@@ -44,7 +44,13 @@ export default function GmailInbox({
       setNotice(null);
       const result = await syncGmailInboxAction();
       if (result.error) setError(result.error);
-      else setNotice(`${result.added ?? 0} new email${result.added === 1 ? "" : "s"} checked · ${result.matched ?? 0} safely matched to a live deal.`);
+      else if (result.automationStarted) {
+        setNotice("Automatic tracking is on. New Inbox and Sent mail will be handled from this point forward.");
+      } else {
+        setNotice(
+          `${result.added ?? 0} review item${result.added === 1 ? "" : "s"} added · ${result.sentLogged ?? 0} sent logged · ${result.repliesLogged ?? 0} replies logged · ${result.dealsContacted ?? 0} leads moved to Contacted.`
+        );
+      }
     });
 
   const addToDeal = (id: number) =>
@@ -69,7 +75,7 @@ export default function GmailInbox({
         <div>
           <p className="text-sm font-semibold text-slate-900">Connected as {connection.accountEmail}</p>
           <p className="mt-0.5 text-xs text-slate-500">
-            Read-only Gmail access · last checked {connection.lastSyncAt ? receivedAt(connection.lastSyncAt) : "not yet"}
+            {connection.automationStartedAt ? "Automatic tracking on" : "Manual checking only"} · read-only Gmail · last checked {connection.lastSyncAt ? receivedAt(connection.lastSyncAt) : "not yet"}
           </p>
         </div>
         <button
@@ -77,7 +83,7 @@ export default function GmailInbox({
           disabled={isPending}
           className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-dark disabled:opacity-60"
         >
-          {isPending ? "Checking inbox…" : "Check Gmail for replies"}
+          {isPending ? "Checking Gmail…" : "Check now"}
         </button>
       </section>
 
@@ -93,13 +99,13 @@ export default function GmailInbox({
         <section className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
           <span className="material-symbols-outlined text-slate-400">inbox</span>
           <h3 className="mt-2 font-headline text-base font-semibold text-slate-900">No new replies to review</h3>
-          <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">Check Gmail when you are ready. Counterpart only imports emails from the last 30 days and never moves a deal without your approval.</p>
+          <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">Counterpart will log new exact-email, single-deal matches automatically. Ambiguous and unrelated messages remain review-only.</p>
         </section>
       ) : (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 px-5 py-4">
             <h3 className="font-headline text-sm font-semibold text-slate-900">Replies needing a decision</h3>
-            <p className="mt-1 text-xs text-slate-500">A sender match is not enough to alter a deal: only a single live deal can be added in one click.</p>
+            <p className="mt-1 text-xs text-slate-500">Automatic matching requires an exact partner email and exactly one active negotiation. Everything else waits here.</p>
           </div>
           <div className="divide-y divide-slate-100">
             {emails.map((email) => (

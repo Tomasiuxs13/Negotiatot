@@ -75,3 +75,45 @@ describe("getFollowUpCandidate", () => {
     expect(candidates[0].anchorMessageId).toBe(7);
   });
 });
+
+describe("outreach follow-ups", () => {
+  const contacted = (over: Partial<Deal> = {}) =>
+    deal({ stage: "contacted", contacted_at: "2026-07-15 09:00:00", ...over });
+
+  it("dates the wait from the outreach itself — there is no outbound message to key on", () => {
+    // updated_at is deliberately later: editing the deal must not buy silence more time.
+    const d = contacted({ updated_at: "2026-07-21 12:00:00" });
+    const due = getFollowUpCandidate(d, [], null, { today: "2026-07-22" });
+    expect(due?.daysWaiting).toBe(7);
+    expect(due?.followUpNumber).toBe(1);
+    expect(due?.draft).toContain("floating my note back");
+  });
+
+  it("gives outreach five days rather than a negotiation's three", () => {
+    const d = contacted();
+    expect(getFollowUpCandidate(d, [], null, { today: "2026-07-19" })).toBeNull();
+    expect(getFollowUpCandidate(d, [], null, { today: "2026-07-20" })?.daysWaiting).toBe(5);
+  });
+
+  it("counts the chases and restarts the clock from the last one sent", () => {
+    const sent = message({ id: 9, created_at: "2026-07-20 09:00:00", body: "bump" });
+    const next = getFollowUpCandidate(contacted(), [sent], null, { today: "2026-07-26" });
+    expect(next?.followUpNumber).toBe(2);
+    expect(next?.daysWaiting).toBe(6);
+    expect(next?.draft).toContain("Last note from me");
+  });
+
+  it("stops chasing the moment they answer", () => {
+    const replied = getFollowUpCandidate(
+      contacted(),
+      [message({ id: 9, sender: "them", created_at: "2026-07-20 09:00:00" })],
+      null,
+      { today: "2026-07-30" }
+    );
+    expect(replied).toBeNull();
+  });
+
+  it("leaves untouched leads alone — nothing has been sent to follow up on", () => {
+    expect(getFollowUpCandidate(deal({ stage: "lead" }), [], null, { today: "2026-08-30" })).toBeNull();
+  });
+});

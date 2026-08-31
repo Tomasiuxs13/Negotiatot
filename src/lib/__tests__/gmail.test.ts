@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gmailMessageText, gmailSender } from "../gmail-parser";
+import { gmailAddresses, gmailMessageText, gmailSender } from "../gmail-parser";
 
 describe("Gmail message parsing", () => {
   it("normalises a sender address while retaining a useful display name", () => {
@@ -26,5 +26,11 @@ describe("Gmail message parsing", () => {
         body: { data: Buffer.from("<p>Thanks<br>Let’s talk.</p>").toString("base64url") },
       })
     ).toBe("Thanks\nLet’s talk.");
+  });
+
+  it("extracts every unique recipient from a Gmail address header", () => {
+    expect(
+      gmailAddresses('"Mila, Creator" <MILA@Agency.Example>, team@getryoko.com, <mila@agency.example>')
+    ).toEqual(["mila@agency.example", "team@getryoko.com"]);
   });
 });

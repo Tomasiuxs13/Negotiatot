@@ -36,13 +36,17 @@ export async function markFollowUpSent(dealId: number, text: string) {
   }
 
   addMessage(dealId, "us", trimmed, {
-    type: "follow_up",
+    type: candidate.stage === "contacted" ? "outreach_follow_up" : "follow_up",
     anchor_message_id: candidate.anchorMessageId,
   });
   clearFollowUpState(dealId);
   updateDeal(dealId, {
     your_move: 0,
-    status_label: `Round ${Math.max(deal.round, 1)} · follow-up sent · waiting on them`,
+    // A contacted deal has no rounds yet — what matters there is which chase this was.
+    status_label:
+      candidate.stage === "contacted"
+        ? `Follow-up ${candidate.followUpNumber} sent · awaiting reply`
+        : `Round ${Math.max(deal.round, 1)} · follow-up sent · waiting on them`,
     status_tone: "neutral",
   });
   refresh(dealId);

@@ -37,7 +37,7 @@ export default function GmailConnectionBlock({
         <div>
           <p className="text-sm font-semibold text-slate-900">Gmail inbox</p>
           <p className="mt-1 max-w-[72ch] text-xs leading-5 text-slate-500">
-            Reads incoming messages into Counterpart&apos;s review queue. It cannot send, edit, archive, or delete Gmail messages; a reply enters a deal only when you approve it.
+            Read-only tracking checks Inbox and Sent. Exact-email, single-active-deal matches are logged automatically; ambiguous mail stays in the review queue. Counterpart cannot send, edit, archive, or delete Gmail messages.
           </p>
         </div>
         <span className={`text-sm font-medium ${connection ? "text-emerald-600" : configured ? "text-slate-600" : "text-amber-700"}`}>
@@ -62,16 +62,24 @@ export default function GmailConnectionBlock({
       )}
 
       {connection ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="rounded bg-slate-50 px-2 py-1 text-xs text-slate-700 ring-1 ring-slate-200">{connection.accountEmail}</span>
-          <Link href="/inbox" className="text-xs font-semibold text-brand-dark hover:underline">Open inbox</Link>
-          <button
-            onClick={() => (confirming ? disconnect() : setConfirming(true))}
-            disabled={isPending}
-            className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
-          >
-            {isPending ? "Disconnecting…" : confirming ? "Really disconnect?" : "Disconnect"}
-          </button>
+        <div className="mt-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded bg-slate-50 px-2 py-1 text-xs text-slate-700 ring-1 ring-slate-200">{connection.accountEmail}</span>
+            <span className={`rounded px-2 py-1 text-xs font-semibold ${connection.automationStartedAt ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
+              {connection.automationStartedAt ? "Automatic tracking on" : "Reload extension to start automatic tracking"}
+            </span>
+            <Link href="/inbox" className="text-xs font-semibold text-brand-dark hover:underline">Open inbox</Link>
+            <button
+              onClick={() => (confirming ? disconnect() : setConfirming(true))}
+              disabled={isPending}
+              className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
+            >
+              {isPending ? "Disconnecting…" : confirming ? "Really disconnect?" : "Disconnect"}
+            </button>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-slate-500">
+            Background checks run every five minutes while Chrome and Counterpart are running. The first check creates a fresh-mail watermark, so old Sent mail is never replayed into deals.
+          </p>
         </div>
       ) : configured ? (
         <a href="/api/integrations/gmail/connect" className="mt-3 inline-flex rounded-md bg-brand px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-brand-dark">
