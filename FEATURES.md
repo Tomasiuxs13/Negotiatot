@@ -330,6 +330,33 @@ counted out loud beneath the list rather than quietly dropped. Results measured 
 ROAS here is explicitly labelled **fee ROAS**; the deal Actuals tab also shows **all-in
 ROAS**, whose denominator includes actual commission and gifted product cost.
 
+### Sign in
+`/login` — *One password, one session*
+
+The app's own gate, replacing the HTTP basic auth the deployment used to sit behind.
+Basic auth has no session: the browser replays credentials on every request and
+re-prompts on any fresh 401, which happens on every deploy, every container restart and
+every browser restart. A signed cookie survives all three — sign in once, stay signed in
+for 30 days.
+
+The password is `COUNTERPART_PASSWORD` in the instance's environment. The session secret
+is derived from it, so changing the password ends every existing session. The cookie is
+httpOnly, sameSite=lax, secure in production, and carries only a signed expiry — nothing
+secret travels in it, and the expiry cannot be extended without the signature.
+
+**The gate is `src/proxy.ts`** (Next 16 renamed Middleware to Proxy) and is default-deny:
+a path is reachable without a session only if it is listed. Open by design are `/login`,
+`/ship` and `/portal` — creators open the last two with a token in the URL and have no
+account — and Google's OAuth callback, which validates its own state. Requests to
+`/api/*` carrying an `Authorization` or `x-api-key` header are passed to the route, which
+validates the key itself; an API request with neither a key nor a session gets a 401 in
+JSON rather than a redirect to a login page no script can read.
+
+**With no password set the app fails closed in production** — every page returns 503 —
+because an unset password must never silently mean an open instance. In development it
+stays open: a local instance on loopback is not the risk, and requiring a password to run
+the dev server is how one ends up committed to the repository.
+
 ### Settings
 `/settings`
 

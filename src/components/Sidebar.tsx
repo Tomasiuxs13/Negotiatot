@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { money } from "@/lib/format";
+import SignOutButton from "./SignOutButton";
 
 /** The labels explain the product's mental model before the user has to learn it. */
 const NAV_GROUPS = [
@@ -120,6 +121,9 @@ export default function Sidebar({
             <div className="border-t border-white/10 px-3 pt-2 mt-2 text-[11px] text-slate-400 font-tabular">
               {money(committed)} of {money(cap)} · {month}
             </div>
+            <div className="px-1 pt-1">
+              <SignOutButton />
+            </div>
           </nav>
         </details>
       </div>
@@ -166,6 +170,9 @@ export default function Sidebar({
 
       {/* Budget module */}
       <div className="mt-auto p-4 border-t border-white/10">
+        <div className="mb-2">
+          <SignOutButton />
+        </div>
         <div className="flex items-center justify-between mb-2 px-2">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 14 }}>
