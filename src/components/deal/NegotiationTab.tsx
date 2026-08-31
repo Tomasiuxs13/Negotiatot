@@ -5,6 +5,7 @@ import { buildRounds, currentGap } from "@/lib/negotiation";
 import CopilotCard from "./CopilotCard";
 import ReplyForm from "./ReplyForm";
 import DeleteMessageButton from "./DeleteMessageButton";
+import MessageBody from "./MessageBody";
 import GenerateOfferButton from "./GenerateOfferButton";
 import RegenerateRecoButton from "./RegenerateRecoButton";
 import FollowUpComposer from "./FollowUpComposer";
@@ -34,7 +35,7 @@ function Bubble({ msg, creator }: { msg: Message; creator: string }) {
             the cleanup handled by the action rather than left to memory. */}
         <DeleteMessageButton dealId={msg.deal_id} messageId={msg.id} />
       </div>
-      <p className="whitespace-pre-line text-slate-800">{msg.body}</p>
+      <MessageBody body={msg.body} />
     </div>
   );
 }

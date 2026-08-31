@@ -73,18 +73,31 @@ export default function CopilotCard({ dealId, reco }: { dealId: number; reco: Co
           ))}
         </div>
 
-        <div className="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-3 mb-3.5">
-          <div className="text-[10px] font-bold tracking-[0.12em] text-slate-500 mb-1.5">
+        {/* The workings, folded. The pills above already state the move and the draft
+            below is what you act on; five paragraphs of CPM arithmetic between them
+            pushed the thing you came here to send off the screen. */}
+        <details className="group bg-slate-50 border border-slate-200 rounded-lg mb-3.5">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3.5 py-2.5 text-[10px] font-bold tracking-[0.12em] text-slate-500">
+            <span
+              className="material-symbols-outlined text-slate-400 transition-transform group-open:rotate-90"
+              style={{ fontSize: 14 }}
+              aria-hidden
+            >
+              chevron_right
+            </span>
             WHY THIS MOVE
-          </div>
-          <ul className="list-disc pl-4 space-y-1">
+            <span className="font-normal tracking-normal text-slate-400">
+              · {reco.reasoning.length} point{reco.reasoning.length === 1 ? "" : "s"}
+            </span>
+          </summary>
+          <ul className="list-disc pl-8 pr-3.5 pb-3 space-y-1">
             {reco.reasoning.map((r, i) => (
               <li key={i} className="text-xs text-slate-600 max-w-[65ch]">
                 {r}
               </li>
             ))}
           </ul>
-        </div>
+        </details>
 
         <div className="flex gap-1.5 mb-2.5" role="tablist" aria-label="Draft tone">
           {TONES.map((t) => (
@@ -104,8 +117,16 @@ export default function CopilotCard({ dealId, reco }: { dealId: number; reco: Co
           ))}
         </div>
 
-        <div className="bg-white border border-dashed border-slate-300 rounded-lg px-3.5 py-3 text-sm text-slate-700 whitespace-pre-line">
-          {draft || (isPending ? `Rewriting in a ${tone} tone…` : "")}
+        {/* An email preview, not a paragraph: bounded so a long draft scrolls inside its
+            own frame instead of pushing Copy and Mark as sent below the fold. */}
+        <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-1.5">
+            <span className="label-caps text-slate-500">Draft</span>
+            <span className="text-[11px] capitalize text-slate-400">{tone}</span>
+          </div>
+          <div className="max-h-96 overflow-y-auto px-3.5 py-3 text-sm leading-6 text-slate-700 whitespace-pre-line">
+            {draft || (isPending ? `Rewriting in a ${tone} tone…` : "")}
+          </div>
         </div>
         {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
 
