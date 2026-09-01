@@ -389,7 +389,11 @@ function takeDeparture(
   return { takeDeparture: { asked: asked.total, drafted } };
 }
 
-export async function performRecommendation(dealId: number, take?: string | null) {
+export async function performRecommendation(
+  dealId: number,
+  take?: string | null,
+  approvedOverride?: number | null
+) {
   try {
     const deal = getDeal(dealId);
     if (!deal) {
@@ -405,6 +409,7 @@ export async function performRecommendation(dealId: number, take?: string | null
       playbook: playbookContext(platformsOf(deal), deal.campaign_id, deal.partner_id),
       history: dealHistory(deal),
       take,
+      approvedOverride,
     });
 
     logUsage(dealId, "recommendation", MODEL, reco.usage.inputTokens, reco.usage.outputTokens);
@@ -423,6 +428,9 @@ export async function performRecommendation(dealId: number, take?: string | null
       // a draft that offers a different number than the manager asked for is the one
       // outcome worse than refusing: they would send it believing it was theirs.
       ...(takeDeparture(take, reco.proposedOffer) ?? {}),
+      // The record of a deliberate trade: this fee is above the deal's own ceiling and
+      // the manager said so knowingly.
+      ...(approvedOverride != null ? { approvedOverride } : {}),
     });
 
     const fields: Record<string, unknown> = {

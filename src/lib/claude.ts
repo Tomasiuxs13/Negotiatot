@@ -1694,6 +1694,12 @@ export async function recommendNextMove(params: {
   history?: PriorDeal[];
   /** The manager's own instruction for this draft. See manager-take.ts. */
   take?: string | null;
+  /**
+   * A figure the manager has explicitly approved after being shown that it breaches the
+   * guardrails. Their deal, their budget, their call — the guard's job was to make sure
+   * the decision was made by them rather than by the model, and it has been.
+   */
+  approvedOverride?: number | null;
 }): Promise<RecoResult> {
   const { deal, messages, playbook } = params;
   const client = getClient();
@@ -1708,6 +1714,7 @@ export async function recommendNextMove(params: {
 
   const isOpening = thread.length === 0;
   const take = (params.take ?? "").trim();
+  const approvedOverride = params.approvedOverride ?? null;
   const userText = [
     isOpening
       ? `The manager is initiating this deal — recommend and draft the OPENING OFFER message to the creator. It should introduce the collaboration (deliverables below), justify the price with data, and open at the anchor.`
@@ -1762,7 +1769,9 @@ export async function recommendNextMove(params: {
           `## THE MANAGER'S INSTRUCTION — this outranks your own read`,
           `"""${take}"""`,
           `They are not asking your opinion of the number. If their instruction names a fee, proposedOffer MUST be exactly that fee and the draft MUST offer exactly that — not your preferred number, not a no-fee structure you would rather recommend, not "close to" it.`,
-          `The single exception is the profitability ceiling: a fee above the LOWER of walk-away and breakeven cannot be drafted. If theirs is above it, draft the closest compliant move and open your reasoning by naming their figure, the ceiling, and the gap — so they can see you were overruled by arithmetic rather than by preference.`,
+          approvedOverride != null
+            ? `They have been shown that this figure breaches the profitability ceiling and have approved it anyway. Draft it: proposedOffer = ${Math.round(approvedOverride)}. Do not water it down, do not counter-propose a compliant number, and do not lecture them in the draft — the creator must never see an internal ceiling. Open your reasoning with what it costs: the figure, the ceiling it passes, and the gap, so the record shows the trade they chose.`
+            : `The single exception is the profitability ceiling: a fee above the LOWER of walk-away and breakeven cannot be drafted. If theirs is above it, draft the closest compliant move and open your reasoning by naming their figure, the ceiling, and the gap — so they can see you were overruled by arithmetic rather than by preference.`,
           `If their instruction is inside the ceiling, argue for it in the draft. Your judgement is in HOW it is written and justified, never in WHETHER it is offered.`,
         ].join("\n")
       : ``,
@@ -1794,11 +1803,19 @@ export async function recommendNextMove(params: {
   if (!text) throw new Error("Empty recommendation response from Claude.");
   const parsed = JSON.parse(text) as Omit<RecoResult, "usage" | "drafts"> & { draft: string };
   const proposedOffer = Math.round(parsed.proposedOffer);
-  const guardError = recommendationGuardError({
-    proposedOffer,
-    walkaway: deal.walkaway,
-    breakeven: deal.breakeven,
-  });
+  // An approved override suspends the ceiling for the approved figure only. Anything
+  // else the model returns is still checked, so "the manager approved something" can
+  // never become "the ceiling is off for this call".
+  const approvedThisFigure =
+    approvedOverride != null &&
+    Math.abs(proposedOffer - approvedOverride) <= Math.max(1, approvedOverride * 0.02);
+  const guardError = approvedThisFigure
+    ? null
+    : recommendationGuardError({
+        proposedOffer,
+        walkaway: deal.walkaway,
+        breakeven: deal.breakeven,
+      });
   if (guardError) throw new Error(guardError);
   const projectionError = recommendationProjectionGuardError({
     draft: parsed.draft,

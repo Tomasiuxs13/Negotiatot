@@ -64,13 +64,19 @@ export default function CopilotCard({ dealId, reco }: { dealId: number; reco: Co
         {reco.take && (
           <p
             className={`mb-3 rounded-lg border px-3 py-2 text-xs ${
-              reco.takeDeparture
+              reco.takeDeparture || reco.approvedOverride != null
                 ? "border-amber-300 bg-amber-50 text-amber-900"
                 : "border-brand/20 bg-brand/5 text-slate-600"
             }`}
           >
             <span className="font-semibold">Your take: </span>
             {reco.take}
+            {reco.approvedOverride != null && (
+              <span className="mt-1 block font-semibold">
+                Drafted at {money(reco.approvedOverride)} — above this deal&apos;s ceiling,
+                approved by you.
+              </span>
+            )}
             {reco.takeDeparture && (
               <span className="mt-1 block font-semibold">
                 This draft offers {money(reco.takeDeparture.drafted)}, not the{" "}

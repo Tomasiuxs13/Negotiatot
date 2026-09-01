@@ -629,11 +629,19 @@ scope; its judgement stays in *how* the offer is written and argued. Deal notes 
 context and never instructions, deliberately, which is why this is separate.
 
 A take is checked against the guardrails **before** the call, because the two ways one
-fails are invisible on the deal page. Above the ceiling (the lower of walk-away and
-breakeven) it is refused with the figures — and when the take covers more pieces than the
-deal was priced for, it says so, because the fix is the deliverables and a re-run, not a
-smaller number. Below the Playbook's **minimum paid fee** it is refused too: the Copilot
-would silently turn it into a no-fee structure instead.
+fails are invisible on the deal page: above the ceiling (the lower of walk-away and
+breakeven), or below the Playbook's **minimum paid fee**, where the Copilot would quietly
+turn a small fee into a no-fee structure. When the take covers more pieces than the deal
+was priced for, the warning says so, because the fix is usually the deliverables and a
+re-run rather than a smaller number.
+
+**It is a warning, never a veto.** *Draft it anyway* is right there, and the guardrails
+exist to stop the Copilot drafting above a ceiling unasked — not to stop the person who
+owns the budget from deciding to. An approved figure suspends the ceiling for that figure
+only; anything else the model returns is still checked. The draft then carries the trade
+on the record: the card says the fee is above the deal's ceiling and that you approved it,
+and the reasoning opens with the cost — *"$600 in fees against a walk-away of $36 per
+integration — it clears the profitability ceiling by roughly $492."*
 
 When the Copilot still cannot follow an instruction it does not quietly substitute its own
 number. It names your figure, the ceiling and the gap in its reasoning, and the card says

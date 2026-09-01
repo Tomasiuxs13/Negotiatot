@@ -79,6 +79,10 @@ export function parseTakeAmount(text: string): TakeAmount | null {
 /**
  * What to tell the manager before the call, if anything.
  *
+ * This is a warning, never a veto. The manager sets the price — the guardrails exist to
+ * stop the COPILOT drafting above a ceiling unasked, not to stop the person who owns the
+ * budget from deciding to. Saying it once, with the figures, is the whole job.
+ *
  * The ceiling is the lower of walk-away and breakeven — the same rule the recommendation
  * guard enforces — and the usual reason a sensible take breaches it is that the take
  * covers more pieces than the deal was priced for. That is worth saying, because the fix

@@ -218,6 +218,8 @@ export interface CopilotReco {
   take?: string;
   /** Set when the Copilot drafted a different number than the instruction asked for. */
   takeDeparture?: { asked: number; drafted: number };
+  /** Set when this fee is above the deal's ceiling and the manager approved it knowingly. */
+  approvedOverride?: number;
 }
 
 export const STAGES: { key: Stage; label: string }[] = [

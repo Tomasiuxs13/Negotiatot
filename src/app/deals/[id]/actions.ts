@@ -13,7 +13,7 @@ import { hasApiKey } from "@/lib/claude";
 import { performAnalysis, performRecommendation, platformsOf } from "@/lib/engine";
 import { recommendationGuardError } from "@/lib/recommendation-guard";
 import { stageAfterOffer, stageAfterTheirReply } from "@/lib/stage-advance";
-import { normalizeTake, takeGuardWarning } from "@/lib/manager-take";
+import { normalizeTake, parseTakeAmount, takeGuardWarning } from "@/lib/manager-take";
 import { dealPlatforms } from "@/lib/types";
 
 const NO_KEY_ERROR =
@@ -96,7 +96,12 @@ export async function addTheirReply(dealId: number, text: string) {
  * Runs the Copilot's next move. Used both for the opening offer and to redo an existing
  * recommendation against changed rules — the work is identical either way.
  */
-export async function runRecommendation(dealId: number, rawTake?: string | null) {
+export async function runRecommendation(
+  dealId: number,
+  rawTake?: string | null,
+  /** Set once the manager has seen the warning and asked for it anyway. */
+  approveOverride = false
+) {
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
   if (deal.stage === "agreed" || deal.stage === "completed" || deal.stage === "declined") {
@@ -108,6 +113,7 @@ export async function runRecommendation(dealId: number, rawTake?: string | null)
   // the call: a take above the ceiling would come back as a failed job rather than an
   // explanation, and the fix is usually the scope, not the number.
   const take = normalizeTake(rawTake);
+  let approvedOverride: number | null = null;
   if (take) {
     const warning = takeGuardWarning({
       take,
@@ -117,13 +123,18 @@ export async function runRecommendation(dealId: number, rawTake?: string | null)
       platforms: dealPlatforms(deal),
       minPaidFee: Number(getUnitEconomics().minPaidFee ?? 0) || null,
     });
-    if (warning) return { error: warning };
+    // A warning, not a veto: it is shown once, and the manager decides. Blocking here
+    // would be the app overruling the person who owns the budget.
+    if (warning && !approveOverride) return { warning };
+    if (warning && approveOverride) {
+      approvedOverride = parseTakeAmount(take)?.total ?? null;
+    }
   }
 
   if (!setJob(dealId, "recommending")) {
     return { error: "The Copilot is already working on this deal — wait for it to finish." };
   }
-  after(() => performRecommendation(dealId, take));
+  after(() => performRecommendation(dealId, take, approvedOverride));
   revalidatePath(`/deals/${dealId}`);
   return {};
 }

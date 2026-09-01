@@ -31,13 +31,18 @@ export default function ManagerTakeBox({
   const [take, setTake] = useState(initialTake);
   const [open, setOpen] = useState(!hasRecommendation && !initialTake ? false : Boolean(initialTake));
   const [error, setError] = useState<string | null>(null);
+  /** Shown once, with a way past it: the manager owns the budget, not this box. */
+  const [warning, setWarning] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const run = () => {
+  const run = (approveOverride = false) => {
     setError(null);
+    if (!approveOverride) setWarning(null);
     startTransition(async () => {
-      const result = await runRecommendation(dealId, take);
+      const result = await runRecommendation(dealId, take, approveOverride);
       if (result?.error) setError(result.error);
+      else if (result?.warning) setWarning(result.warning);
+      else setWarning(null);
     });
   };
 
@@ -72,13 +77,25 @@ export default function ManagerTakeBox({
         className="mt-2 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-brand focus:ring-2 focus:ring-brand/20"
       />
       {error && (
-        <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
+        <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-700">
           {error}
         </p>
       )}
+      {warning && (
+        <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-2">
+          <p className="text-xs text-amber-900">{warning}</p>
+          <button
+            onClick={() => run(true)}
+            disabled={isPending || busy}
+            className="mt-2 rounded-md border border-amber-400 bg-white px-2.5 py-1 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100 disabled:opacity-50"
+          >
+            {isPending ? "Drafting…" : "Draft it anyway"}
+          </button>
+        </div>
+      )}
       <div className="mt-2 flex items-center gap-2">
         <button
-          onClick={run}
+          onClick={() => run()}
           disabled={isPending || busy || !take.trim()}
           className="rounded-md bg-brand px-3.5 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-50"
         >
