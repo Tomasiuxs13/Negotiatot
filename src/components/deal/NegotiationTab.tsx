@@ -7,6 +7,7 @@ import ReplyForm from "./ReplyForm";
 import DeleteMessageButton from "./DeleteMessageButton";
 import MessageBody from "@/components/MessageBody";
 import GenerateOfferButton from "./GenerateOfferButton";
+import ManagerTakeBox from "./ManagerTakeBox";
 import RegenerateRecoButton from "./RegenerateRecoButton";
 import FollowUpComposer from "./FollowUpComposer";
 import type { FollowUpCandidate } from "@/lib/followups";
@@ -104,9 +105,18 @@ export default function NegotiationTab({
               <RegenerateRecoButton dealId={deal.id} busy={deal.job_status != null} />
             </div>
             <CopilotCard dealId={deal.id} reco={reco} />
+            <ManagerTakeBox
+              dealId={deal.id}
+              initialTake={reco.take ?? ""}
+              busy={deal.job_status != null}
+              hasRecommendation
+            />
           </div>
         ) : thread.length === 0 ? (
-          <GenerateOfferButton dealId={deal.id} />
+          <div className="flex flex-col gap-3">
+            <GenerateOfferButton dealId={deal.id} />
+            <ManagerTakeBox dealId={deal.id} busy={deal.job_status != null} hasRecommendation={false} />
+          </div>
         ) : (
           <div className="bg-white rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
             No recommendation yet — paste their latest message below and run the analysis.

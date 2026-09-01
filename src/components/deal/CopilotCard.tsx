@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import type { CopilotReco } from "@/lib/types";
 import { markDraftAsSent, rewriteDraftAction } from "@/app/deals/[id]/actions";
+import { money } from "@/lib/format";
 
 const TONES = ["balanced", "warm", "firm"] as const;
 type ToneKey = (typeof TONES)[number];
@@ -58,6 +59,26 @@ export default function CopilotCard({ dealId, reco }: { dealId: number; reco: Co
       </div>
 
       <div className="p-4">
+        {/* Written to your instruction, not the Copilot's own read — worth saying, because
+            the number in the draft is then yours and the reasoning is the argument for it. */}
+        {reco.take && (
+          <p
+            className={`mb-3 rounded-lg border px-3 py-2 text-xs ${
+              reco.takeDeparture
+                ? "border-amber-300 bg-amber-50 text-amber-900"
+                : "border-brand/20 bg-brand/5 text-slate-600"
+            }`}
+          >
+            <span className="font-semibold">Your take: </span>
+            {reco.take}
+            {reco.takeDeparture && (
+              <span className="mt-1 block font-semibold">
+                This draft offers {money(reco.takeDeparture.drafted)}, not the{" "}
+                {money(reco.takeDeparture.asked)} you asked for — the reasoning says why.
+              </span>
+            )}
+          </p>
+        )}
         <div className="flex flex-wrap gap-2 mb-3">
           {reco.pills.map((p) => (
             <span

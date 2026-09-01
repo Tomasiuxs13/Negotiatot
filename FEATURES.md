@@ -622,6 +622,24 @@ saved contact email, and can enter a negotiation only when that partner has exac
 deal and the manager chooses **Add reply & draft next move**. The captured reply follows the
 same stage, recommendation and attention-panel updates as a pasted response; no email is sent.
 
+**Your take → the draft.** The Copilot decides the number unless you tell it otherwise.
+**Your take** on the Negotiation tab is the instruction channel — "offer $200 per video for
+3 videos, and keep exclusivity out" — and it outranks the Copilot's own read on price and
+scope; its judgement stays in *how* the offer is written and argued. Deal notes remain
+context and never instructions, deliberately, which is why this is separate.
+
+A take is checked against the guardrails **before** the call, because the two ways one
+fails are invisible on the deal page. Above the ceiling (the lower of walk-away and
+breakeven) it is refused with the figures — and when the take covers more pieces than the
+deal was priced for, it says so, because the fix is the deliverables and a re-run, not a
+smaller number. Below the Playbook's **minimum paid fee** it is refused too: the Copilot
+would silently turn it into a no-fee structure instead.
+
+When the Copilot still cannot follow an instruction it does not quietly substitute its own
+number. It names your figure, the ceiling and the gap in its reasoning, and the card says
+**"This draft offers $0, not the $30 you asked for"** — a draft that offers something other
+than what you asked for must never look like the one you asked for.
+
 **Outbound message → follow-up queue.** While a deal is in *Contacted*, *Offer sent* or
 *Negotiating* and the
 creator has the move, Counterpart waits three full calendar days from the last outbound message

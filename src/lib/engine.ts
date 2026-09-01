@@ -38,6 +38,7 @@ import {
 } from "./claude";
 import type { Deal } from "./types";
 import { priorDeals, type PriorDeal } from "./partners";
+import { parseTakeAmount } from "./manager-take";
 
 export function platformsOf(deal: Pick<Deal, "platform" | "platforms">): string[] {
   if (deal.platforms) {
@@ -370,7 +371,25 @@ export async function performAnalysis(
  * Generates the next-move recommendation (or the opening offer when the
  * thread is empty) and stores it as a copilot message. Called from `after()`.
  */
-export async function performRecommendation(dealId: number) {
+/**
+ * Did the draft honour the manager's instruction on price?
+ *
+ * Only reports a departure when the take named a figure we could read and the draft
+ * offers a materially different one — a rounding difference is not a departure, and an
+ * instruction with no number in it cannot be departed from.
+ */
+function takeDeparture(
+  take: string | null | undefined,
+  drafted: number
+): { takeDeparture: { asked: number; drafted: number } } | null {
+  if (!take) return null;
+  const asked = parseTakeAmount(take);
+  if (!asked) return null;
+  if (Math.abs(asked.total - drafted) <= Math.max(1, asked.total * 0.02)) return null;
+  return { takeDeparture: { asked: asked.total, drafted } };
+}
+
+export async function performRecommendation(dealId: number, take?: string | null) {
   try {
     const deal = getDeal(dealId);
     if (!deal) {
@@ -385,6 +404,7 @@ export async function performRecommendation(dealId: number) {
       messages,
       playbook: playbookContext(platformsOf(deal), deal.campaign_id, deal.partner_id),
       history: dealHistory(deal),
+      take,
     });
 
     logUsage(dealId, "recommendation", MODEL, reco.usage.inputTokens, reco.usage.outputTokens);
@@ -396,6 +416,13 @@ export async function performRecommendation(dealId: number) {
       pills: reco.pills,
       reasoning: reco.reasoning,
       drafts: reco.drafts,
+      // Stored so the card can say what this draft came from, and so a re-run starts from
+      // the same instruction instead of silently dropping it.
+      ...(take ? { take } : {}),
+      // When the Copilot did not do as it was told, say so on the card. Silently shipping
+      // a draft that offers a different number than the manager asked for is the one
+      // outcome worse than refusing: they would send it believing it was theirs.
+      ...(takeDeparture(take, reco.proposedOffer) ?? {}),
     });
 
     const fields: Record<string, unknown> = {

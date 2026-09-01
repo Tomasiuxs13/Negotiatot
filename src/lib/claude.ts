@@ -1692,6 +1692,8 @@ export async function recommendNextMove(params: {
   messages: Message[];
   playbook: PlaybookContext;
   history?: PriorDeal[];
+  /** The manager's own instruction for this draft. See manager-take.ts. */
+  take?: string | null;
 }): Promise<RecoResult> {
   const { deal, messages, playbook } = params;
   const client = getClient();
@@ -1705,6 +1707,7 @@ export async function recommendNextMove(params: {
   const evidenceRisk = quantitativeEvidenceRisk(analysis);
 
   const isOpening = thread.length === 0;
+  const take = (params.take ?? "").trim();
   const userText = [
     isOpening
       ? `The manager is initiating this deal — recommend and draft the OPENING OFFER message to the creator. It should introduce the collaboration (deliverables below), justify the price with data, and open at the anchor.`
@@ -1735,6 +1738,9 @@ export async function recommendNextMove(params: {
     playbookBlock(playbook, deal),
     ``,
     `## Rules for your recommendation`,
+    take
+      ? `- The manager has given an instruction (below, at the end). It sets the offer. Do not talk them down to your own preferred number and do not substitute a structure you like better.`
+      : ``,
     `- Never propose a fixed fee above the LOWER of walk-away and breakeven. If the market-rate anchor is above that profitability ceiling, recommend a no-fee product/performance structure, reducing scope, holding, or walking away — do not quietly turn an unprofitable market rate into the offer.`,
     `- Trade scope before price: work down the concession ladder (extra deliverables, usage rights, bundles, bonuses) before raising the offer, and price steps must respect the max step %.`,
     `- Mirror their concession size; keep headroom.`,
@@ -1750,6 +1756,16 @@ export async function recommendNextMove(params: {
     `- Never justify a no-fee or low-fee structure by the creator's size. "Given where your channel is right now" reads as "you're too small to pay" and loses deals. Name the structure as a choice, and frame performance terms as uncapped upside they own, not as a consolation for not being paid.`,
     `- Write ONE draft, in a balanced tone — professional and warm, neither pushy nor deferential. Format it as a real email, not a paragraph: greeting on its own line, blank line between paragraphs, 1-3 sentences each. Put a multi-part offer in "- " bullets on separate lines — a creator should be able to see what they get at a glance. Finish with one clear question and a sign-off.`,
     `- A draft is read by the CREATOR. Never disclose internal figures in one: cost of goods, gross margin, breakeven, walk-away, target price, CPM ceilings, or what you can "afford". Quote only what is being offered to them — fee, commission, tier thresholds, their discount code, and the product's price exactly as given under "Voice and product". Internal numbers belong in the reasoning, which the manager alone sees.`,
+    take
+      ? [
+          ``,
+          `## THE MANAGER'S INSTRUCTION — this outranks your own read`,
+          `"""${take}"""`,
+          `They are not asking your opinion of the number. If their instruction names a fee, proposedOffer MUST be exactly that fee and the draft MUST offer exactly that — not your preferred number, not a no-fee structure you would rather recommend, not "close to" it.`,
+          `The single exception is the profitability ceiling: a fee above the LOWER of walk-away and breakeven cannot be drafted. If theirs is above it, draft the closest compliant move and open your reasoning by naming their figure, the ceiling, and the gap — so they can see you were overruled by arithmetic rather than by preference.`,
+          `If their instruction is inside the ceiling, argue for it in the draft. Your judgement is in HOW it is written and justified, never in WHETHER it is offered.`,
+        ].join("\n")
+      : ``,
   ]
     .filter(Boolean)
     .join("\n");

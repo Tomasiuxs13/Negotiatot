@@ -5,7 +5,7 @@ import { hasRights, parseRights, type DealRights } from "@/lib/rights";
 import { readReportFile } from "@/lib/report-upload";
 import { dependentCopilotIds, repairThread } from "@/lib/thread-repair";
 import { after } from "next/server";
-import { addMessage, clearFollowUpState, deleteMessage, getContractDraft, getDeal, getMessage, getMessages, getPartner, markContractDraftSigned, saveContractDraft, setJob, updateDeal, upsertPartnerChannel } from "@/lib/db";
+import { addMessage, clearFollowUpState, deleteMessage, getContractDraft, getDeal, getMessage, getMessages, getPartner, markContractDraftSigned, saveContractDraft, setJob, updateDeal, upsertPartnerChannel, getUnitEconomics } from "@/lib/db";
 import { getContentItems, getPaymentItems } from "@/lib/fulfillment";
 import { generateContractText } from "@/lib/contract-template";
 import { getSetting } from "@/lib/db";
@@ -13,6 +13,8 @@ import { hasApiKey } from "@/lib/claude";
 import { performAnalysis, performRecommendation, platformsOf } from "@/lib/engine";
 import { recommendationGuardError } from "@/lib/recommendation-guard";
 import { stageAfterOffer, stageAfterTheirReply } from "@/lib/stage-advance";
+import { normalizeTake, takeGuardWarning } from "@/lib/manager-take";
+import { dealPlatforms } from "@/lib/types";
 
 const NO_KEY_ERROR =
   "No ANTHROPIC_API_KEY configured — add it to counterpart/.env.local and restart the dev server.";
@@ -94,7 +96,7 @@ export async function addTheirReply(dealId: number, text: string) {
  * Runs the Copilot's next move. Used both for the opening offer and to redo an existing
  * recommendation against changed rules — the work is identical either way.
  */
-export async function runRecommendation(dealId: number) {
+export async function runRecommendation(dealId: number, rawTake?: string | null) {
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
   if (deal.stage === "agreed" || deal.stage === "completed" || deal.stage === "declined") {
@@ -102,10 +104,26 @@ export async function runRecommendation(dealId: number) {
   }
   if (!hasApiKey()) return { error: NO_KEY_ERROR };
 
+  // The manager's own instruction for this draft, checked against the guardrails before
+  // the call: a take above the ceiling would come back as a failed job rather than an
+  // explanation, and the fix is usually the scope, not the number.
+  const take = normalizeTake(rawTake);
+  if (take) {
+    const warning = takeGuardWarning({
+      take,
+      walkaway: deal.walkaway,
+      breakeven: deal.breakeven,
+      deliverables: deal.deliverables,
+      platforms: dealPlatforms(deal),
+      minPaidFee: Number(getUnitEconomics().minPaidFee ?? 0) || null,
+    });
+    if (warning) return { error: warning };
+  }
+
   if (!setJob(dealId, "recommending")) {
     return { error: "The Copilot is already working on this deal — wait for it to finish." };
   }
-  after(() => performRecommendation(dealId));
+  after(() => performRecommendation(dealId, take));
   revalidatePath(`/deals/${dealId}`);
   return {};
 }

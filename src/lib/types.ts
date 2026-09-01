@@ -214,6 +214,10 @@ export interface CopilotReco {
   reasoning: string[];
   drafts: { balanced: string; warm: string; firm: string };
   proposedOffer: number;
+  /** The manager's instruction this draft was written from, when they gave one. */
+  take?: string;
+  /** Set when the Copilot drafted a different number than the instruction asked for. */
+  takeDeparture?: { asked: number; drafted: number };
 }
 
 export const STAGES: { key: Stage; label: string }[] = [
