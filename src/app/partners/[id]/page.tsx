@@ -5,6 +5,7 @@ import {
   ensurePartnerPortalToken,
   getCreatorCategories,
   getRecordLayout,
+  getMessages,
   getPartner,
   getPartnerChannels,
   getPartnerDeals,
@@ -18,6 +19,7 @@ import PartnerStatusPill from "@/components/partners/PartnerStatusPill";
 import { dealPlatforms, PLATFORM_META, STAGE_LABELS } from "@/lib/types";
 import { money, moneyCpm } from "@/lib/format";
 import { PAGE_WIDTH } from "@/lib/layout";
+import PartnerCommunication from "@/components/partners/PartnerCommunication";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,20 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
 
   const channels = getPartnerChannels(partner.id);
   const deals = getPartnerDeals(partner.id);
+  const communication = deals
+    .flatMap((deal) =>
+      getMessages(deal.id)
+        .filter((message) => message.sender === "us" || message.sender === "them")
+        .map((message) => ({
+          ...message,
+          deal_creator: deal.creator,
+          deal_campaign: deal.campaign,
+          deal_stage: deal.stage,
+          deal_deliverables: deal.deliverables,
+          deal_format: deal.format,
+        }))
+    )
+    .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id);
   const stats = partnerStats(deals);
   const operations = partnerOperationalStats(
     deals,
@@ -133,6 +149,16 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
     </>
   );
 
+  const communicationBlock = (
+    <>
+      <PartnerCommunication
+        partnerName={partner.name}
+        messages={communication}
+        latestDealId={communication[0]?.deal_id ?? deals[0]?.id}
+      />
+    </>
+  );
+
   const setupBlock = (
     <>
       {onboarding.length > 0 && (
@@ -200,7 +226,7 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
           </p>
         ) : (
           <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[46rem]">
+                <table className="w-full text-sm min-w-[46rem]">
             <thead>
               <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
                 <th className="px-4 py-2.5 font-medium">Deal</th>
@@ -219,9 +245,9 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
                 <tr key={d.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                   <td className="px-4 py-2.5">
                     <Link
-                          href={`/deals/${d.id}`}
-                          className="line-clamp-2 max-w-[16rem] font-medium text-slate-900 hover:text-brand"
-                        >
+                      href={`/deals/${d.id}`}
+                      className="line-clamp-2 max-w-[16rem] font-medium text-slate-900 hover:text-brand"
+                    >
                       {d.deliverables ?? d.format ?? "Deal"}
                     </Link>
                     <span className="ml-2 inline-flex gap-1 align-middle">
@@ -279,12 +305,13 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
       {workspace ? (
         <div className={`grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,26%)_minmax(0,45%)_minmax(0,29%)] ${PAGE_WIDTH}`}>
           {/* Below xl the work comes first; the properties follow it rather than
-              standing between the header and the deal history. */}
+              standing between the header and the conversation. */}
           <aside className="order-2 flex min-w-0 flex-col gap-4 xl:order-1">
             {profileBlock}
             {contactBlock}
           </aside>
           <div className="order-1 flex min-w-0 flex-col gap-4 xl:order-2">
+            {communicationBlock}
             {historyBlock}
           </div>
           <aside className="order-3 flex min-w-0 flex-col gap-4">
@@ -299,6 +326,7 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
           {remindersBlock}
           {contactBlock}
           {kpisBlock}
+          {communicationBlock}
           {setupBlock}
           {historyBlock}
         </div>

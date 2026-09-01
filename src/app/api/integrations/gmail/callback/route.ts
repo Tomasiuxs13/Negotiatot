@@ -2,6 +2,7 @@ import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { completeGmailAuthorization } from "@/lib/gmail";
 import { gmailOAuthStatusForError } from "@/lib/gmail-oauth-status";
+import { publicRequestOrigin } from "@/lib/public-origin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +15,8 @@ function sameState(left: string | undefined, right: string | null): boolean {
 }
 
 export async function GET(request: NextRequest) {
-  const redirect = new URL("/settings", request.url);
+  const appOrigin = publicRequestOrigin(request, process.env.GMAIL_REDIRECT_URI);
+  const redirect = new URL("/settings", appOrigin);
   const storedState = request.cookies.get("counterpart_gmail_oauth_state")?.value;
   const state = request.nextUrl.searchParams.get("state");
   const error = request.nextUrl.searchParams.get("error");
@@ -27,7 +29,7 @@ export async function GET(request: NextRequest) {
     );
   } else {
     try {
-      await completeGmailAuthorization(request.nextUrl.origin, code);
+      await completeGmailAuthorization(appOrigin, code);
       redirect.searchParams.set("gmail", "connected");
     } catch {
       redirect.searchParams.set("gmail", "connection-failed");
@@ -37,7 +39,7 @@ export async function GET(request: NextRequest) {
   response.cookies.set("counterpart_gmail_oauth_state", "", {
     httpOnly: true,
     sameSite: "lax",
-    secure: request.nextUrl.protocol === "https:",
+    secure: new URL(appOrigin).protocol === "https:",
     path: "/api/integrations/gmail",
     maxAge: 0,
   });

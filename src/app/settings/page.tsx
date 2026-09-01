@@ -11,6 +11,7 @@ import GmailConnectionBlock from "@/components/settings/GmailConnectionBlock";
 import { getGmailConnectionSummary, gmailSetupStatus } from "@/lib/gmail";
 import { gmailOAuthStatus } from "@/lib/gmail-oauth-status";
 import { headers } from "next/headers";
+import { normalizeIgnoredDomains } from "@/lib/email-triage";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +88,7 @@ export default async function SettingsPage({
             missing={gmail.missing}
             connection={gmailConnection}
             oauthStatus={gmailOAuthStatus(query.gmail)}
+            ignoredDomains={normalizeIgnoredDomains(getSetting<unknown>("gmail_ignored_domains"))}
           />
           <RecordLayoutBlock current={getRecordLayout()} />
           <CreatorCategoriesBlock categories={categories} usage={categoryCounts} />

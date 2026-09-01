@@ -6,6 +6,31 @@ export interface ExtensionDealCandidate {
   stage: Stage;
 }
 
+export interface ExtensionDealOption extends ExtensionDealCandidate {
+  campaign: string | null;
+  partnerId: number;
+  partnerName: string;
+}
+
+/** Small, deterministic client search for the private Gmail deal picker. */
+export function filterExtensionDealOptions(
+  deals: ExtensionDealOption[],
+  query: string,
+  limit = 20
+): ExtensionDealOption[] {
+  const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  return deals
+    .filter((deal) => {
+      if (terms.length === 0) return true;
+      const haystack = [deal.creator, deal.partnerName, deal.campaign, deal.stage]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return terms.every((term) => haystack.includes(term));
+    })
+    .slice(0, Math.max(1, limit));
+}
+
 export interface ExtensionPartnerCandidate {
   partnerId: number;
   name: string;

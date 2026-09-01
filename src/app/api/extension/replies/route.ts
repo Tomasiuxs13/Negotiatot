@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
   // Re-resolve identity at write time. A stale sidebar must not attach a message after
   // the database or Gmail thread changed underneath it.
-  const context = gmailExtensionContext(input.contacts);
+  const context = gmailExtensionContext(input.contacts, input.threadId, input.senderEmail);
   if (context.status !== "matched" || context.deal.id !== dealId) {
     return extensionJson(
       { error: "Counterpart can no longer match this thread to exactly one live deal." },

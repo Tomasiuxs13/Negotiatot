@@ -8,6 +8,7 @@ import { parseCategories } from "@/lib/categories";
 import { parseRecordLayout, type RecordLayout } from "@/lib/record-layout";
 import { generateApiKey } from "@/lib/api-auth";
 import { disconnectGmail } from "@/lib/gmail";
+import { normalizeIgnoredDomains } from "@/lib/email-triage";
 
 /**
  * One key, held in the settings table like every other app-level setting. Generating a
@@ -39,6 +40,17 @@ export async function disconnectGmailAction(): Promise<{ error?: string }> {
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Gmail could not be disconnected." };
   }
+}
+
+export async function saveGmailIgnoredDomainsAction(value: string): Promise<{
+  domains?: string[];
+  error?: string;
+}> {
+  const domains = normalizeIgnoredDomains(value);
+  setSetting("gmail_ignored_domains", domains);
+  revalidatePath("/settings");
+  revalidatePath("/inbox");
+  return { domains };
 }
 
 /**

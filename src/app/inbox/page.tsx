@@ -1,20 +1,32 @@
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import GmailInbox from "@/components/inbox/GmailInbox";
-import { getInboxEmails } from "@/lib/db";
+import { getDeals, getInboxEmails } from "@/lib/db";
 import { getGmailConnectionSummary } from "@/lib/gmail";
+import type { InboxDealOption } from "@/lib/email-inbox";
+
+const INBOX_DEAL_STAGES = new Set(["lead", "contacted", "analyzing", "offer_sent", "negotiating"]);
 
 export const dynamic = "force-dynamic";
 
 export default function InboxPage() {
   const connection = getGmailConnectionSummary();
+  const deals: InboxDealOption[] = getDeals()
+    .filter((deal) => INBOX_DEAL_STAGES.has(deal.stage))
+    .map((deal) => ({
+      id: deal.id,
+      creator: deal.creator,
+      stage: deal.stage,
+      campaign: deal.campaign,
+      partnerId: deal.partner_id,
+    }));
   return (
     <>
       <PageHeader title="Inbox" subtitle="Automatic creator mail tracking, with ambiguous matches held for review" />
       <main className="flex-1 overflow-y-auto p-4 md:p-8">
         <div className="mx-auto max-w-5xl">
           {connection ? (
-            <GmailInbox connection={connection} emails={getInboxEmails("new")} />
+            <GmailInbox connection={connection} emails={getInboxEmails("new")} deals={deals} />
           ) : (
             <section className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
               <span className="material-symbols-outlined text-slate-400">mark_email_unread</span>

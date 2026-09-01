@@ -11,5 +11,5 @@ export function OPTIONS() {
 export async function GET(request: Request) {
   const authError = extensionAuthError(request);
   if (authError) return authError;
-  return extensionJson({ ok: true, product: "Counterpart", extensionApi: 1 });
+  return extensionJson({ ok: true, product: "Counterpart", extensionApi: 2 });
 }

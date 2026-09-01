@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { disconnectGmailAction } from "@/app/settings/actions";
+import { disconnectGmailAction, saveGmailIgnoredDomainsAction } from "@/app/settings/actions";
 import type { GmailConnectionSummary } from "@/lib/email-inbox";
 import { gmailOAuthNotice, type GmailOAuthStatus } from "@/lib/gmail-oauth-status";
 
@@ -12,23 +12,40 @@ export default function GmailConnectionBlock({
   missing,
   connection,
   oauthStatus,
+  ignoredDomains,
 }: {
   configured: boolean;
   redirectUri: string;
   missing: string[];
   connection: GmailConnectionSummary | null;
   oauthStatus: GmailOAuthStatus | null;
+  ignoredDomains: string[];
 }) {
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [domainText, setDomainText] = useState(ignoredDomains.join(", "));
   const [isPending, startTransition] = useTransition();
-  const notice = gmailOAuthNotice(oauthStatus);
+  const oauthNotice = gmailOAuthNotice(oauthStatus);
 
   const disconnect = () =>
     startTransition(async () => {
       const result = await disconnectGmailAction();
       if (result.error) setError(result.error);
       else setConfirming(false);
+    });
+
+  const saveDomains = () =>
+    startTransition(async () => {
+      setError(null);
+      setNotice(null);
+      const result = await saveGmailIgnoredDomainsAction(domainText);
+      if (result.error) setError(result.error);
+      else {
+        const domains = result.domains ?? [];
+        setDomainText(domains.join(", "));
+        setNotice("Inbox filters saved. Existing unassigned mail will be cleaned up on the next check.");
+      }
     });
 
   return (
@@ -45,19 +62,19 @@ export default function GmailConnectionBlock({
         </span>
       </div>
 
-      {notice && (
+      {oauthNotice && (
         <div
           className={`mt-3 rounded-lg border p-3 text-xs leading-5 ${
-            notice.tone === "success"
+            oauthNotice.tone === "success"
               ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-              : notice.tone === "warning"
+              : oauthNotice.tone === "warning"
                 ? "border-amber-200 bg-amber-50 text-amber-900"
                 : "border-red-200 bg-red-50 text-red-900"
           }`}
           role="status"
         >
-          <p className="font-semibold">{notice.title}</p>
-          <p className="mt-0.5 opacity-80">{notice.detail}</p>
+          <p className="font-semibold">{oauthNotice.title}</p>
+          <p className="mt-0.5 opacity-80">{oauthNotice.detail}</p>
         </div>
       )}
 
@@ -80,6 +97,32 @@ export default function GmailConnectionBlock({
           <p className="mt-2 text-xs leading-5 text-slate-500">
             Background checks run every five minutes while Chrome and Counterpart are running. The first check creates a fresh-mail watermark, so old Sent mail is never replayed into deals.
           </p>
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <label htmlFor="gmail-ignored-domains" className="text-xs font-semibold text-slate-800">
+              Team email domains to hide
+            </label>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Your connected Gmail domain is hidden automatically. Add any other company domains, separated by commas; saved creator or agency contacts still take priority.
+            </p>
+            <div className="mt-2 flex gap-2">
+              <input
+                id="gmail-ignored-domains"
+                value={domainText}
+                onChange={(event) => setDomainText(event.target.value)}
+                placeholder="orbio.world, company.com"
+                className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-800 outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+              />
+              <button
+                type="button"
+                onClick={saveDomains}
+                disabled={isPending}
+                className="rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Save filters
+              </button>
+            </div>
+            {notice && <p className="mt-2 text-xs text-emerald-700">{notice}</p>}
+          </div>
         </div>
       ) : configured ? (
         <a href="/api/integrations/gmail/connect" className="mt-3 inline-flex rounded-md bg-brand px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-brand-dark">

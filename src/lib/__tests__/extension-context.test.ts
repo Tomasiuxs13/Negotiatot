@@ -1,9 +1,40 @@
 import { describe, expect, it } from "vitest";
 import {
+  filterExtensionDealOptions,
   latestExtensionRecommendation,
   resolveExtensionIdentity,
   type ExtensionPartnerCandidate,
 } from "../extension-context";
+
+describe("filterExtensionDealOptions", () => {
+  const deals = [
+    {
+      id: 12,
+      creator: "Jay Abarca",
+      partnerName: "Jay",
+      partnerId: 1,
+      campaign: "Ryoko Travel",
+      stage: "negotiating" as const,
+    },
+    {
+      id: 13,
+      creator: "Marta Creates",
+      partnerName: "Marta",
+      partnerId: 2,
+      campaign: "Summer Launch",
+      stage: "contacted" as const,
+    },
+  ];
+
+  it("matches every search term across creator, campaign, and stage", () => {
+    expect(filterExtensionDealOptions(deals, "jay travel")).toEqual([deals[0]]);
+    expect(filterExtensionDealOptions(deals, "marta contacted")).toEqual([deals[1]]);
+  });
+
+  it("keeps current deal order and enforces the result limit", () => {
+    expect(filterExtensionDealOptions(deals, "", 1)).toEqual([deals[0]]);
+  });
+});
 
 const partner = (
   partnerId: number,
