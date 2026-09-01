@@ -18,13 +18,15 @@ import type { Partner, PartnerChannel, PartnerContact, PartnerMessage, PartnerSo
 import type { Reminder } from "./reminders";
 import { normalizeEmail, normalizeProfileUrl } from "./creator-identity";
 import type { CreatorImportCandidate, ImportSource } from "./creator-import";
-import type { EmailProvider, GmailConnectionSummary, InboxEmail, InboxEmailStatus, InboxMatchKind, OutboundEmail } from "./email-inbox";
+import type { EmailProvider, EmailThreadLink, GmailConnectionSummary, InboxEmail, InboxEmailStatus, InboxMatchKind, InboxMatchMethod, OutboundEmail } from "./email-inbox";
+import type { InboxBucket } from "./email-triage";
 import type { FollowUpState } from "./followups";
 import { DEFAULT_CATEGORIES, parseCategories } from "./categories";
 import { parseRecordLayout, type RecordLayout } from "./record-layout";
 import { normalizeQuery, rankBy, SEARCH_MIN_CHARS } from "./search";
 import { parseColumns, type PartnerColumnKey } from "./partner-columns";
 import type { PartnerHandleRow } from "./api-resolve";
+
 
 const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -301,6 +303,8 @@ CREATE TABLE IF NOT EXISTS usage_log (
     partner_id INTEGER REFERENCES partners(id) ON DELETE SET NULL,
     deal_id INTEGER REFERENCES deals(id) ON DELETE SET NULL,
     match_kind TEXT NOT NULL CHECK (match_kind IN ('deal','partner_only','unmatched')),
+    match_method TEXT,
+    bucket TEXT NOT NULL DEFAULT 'priority',
     status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','imported','ignored')),
     imported_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
     auto_eligible INTEGER NOT NULL DEFAULT 0,
@@ -313,9 +317,18 @@ CREATE TABLE IF NOT EXISTS usage_log (
   if (!inboundEmailCols.includes("auto_eligible")) {
     db.exec("ALTER TABLE inbound_emails ADD COLUMN auto_eligible INTEGER NOT NULL DEFAULT 0");
   }
+  if (!inboundEmailCols.includes("match_method")) {
+    db.exec("ALTER TABLE inbound_emails ADD COLUMN match_method TEXT");
+    db.exec("UPDATE inbound_emails SET match_method = 'email' WHERE match_kind IN ('deal','partner_only')");
+  }
+  if (!inboundEmailCols.includes("bucket")) {
+    db.exec("ALTER TABLE inbound_emails ADD COLUMN bucket TEXT NOT NULL DEFAULT 'priority'");
+    db.exec("UPDATE inbound_emails SET bucket = 'other' WHERE match_kind = 'unmatched'");
+  }
   db.exec("CREATE INDEX IF NOT EXISTS idx_inbound_emails_status ON inbound_emails(status, received_at DESC)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_inbound_emails_partner ON inbound_emails(partner_id)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_inbound_emails_deal ON inbound_emails(deal_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_inbound_emails_bucket ON inbound_emails(status, bucket, received_at DESC)");
   db.exec(`CREATE TABLE IF NOT EXISTS outbound_emails (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     provider TEXT NOT NULL,
@@ -333,6 +346,20 @@ CREATE TABLE IF NOT EXISTS usage_log (
     UNIQUE(provider, provider_message_id)
   )`);
   db.exec("CREATE INDEX IF NOT EXISTS idx_outbound_emails_deal ON outbound_emails(deal_id, sent_at DESC)");
+  // Gmail's browser conversation id is not always the same identifier returned by its
+  // API. Keep a manager-confirmed link anyway: it makes the sidebar durable across
+  // refreshes, while remembering the sender remains the cross-device automation path.
+  db.exec(`CREATE TABLE IF NOT EXISTS email_thread_links (
+    provider TEXT NOT NULL,
+    provider_thread_id TEXT NOT NULL,
+    partner_id INTEGER NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+    deal_id INTEGER NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+    source TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY(provider, provider_thread_id)
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_email_thread_links_deal ON email_thread_links(deal_id)");
   // Follow-ups are derived from the negotiation thread. This tiny state table stores
   // only an intentional temporary exception — the manager's snooze — tied to the
   // exact outbound message it postpones.
@@ -1565,14 +1592,18 @@ export function saveInboundEmail(fields: {
   partnerId?: number | null;
   dealId?: number | null;
   matchKind: InboxMatchKind;
+  matchMethod?: InboxMatchMethod | null;
+  bucket?: InboxBucket;
+  status?: InboxEmailStatus;
   autoEligible?: boolean;
 }) {
   const result = db
     .prepare(
       `INSERT INTO inbound_emails (
         provider, provider_message_id, provider_thread_id, from_email, from_name, subject,
-        body, received_at, partner_id, deal_id, match_kind, auto_eligible
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        body, received_at, partner_id, deal_id, match_kind, match_method, bucket, status,
+        auto_eligible
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(provider, provider_message_id) DO NOTHING`
     )
     .run(
@@ -1587,9 +1618,97 @@ export function saveInboundEmail(fields: {
       fields.partnerId ?? null,
       fields.dealId ?? null,
       fields.matchKind,
+      fields.matchMethod ?? null,
+      fields.bucket ?? "priority",
+      fields.status ?? "new",
       fields.autoEligible ? 1 : 0
     );
   return Number(result.lastInsertRowid);
+}
+
+export function setInboundEmailMatch(fields: {
+  id: number;
+  partnerId: number | null;
+  dealId: number | null;
+  matchKind: InboxMatchKind;
+  matchMethod: InboxMatchMethod;
+  bucket?: InboxBucket;
+}) {
+  db.prepare(
+    `UPDATE inbound_emails
+     SET partner_id = ?, deal_id = ?, match_kind = ?, match_method = ?, bucket = ?
+     WHERE id = ? AND status = 'new'`
+  ).run(
+    fields.partnerId,
+    fields.dealId,
+    fields.matchKind,
+    fields.matchMethod,
+    fields.bucket ?? "priority",
+    fields.id
+  );
+}
+
+export function setInboundEmailBucket(fields: {
+  id: number;
+  bucket: InboxBucket;
+  status?: InboxEmailStatus;
+}) {
+  db.prepare("UPDATE inbound_emails SET bucket = ?, status = COALESCE(?, status) WHERE id = ?").run(
+    fields.bucket,
+    fields.status ?? null,
+    fields.id
+  );
+}
+
+export function getGmailThreadDealIds(threadId: string): number[] {
+  if (!threadId.trim()) return [];
+  const rows = db
+    .prepare(
+      `SELECT DISTINCT deal_id FROM (
+         SELECT deal_id FROM inbound_emails
+         WHERE provider = 'gmail' AND provider_thread_id = ? AND deal_id IS NOT NULL
+         UNION
+         SELECT deal_id FROM outbound_emails
+         WHERE provider = 'gmail' AND provider_thread_id = ? AND deal_id IS NOT NULL
+       )`
+    )
+    .all(threadId, threadId) as { deal_id: number }[];
+  return rows.map((row) => row.deal_id);
+}
+
+export function getEmailThreadLink(
+  provider: EmailProvider,
+  providerThreadId: string
+): EmailThreadLink | undefined {
+  const threadId = providerThreadId.trim();
+  if (!threadId) return undefined;
+  return db
+    .prepare(
+      "SELECT * FROM email_thread_links WHERE provider = ? AND provider_thread_id = ?"
+    )
+    .get(provider, threadId) as EmailThreadLink | undefined;
+}
+
+/** A later explicit choice replaces the older one; silent background work never calls this. */
+export function saveEmailThreadLink(fields: {
+  provider: EmailProvider;
+  providerThreadId: string;
+  partnerId: number;
+  dealId: number;
+  source: string;
+}) {
+  const threadId = fields.providerThreadId.trim().slice(0, 300);
+  if (!threadId) return;
+  db.prepare(
+    `INSERT INTO email_thread_links (
+       provider, provider_thread_id, partner_id, deal_id, source
+     ) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(provider, provider_thread_id) DO UPDATE SET
+       partner_id = excluded.partner_id,
+       deal_id = excluded.deal_id,
+       source = excluded.source,
+       updated_at = datetime('now')`
+  ).run(fields.provider, threadId, fields.partnerId, fields.dealId, fields.source.trim().slice(0, 100));
 }
 
 export function setInboundEmailStatus(fields: {
