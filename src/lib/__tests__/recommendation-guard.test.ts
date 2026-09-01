@@ -70,3 +70,30 @@ describe("quantitative evidence guard", () => {
     expect(recommendationReadyLabel(3, false)).toBe("Round 3 · Recommendation ready");
   });
 });
+
+describe("manager-confirmed audience clears the projection ban", () => {
+  const unconfirmed = {
+    evidenceConfidence: "mixed" as const,
+    evidenceNotes: "avg views inferred from an unlabelled block in the PDF",
+  };
+
+  it("still refuses projections when nobody has vouched for the figures", () => {
+    expect(quantitativeEvidenceRisk(unconfirmed)).toContain("unlabelled");
+  });
+
+  it("allows them once the manager has set the audience figures by hand", () => {
+    // The reported case: a Modash report whose view figures the analysis could not label,
+    // on a deal whose manager knows the number is right.
+    expect(
+      quantitativeEvidenceRisk(unconfirmed, { managerConfirmedAudience: true })
+    ).toBeNull();
+  });
+
+  it("names the remedy in the rejection, so it is not a dead end", () => {
+    const error = recommendationProjectionGuardError({
+      draft: "You could earn roughly 12 orders a month.",
+      evidenceRisk: "no independent view figure exists",
+    });
+    expect(error).toContain("Correct this");
+  });
+});

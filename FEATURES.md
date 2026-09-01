@@ -686,6 +686,17 @@ must not be recorded as an offer of whatever was last drafted.
 *Mark as sent* remains for when Gmail is not connected, the match is ambiguous, or the email
 was sent from somewhere else.
 
+**Confirmed audience → what a draft may promise.** A draft may not contain a performance
+projection — expected orders, earnings, views — while the platform evidence behind it is
+unconfirmed, because a number a model read off an unlabelled block in a PDF becomes a
+promise the creator will hold you to. **Setting the audience figures by hand ("Correct
+this") lifts that ban**: every projection is built from average views, and a figure the
+manager entered is the most authoritative source the app has. The lock is stored on the
+deal, so the basis of any projection stays auditable.
+
+If the draft breaks the rule anyway, the recommendation is not thrown away — it is asked
+again, once, with the offending claim named, and both calls are counted in usage.
+
 **Portal → your worklist.** A creator submitting a draft moves the item to *submitted*,
 which puts it on your board and in the attention panel with a review clock running from
 submission — not from when you happen to open the deal. A proposed publication date is a

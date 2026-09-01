@@ -36,8 +36,21 @@ export interface EvidenceAssessment {
  * stored analyses safe without a migration.
  */
 export function quantitativeEvidenceRisk(
-  analysis: EvidenceAssessment | null | undefined
+  analysis: EvidenceAssessment | null | undefined,
+  options: {
+    /**
+     * The manager has set the audience figures by hand and stands behind them.
+     *
+     * Every projection in a draft is built from average views, and a figure the manager
+     * entered is the most authoritative source this app has — more so than a number a
+     * model read off an unlabelled block in a PDF. The guard exists to stop the COPILOT
+     * projecting from evidence nobody vouched for; once someone has vouched, it has done
+     * its job. The lock is recorded on the deal either way, so the basis is auditable.
+     */
+    managerConfirmedAudience?: boolean;
+  } = {}
 ): string | null {
+  if (options.managerConfirmedAudience) return null;
   if (!analysis) return "No completed analysis confirms the platform evidence.";
   if (analysis.evidenceConfidence && analysis.evidenceConfidence !== "confirmed") {
     return analysis.evidenceNotes?.trim() ||
@@ -71,7 +84,12 @@ export function recommendationProjectionGuardError(input: {
     /\b(?:could|should)\s+(?:drive|generate|deliver|reach|earn)\b[^.!?\n]{0,80}(?:\$|\d)/i,
   ].find((pattern) => pattern.test(input.draft));
   if (!projection) return null;
-  return `The draft contains a quantitative performance promise, but its platform evidence is not confirmed: ${input.evidenceRisk}`;
+  // The remedy belongs in the error. Without it this reads as a dead end, when the fix is
+  // usually ten seconds of work: confirm the views you already trust.
+  return (
+    `The draft contains a quantitative performance promise, but its platform evidence is not confirmed: ${input.evidenceRisk}` +
+    ` — if you stand behind the audience figures, set them with "Correct this" on the deal and run this again; the projection is then allowed.`
+  );
 }
 
 /** Final status for every successful recommendation, including non-opening rounds. */

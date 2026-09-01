@@ -1710,7 +1710,9 @@ export async function recommendNextMove(params: {
     .join("\n\n");
 
   const analysis = deal.analysis ? (JSON.parse(deal.analysis) as DealAnalysis) : null;
-  const evidenceRisk = quantitativeEvidenceRisk(analysis);
+  const evidenceRisk = quantitativeEvidenceRisk(analysis, {
+    managerConfirmedAudience: deal.audience_locked === 1 && deal.avg_views != null,
+  });
 
   const isOpening = thread.length === 0;
   const take = (params.take ?? "").trim();
@@ -1779,13 +1781,14 @@ export async function recommendNextMove(params: {
     .filter(Boolean)
     .join("\n");
 
-  const response = await client.messages.create({
+  const ask = (content: string) =>
+    client.messages.create({
     model: MODEL,
     max_tokens: 16000,
     thinking: { type: "adaptive" },
     system:
       "You are Counterpart, a negotiation copilot for influencer marketing managers. You are on the manager's side of the table. You give grounded, playbook-compliant negotiation moves with transparent reasoning, and you write natural, human-sounding messages the manager can send verbatim.",
-    messages: [{ role: "user", content: userText }],
+    messages: [{ role: "user", content }],
     output_config: {
       // Held at high deliberately. Dropping to medium is the cheapest saving left on
       // the table and the only one that would land on the drafts a creator actually
@@ -1796,12 +1799,42 @@ export async function recommendNextMove(params: {
     },
   });
 
+  let response = await ask(userText);
+  // Both calls are billed, so both are counted. Reporting only the retry would make a
+  // corrected recommendation look cheaper than one that got it right first time.
+  let inputTokens = response.usage.input_tokens;
+  let outputTokens = response.usage.output_tokens;
+
   if (response.stop_reason === "refusal") {
     throw new Error("Recommendation was refused by the model.");
   }
-  const text = finalText(response);
+  let text = finalText(response);
   if (!text) throw new Error("Empty recommendation response from Claude.");
-  const parsed = JSON.parse(text) as Omit<RecoResult, "usage" | "drafts"> & { draft: string };
+  let parsed = JSON.parse(text) as Omit<RecoResult, "usage" | "drafts"> & { draft: string };
+
+  /**
+   * A projection slip used to destroy the whole recommendation: the reasoning, the pills
+   * and the offer were thrown away because one sentence in the draft promised orders the
+   * evidence could not support, and the manager paid for a call that produced an error.
+   * One corrective retry keeps the work and costs a second call only when it happens.
+   */
+  if (recommendationProjectionGuardError({ draft: parsed.draft, evidenceRisk })) {
+    response = await ask(
+      [
+        userText,
+        ``,
+        `## Your previous draft was rejected`,
+        `It contained a quantitative performance claim — an order count, an earnings figure, a view or reach projection — and the platform evidence behind those numbers is not confirmed (${evidenceRisk}).`,
+        `Write the whole recommendation again with the same offer and the same argument, but with every numeric performance claim removed from the DRAFT. Sell the product, the fee, the commission rate and the audience discount, none of which are projections. The reasoning you return to the manager may still discuss the forecast; the draft the creator reads may not.`,
+      ].join("\n")
+    );
+    inputTokens += response.usage.input_tokens;
+    outputTokens += response.usage.output_tokens;
+    text = finalText(response);
+    if (!text) throw new Error("Empty recommendation response from Claude.");
+    parsed = JSON.parse(text) as Omit<RecoResult, "usage" | "drafts"> & { draft: string };
+  }
+
   const proposedOffer = Math.round(parsed.proposedOffer);
   // An approved override suspends the ceiling for the approved figure only. Anything
   // else the model returns is still checked, so "the manager approved something" can
@@ -1828,10 +1861,7 @@ export async function recommendNextMove(params: {
     // Stored keyed by tone so a later rewrite merges alongside rather than replacing,
     // and so messages written when three tones were generated still render.
     drafts: { balanced: parsed.draft },
-    usage: {
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-    },
+    usage: { inputTokens, outputTokens },
   };
 }
 
