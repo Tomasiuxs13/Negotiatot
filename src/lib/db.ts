@@ -206,6 +206,28 @@ CREATE TABLE IF NOT EXISTS usage_log (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
+  /**
+   * Analytics reports, filed against the creator they describe.
+   *
+   * The document was read for one analysis and thrown away, so the figures a deal was
+   * priced from had no source you could open afterwards — and the next deal with the same
+   * creator started by asking them for the report again. It belongs to the creator, not
+   * to the deal: a Modash export describes a channel, and channels outlive deals.
+   */
+  db.exec(`CREATE TABLE IF NOT EXISTS partner_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    partner_id INTEGER NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+    deal_id INTEGER REFERENCES deals(id) ON DELETE SET NULL,
+    filename TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    mime TEXT NOT NULL,
+    bytes INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_partner_reports_partner ON partner_reports(partner_id, created_at DESC)"
+  );
+
   db.exec(`CREATE TABLE IF NOT EXISTS partner_channels (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     partner_id INTEGER NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
@@ -1229,6 +1251,55 @@ export function getPartnersWithHandles(): PartnerHandleRow[] {
     .all() as { partner_id: number; handle: string }[];
   for (const channel of channels) byId.get(channel.partner_id)?.handles.push(channel.handle);
   return [...byId.values()];
+}
+
+export interface PartnerReport {
+  id: number;
+  partner_id: number;
+  deal_id: number | null;
+  filename: string;
+  file_path: string;
+  mime: string;
+  bytes: number;
+  created_at: string;
+}
+
+export function savePartnerReport(fields: {
+  partnerId: number;
+  dealId?: number | null;
+  filename: string;
+  filePath: string;
+  mime: string;
+  bytes: number;
+}): number {
+  const info = db
+    .prepare(
+      `INSERT INTO partner_reports (partner_id, deal_id, filename, file_path, mime, bytes)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      fields.partnerId,
+      fields.dealId ?? null,
+      fields.filename,
+      fields.filePath,
+      fields.mime,
+      fields.bytes
+    );
+  return Number(info.lastInsertRowid);
+}
+
+export function getPartnerReports(partnerId: number): PartnerReport[] {
+  return db
+    .prepare("SELECT * FROM partner_reports WHERE partner_id = ? ORDER BY created_at DESC, id DESC")
+    .all(partnerId) as PartnerReport[];
+}
+
+export function getPartnerReport(id: number): PartnerReport | undefined {
+  return db.prepare("SELECT * FROM partner_reports WHERE id = ?").get(id) as PartnerReport | undefined;
+}
+
+export function deletePartnerReport(id: number) {
+  db.prepare("DELETE FROM partner_reports WHERE id = ?").run(id);
 }
 
 /** Which columns the Partners table shows. See partner-columns.ts. */

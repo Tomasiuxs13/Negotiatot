@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ensurePartnerPortalToken, getCampaign, getContractDraft, getDeal, getFollowUpState, getMessages, getNegotiationStyle, getPartner, getPartnerChannels, getPartnerCommunication, getPartnerDeals, getRecordLayout, getPlaybook, getLastRunAt, getRemindersFor, getSetting, getUnitEconomics, getUsageTotals } from "@/lib/db";
+import { ensurePartnerPortalToken, getCampaign, getContractDraft, getDeal, getFollowUpState, getMessages, getNegotiationStyle, getPartner, getPartnerChannels, getPartnerCommunication, getPartnerDeals, getPartnerReports, getRecordLayout, getPlaybook, getLastRunAt, getRemindersFor, getSetting, getUnitEconomics, getUsageTotals } from "@/lib/db";
 import ContactStrip from "@/components/deal/ContactStrip";
 import RightsEditor from "@/components/deal/RightsEditor";
 import AttachReportBlock from "@/components/deal/AttachReportBlock";
@@ -547,7 +547,11 @@ export default async function DealPage({
               />
             )}
             {!workspace && <RightsEditor dealId={deal.id} rightsJson={deal.rights ?? null} />}
-            {deal.analysis && <AttachReportBlock dealId={deal.id} />}
+            {deal.analysis && <AttachReportBlock
+                dealId={deal.id}
+                partnerId={deal.partner_id}
+                onFile={deal.partner_id != null ? getPartnerReports(deal.partner_id).length : 0}
+              />}
             <DealNotes dealId={deal.id} initialNotes={deal.notes ?? ""} />
             <RemindersBlock
               reminders={getRemindersFor({ dealId: deal.id })}

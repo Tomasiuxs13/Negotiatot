@@ -154,9 +154,19 @@ replays historical Sent mail into the pipeline.
 - **Incoming reply:** the same exact-email, single-active-negotiation rule records the reply,
   marks it as the manager's move and advances an offered/analyzing deal to Negotiating. It does
   not start a paid Copilot run or send anything.
-- **Partner only / no match:** the message stays in the queue, linked to the partner when
-  possible, until the manager resolves the relationship. The app never guesses among several
-  live deals, attaches mail to an agreed collaboration, or matches based on a similar name.
+- **Changed agency sender:** a new address replying inside a Gmail thread already tied to one
+  active deal appears as a high-priority suggestion, but is never attached automatically. The
+  manager confirms the deal and can remember the sender as an agency/contact address so later
+  messages match normally.
+- **Focused review queue:** saved contacts and Gmail-thread suggestions appear first. Unknown
+  human-looking external mail is collapsed under **Other external mail**. Team domains,
+  no-reply/security senders, mailing lists, and Gmail Promotions/Social/Forums are hidden;
+  additional team domains are configurable in Settings. A saved contact always wins over a
+  domain filter.
+- **Partner only / no match:** every visible review item has an active-deal picker, so the
+  manager can resolve a new agency address without first editing Partner records. The app never
+  guesses among several live deals, attaches mail to an agreed collaboration, or matches based
+  on a similar name.
 - **Check now:** the manual button runs the automatic Inbox/Sent pass immediately, then fills the
   review queue with up to 50 inbox messages from the last 30 days that have not been seen before.
 - **Privacy and control:** OAuth credentials are encrypted at rest. Disconnecting removes
@@ -175,12 +185,25 @@ can explicitly record the latest expanded creator message, ask Counterpart to dr
 move, and copy or insert a balanced, warm or firm draft into an already-open Gmail composer.
 The extension never chooses among ambiguous matches and never clicks Send.
 
+Version 0.3 adds an active-deal picker for unmatched, partner-only and ambiguous threads. A
+manager-confirmed choice is stored as a durable browser-thread link and can also remember the
+visible sender as an agency/contact address. Remembering the address is what enables reliable
+background and cross-device Gmail matching; the browser link keeps the sidebar matched when the
+address is intentionally not saved. A saved address already owned by another partner is rejected.
+The sidebar automatically re-matches when Gmail changes conversations, shows recent human
+communication, identifies whether the visible sender is covered by automatic tracking, and
+surfaces the last extension-triggered Gmail sync or its error.
+
 The Gmail sidebar remains a foreground integration that sees only the open conversation. Its
 service worker also schedules the read-only OAuth sync through Counterpart, so mail handled on
 another device is picked up after Chrome and Counterpart are running again. The extension API is
 exposed through authenticated, CORS-enabled `/api/extension/status`,
-`/api/extension/gmail-sync`, `/api/extension/context` and `/api/extension/replies` routes; no
-configured Counterpart API key means those routes are off.
+`/api/extension/gmail-sync`, `/api/extension/context`, `/api/extension/deals`,
+`/api/extension/match` and `/api/extension/replies` routes; no
+configured Counterpart API key means those routes are off. On the VPS, a higher-priority
+Traefik path router lets only `/api/extension/*` bypass the site's browser Basic Auth because
+both Basic and Bearer authentication use the `Authorization` header; the application-level
+Bearer key remains mandatory on every extension request.
 
 ### Creator intake
 `/imports` — *Reconcile a discovery list before it becomes relationship work*
@@ -273,13 +296,17 @@ Each row and profile carries the creator's **category** from the managed list in
 — searchable alongside tags, and the key Benchmarks groups its CPM averages on.
 
 The profile uses the same three-column record layout as a deal: identity, contact and
-channels on the left; deal history in the middle; lifetime numbers, program setup and
-reminders on the right.
+channels on the left; the communication timeline and deal history in the middle; lifetime
+numbers, program setup and reminders on the right.
 
 `/partners/[id]` — profile with contact and legal details, per-platform channels and their
 average views, deal history, published/verified deliverables, on-time delivery rate,
 average revision rounds, and the creator's portal link (copied as a full URL — the same
-contact strip the deal's Fulfillment tab carries).
+contact strip the deal's Fulfillment tab carries). A relationship-level **Communication**
+timeline combines sent and received human messages from every deal, newest first, while
+retaining the deal/campaign, stage, Gmail subject/source and a link back to the deal where
+the manager can act. Copilot recommendations are excluded, long quoted mail is collapsed,
+and older history remains expandable rather than making the profile unbounded.
 
 ### Payments
 `/payments` — *Everything owed across deals*
@@ -406,22 +433,6 @@ create path as the form. Analysis never runs from the import — stage "analyzin
 refused, so a file can never silently start model runs. Requires an API key sent as `Authorization: Bearer …` or `x-api-key` — generated,
 copied, rotated and revoked in **Settings → API access**, which also shows the endpoint
 URL and a working example. No key configured means the API is off, not open.
-
-**Creator lookup and bulk categorisation** — two endpoints on the same key:
-
-- `GET /api/partners?handles=a,b,c` — resolves handles to `{handle, id, name, category}`.
-  Handles resolve through **channel records, never the partner's name**: an import files
-  creators under whatever the source called them, and matching "Emily" to "Emily" is what
-  silently dropped rows in Creator intake. A creator with no channel handle recorded comes
-  back in `missing` and must be addressed by id — which is why `GET /api/partners` with no
-  handles lists the whole book, including how many have no handle to match on.
-- `POST /api/partners/category` — `{dryRun, items:[{handle|id, category}]}`, at most 500,
-  one transaction. **Only the category column is written**: no read-modify-write, so a run
-  across the whole book cannot blank a phone number the way driving the profile form does.
-  The category is validated against the managed list in Settings before anything is
-  written, and an unknown value rejects the whole batch naming the offender. Results are
-  per item — `updated` (with `from`/`to`), `unchanged`, `missing`, `ambiguous` — never an
-  aggregate count.
 
 **Deal lookup and bulk edits** — three more endpoints, all requiring the same API key:
 
@@ -629,19 +640,11 @@ scope; its judgement stays in *how* the offer is written and argued. Deal notes 
 context and never instructions, deliberately, which is why this is separate.
 
 A take is checked against the guardrails **before** the call, because the two ways one
-fails are invisible on the deal page: above the ceiling (the lower of walk-away and
-breakeven), or below the Playbook's **minimum paid fee**, where the Copilot would quietly
-turn a small fee into a no-fee structure. When the take covers more pieces than the deal
-was priced for, the warning says so, because the fix is usually the deliverables and a
-re-run rather than a smaller number.
-
-**It is a warning, never a veto.** *Draft it anyway* is right there, and the guardrails
-exist to stop the Copilot drafting above a ceiling unasked — not to stop the person who
-owns the budget from deciding to. An approved figure suspends the ceiling for that figure
-only; anything else the model returns is still checked. The draft then carries the trade
-on the record: the card says the fee is above the deal's ceiling and that you approved it,
-and the reasoning opens with the cost — *"$600 in fees against a walk-away of $36 per
-integration — it clears the profitability ceiling by roughly $492."*
+fails are invisible on the deal page. Above the ceiling (the lower of walk-away and
+breakeven) it is refused with the figures — and when the take covers more pieces than the
+deal was priced for, it says so, because the fix is the deliverables and a re-run, not a
+smaller number. Below the Playbook's **minimum paid fee** it is refused too: the Copilot
+would silently turn it into a no-fee structure instead.
 
 When the Copilot still cannot follow an instruction it does not quietly substitute its own
 number. It names your figure, the ceiling and the gap in its reasoning, and the card says
@@ -673,29 +676,19 @@ picker is refused rather than becoming the second spelling that splits a bucket.
 category is not yet an input to pricing — the analysis prompt receives the Playbook's
 per-platform CPM ceilings, not the calibrated per-category figure.
 
-**Sent mail → the offer on the table.** When Gmail sync imports an email you sent on a
-deal that has a recommendation, and **the email actually quotes the recommended figure**,
-that figure becomes the deal's `current_offer` — the same thing *Mark as sent* writes, without
-the click. It moves the deal to *Offer sent* with it.
+**Uploaded report → the creator's file.** An analytics report used to be read once and
+discarded: the figures a deal was priced from had no source you could open afterwards, and
+the next deal with the same creator began by asking them for it again. Every report
+uploaded — on the intake form or on the deal page — is now stored against the **creator**,
+because a Modash export describes a channel and channels outlive deals. The original file
+is kept, not the resized copy the model read.
 
-The quote requirement is the whole safety of it: the sync knows an email went out, not what
-was in it, so the number must appear with a currency marker in the words that were sent. A
-bare "600" is a view count as often as a fee, and an outreach email that asks for their rates
-must not be recorded as an offer of whatever was last drafted.
-
-*Mark as sent* remains for when Gmail is not connected, the match is ambiguous, or the email
-was sent from somewhere else.
-
-**Confirmed audience → what a draft may promise.** A draft may not contain a performance
-projection — expected orders, earnings, views — while the platform evidence behind it is
-unconfirmed, because a number a model read off an unlabelled block in a PDF becomes a
-promise the creator will hold you to. **Setting the audience figures by hand ("Correct
-this") lifts that ban**: every projection is built from average views, and a figure the
-manager entered is the most authoritative source the app has. The lock is stored on the
-deal, so the basis of any projection stays auditable.
-
-If the draft breaks the rule anyway, the recommendation is not thrown away — it is asked
-again, once, with the offending claim named, and both calls are counted in usage.
+They are listed on the creator's profile under **Analytics reports** with their date, size
+and the deal they arrived on, and open inline through `/api/reports/[id]`, which the
+session gate covers — a creator's audience data is readable only by someone signed in. The
+deal's upload block says how many are already on file, so the same PDF is not fetched
+twice. Filing failure never fails the analysis: the point of the upload is the pricing, and
+a full disk should cost the archive copy, not the verdict.
 
 **Portal → your worklist.** A creator submitting a draft moves the item to *submitted*,
 which puts it on your board and in the attention panel with a review clock running from
@@ -762,7 +755,7 @@ centimetres away — but the two views of the same row do read differently.
 | `partners` / `partner_channels` | Creators, legal details, portal token, creator category, per-platform average views |
 | `partner_contacts` / `partner_source_records` | Secondary emails and provider-specific identity/evidence; imported data is auditable and never silently replaces manager-owned fields |
 | `creator_import_batches` / `creator_import_records` | Source file/manual intake audit trail and its per-row reconciliation outcome |
-| `email_connections` / `inbound_emails` | Encrypted Gmail OAuth credentials and a manager-reviewed local inbox queue, with sender/deal match outcome and import status |
+| `email_connections` / `inbound_emails` | Encrypted Gmail OAuth credentials and a manager-reviewed local inbox queue, with priority/noise bucket, exact-email/Gmail-thread/manual match evidence, and import status |
 | `messages` | The negotiation thread, including Copilot recommendations |
 | `deal_followup_states` | A manager's temporary snooze, anchored to the outbound message it postpones; follow-up eligibility itself is derived from the deal and messages |
 | `campaigns` | Objective, primary KPI, target, named budget, per-campaign playbook overrides, brief and its extracted requirements |

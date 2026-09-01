@@ -20,7 +20,7 @@ import { performAnalysis } from "@/lib/engine";
 import { partnerPrefillByName } from "@/lib/partner-prefill";
 import type { PartnerPrefill } from "@/lib/partners";
 import { parseDecimal } from "@/lib/format";
-import { readReportFile } from "@/lib/report-upload";
+import { fileReportAgainstPartner, readReportFile } from "@/lib/report-upload";
 import { hasRights, parseRights, type DealRights } from "@/lib/rights";
 import { normalizeCategory } from "@/lib/categories";
 
@@ -154,6 +154,8 @@ export async function createDealAction(
       engagementRate: platform === platforms[0] ? knownEngagement : undefined,
     });
   }
+  // The report the deal was priced from, kept against the creator it describes.
+  fileReportAgainstPartner(report, partnerId, id);
   if (message) addMessage(id, "them", message);
   if (channelUrl) updateDeal(id, { channel_url: channelUrl });
   revalidatePath("/");

@@ -12,7 +12,16 @@ import { attachReportAndAnalyze } from "@/app/deals/[id]/actions";
  * report is a number nobody is looking at, and the only reason to attach one is to
  * re-price on it.
  */
-export default function AttachReportBlock({ dealId }: { dealId: number }) {
+export default function AttachReportBlock({
+  dealId,
+  onFile = 0,
+  partnerId,
+}: {
+  dealId: number;
+  /** How many reports this creator already has on file. */
+  onFile?: number;
+  partnerId?: number | null;
+}) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,8 +53,16 @@ export default function AttachReportBlock({ dealId }: { dealId: number }) {
     <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
       <h3 className="font-headline text-sm font-semibold text-slate-900">Analytics report</h3>
       <p className="text-xs text-slate-500 mt-0.5 mb-2">
-        PDF or screenshot — re-runs the analysis on its figures.
+        PDF or screenshot — re-runs the analysis on its figures, and is kept on the creator.
       </p>
+      {onFile > 0 && partnerId != null && (
+        <p className="mb-2 text-xs text-slate-500">
+          <a href={`/partners/${partnerId}`} className="font-medium text-brand-dark hover:underline">
+            {onFile} already on file
+          </a>{" "}
+          for this creator.
+        </p>
+      )}
       <input
         ref={fileRef}
         type="file"

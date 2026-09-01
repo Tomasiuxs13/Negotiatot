@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { hasRights, parseRights, type DealRights } from "@/lib/rights";
-import { readReportFile } from "@/lib/report-upload";
+import { fileReportAgainstPartner, readReportFile } from "@/lib/report-upload";
 import { dependentCopilotIds, repairThread } from "@/lib/thread-repair";
 import { after } from "next/server";
 import { addMessage, clearFollowUpState, deleteMessage, getContractDraft, getDeal, getMessage, getMessages, getPartner, markContractDraftSigned, saveContractDraft, setJob, updateDeal, upsertPartnerChannel, getUnitEconomics } from "@/lib/db";
@@ -303,6 +303,8 @@ export async function attachReportAndAnalyze(dealId: number, formData: FormData)
   if (!setJob(dealId, "analyzing")) {
     return { error: "The Copilot is already working on this deal — wait for it to finish." };
   }
+  // Keep the document, not just what the model read out of it.
+  fileReportAgainstPartner(report, deal.partner_id, dealId);
   updateDeal(dealId, { status_label: "Analyzing report…", status_tone: "neutral" });
   after(() =>
     performAnalysis(dealId, {

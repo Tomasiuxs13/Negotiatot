@@ -9,6 +9,7 @@ import {
   getPartner,
   getPartnerChannels,
   getPartnerDeals,
+  getPartnerReports,
   getRemindersFor,
 } from "@/lib/db";
 import RemindersBlock from "@/components/RemindersBlock";
@@ -20,6 +21,7 @@ import { dealPlatforms, PLATFORM_META, STAGE_LABELS } from "@/lib/types";
 import { money, moneyCpm } from "@/lib/format";
 import { PAGE_WIDTH } from "@/lib/layout";
 import PartnerCommunication from "@/components/partners/PartnerCommunication";
+import PartnerReports from "@/components/partners/PartnerReports";
 
 export const dynamic = "force-dynamic";
 
@@ -284,6 +286,12 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
     </>
   );
 
+  const reportsBlock = (
+    <>
+      <PartnerReports reports={getPartnerReports(partner.id)} />
+    </>
+  );
+
   const remindersBlock = (
     <>
       <RemindersBlock reminders={getRemindersFor({ partnerId: partner.id })} partnerId={partner.id} />
@@ -316,6 +324,7 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
           </div>
           <aside className="order-3 flex min-w-0 flex-col gap-4">
             {kpisBlock}
+            {reportsBlock}
             {setupBlock}
             {remindersBlock}
           </aside>
@@ -327,6 +336,7 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
           {contactBlock}
           {kpisBlock}
           {communicationBlock}
+          {reportsBlock}
           {setupBlock}
           {historyBlock}
         </div>
