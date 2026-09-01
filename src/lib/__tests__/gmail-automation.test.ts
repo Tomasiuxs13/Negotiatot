@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   automaticGmailDeal,
+  automaticOfferUpdate,
   automaticReplyStageUpdate,
   automaticSentStageUpdate,
+  offerConfirmedBySentEmail,
 } from "../gmail-automation";
 import type { Deal } from "../types";
 
@@ -65,5 +67,60 @@ describe("automatic Gmail stage updates", () => {
     expect(
       automaticReplyStageUpdate(deal(1, "contacted", { current_offer: 800 }))
     ).toMatchObject({ stage: "negotiating" });
+  });
+});
+
+describe("offerConfirmedBySentEmail", () => {
+  it("accepts the figure when the sent email actually quotes it", () => {
+    const body = "Here's what I can put on the table:\n\n- $200 per video for three integrations — $600 in fees total";
+    expect(offerConfirmedBySentEmail(body, 600)).toBe(600);
+  });
+
+  it("accepts the grouped form a draft writes for a bigger fee", () => {
+    expect(offerConfirmedBySentEmail("We can do $1,250 for the bundle.", 1250)).toBe(1250);
+    expect(offerConfirmedBySentEmail("Happy to pay 1,250 USD.", 1250)).toBe(1250);
+  });
+
+  it("refuses a bare number — a view count is not a fee", () => {
+    expect(offerConfirmedBySentEmail("Your videos average 600 views a day.", 600)).toBeNull();
+    expect(offerConfirmedBySentEmail("Call me on 555 0600.", 600)).toBeNull();
+  });
+
+  it("refuses when the email quotes a different number than was recommended", () => {
+    expect(offerConfirmedBySentEmail("I can offer $450 for this.", 600)).toBeNull();
+  });
+
+  it("does not match a longer number that merely contains it", () => {
+    expect(offerConfirmedBySentEmail("The kit is worth $6,000.", 600)).toBeNull();
+    expect(offerConfirmedBySentEmail("Budget is $60000.", 600)).toBeNull();
+  });
+
+  it("has nothing to confirm without a recommendation", () => {
+    expect(offerConfirmedBySentEmail("$600 sounds right", null)).toBeNull();
+    expect(offerConfirmedBySentEmail("$600 sounds right", 0)).toBeNull();
+  });
+});
+
+describe("automaticOfferUpdate", () => {
+  const deal = (over: Partial<Deal> = {}) =>
+    ({ id: 1, stage: "contacted", round: 1, contacted_at: null, current_offer: null, ...over }) as Deal;
+
+  it("records the offer and moves the deal, as pressing Mark as sent would", () => {
+    expect(automaticOfferUpdate(deal(), 600)).toMatchObject({
+      current_offer: 600,
+      stage: "offer_sent",
+      your_move: 0,
+    });
+  });
+
+  it("writes nothing when the deal already holds that offer", () => {
+    expect(automaticOfferUpdate(deal({ current_offer: 600 }), 600)).toBeNull();
+  });
+
+  it("does not rewind a live negotiation to offer_sent", () => {
+    expect(automaticOfferUpdate(deal({ stage: "negotiating" }), 700)).toMatchObject({
+      stage: "negotiating",
+      current_offer: 700,
+    });
   });
 });

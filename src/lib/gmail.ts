@@ -8,16 +8,21 @@ import {
   findPartnerByEmail,
   getDeal,
   getGmailConnection,
+  getGmailThreadDealIds,
   getInboundEmail,
+  getInboxEmails,
   getMessages,
   getOutboundEmail,
   getPartnerDeals,
+  getSetting,
   inTransaction,
   markGmailAutomaticSync,
   markGmailSync,
   saveGmailConnection,
   saveInboundEmail,
   saveOutboundEmail,
+  setInboundEmailBucket,
+  setInboundEmailMatch,
   setInboundEmailStatus,
   setOutboundEmailImported,
   startGmailAutomation,
@@ -26,12 +31,14 @@ import {
 } from "./db";
 import {
   automaticGmailDeal,
+  automaticOfferUpdate,
   automaticReplyStageUpdate,
   automaticSentStageUpdate,
+  offerConfirmedBySentEmail,
 } from "./gmail-automation";
 import { normalizeEmail } from "./creator-identity";
 import type { GmailConnectionSummary, InboxMatchKind } from "./email-inbox";
-import { TERMINAL_STAGES } from "./types";
+import { inboxBucket, normalizeIgnoredDomains } from "./email-triage";
 import {
   gmailAddresses,
   gmailHeader,
@@ -65,6 +72,7 @@ interface GmailMessage {
   id: string;
   threadId?: string;
   internalDate?: string;
+  labelIds?: string[];
   payload?: GmailPayload;
 }
 
@@ -268,6 +276,81 @@ function gmailMessageAt(message: GmailMessage): string {
   return sqliteTimestamp(Number.isFinite(internalDate) ? internalDate : Date.now());
 }
 
+function gmailIgnoredDomains(): string[] {
+  return normalizeIgnoredDomains(getSetting<unknown>("gmail_ignored_domains"));
+}
+
+function activeThreadDeal(threadId: string | null | undefined) {
+  if (!threadId) return null;
+  const ids = getGmailThreadDealIds(threadId);
+  if (ids.length !== 1) return null;
+  const deal = getDeal(ids[0]);
+  return deal ? automaticGmailDeal([deal]) : null;
+}
+
+function messageBucket(
+  message: GmailMessage,
+  senderEmail: string | null,
+  accountEmail: string,
+  hasRelationshipMatch: boolean
+) {
+  return inboxBucket({
+    senderEmail,
+    accountEmail,
+    ignoredDomains: gmailIgnoredDomains(),
+    hasRelationshipMatch,
+    labelIds: message.labelIds,
+    autoSubmitted: gmailHeader(message.payload, "Auto-Submitted"),
+    precedence: gmailHeader(message.payload, "Precedence"),
+    listUnsubscribe: gmailHeader(message.payload, "List-Unsubscribe"),
+  });
+}
+
+/** Reclassify rows created before inbox filtering, and pick up newly remembered contacts. */
+function triageExistingInbox(accountEmail: string) {
+  for (const email of getInboxEmails("new")) {
+    if (email.match_kind === "deal") {
+      if (email.bucket !== "priority") setInboundEmailBucket({ id: email.id, bucket: "priority" });
+      continue;
+    }
+
+    const exactPartner = email.from_email ? findPartnerByEmail(email.from_email) : undefined;
+    const exactDeal = exactPartner ? automaticGmailDeal(getPartnerDeals(exactPartner.id)) : null;
+    const threadDeal = activeThreadDeal(email.provider_thread_id);
+    const suggestedDeal = exactDeal ?? threadDeal;
+    if (suggestedDeal) {
+      setInboundEmailMatch({
+        id: email.id,
+        partnerId: suggestedDeal.partner_id,
+        dealId: suggestedDeal.id,
+        matchKind: "deal",
+        matchMethod: exactDeal ? "email" : "thread",
+        bucket: "priority",
+      });
+      continue;
+    }
+    if (exactPartner) {
+      setInboundEmailMatch({
+        id: email.id,
+        partnerId: exactPartner.id,
+        dealId: null,
+        matchKind: "partner_only",
+        matchMethod: "email",
+        bucket: "priority",
+      });
+      continue;
+    }
+
+    const bucket = inboxBucket({
+      senderEmail: email.from_email,
+      accountEmail,
+      ignoredDomains: gmailIgnoredDomains(),
+      hasRelationshipMatch: false,
+    });
+    setInboundEmailBucket({ id: email.id, bucket, status: bucket === "noise" ? "ignored" : undefined });
+  }
+}
+
 function existingSyncedMessage(
   dealId: number,
   sender: "them" | "us",
@@ -309,7 +392,10 @@ async function gmailMessagesSince(
   return full.sort((a, b) => Number(a.internalDate ?? 0) - Number(b.internalDate ?? 0));
 }
 
-function recordAutomaticReply(message: GmailMessage): "logged" | "review" | "duplicate" {
+function recordAutomaticReply(
+  message: GmailMessage,
+  accountEmail: string
+): "logged" | "review" | "duplicate" {
   const existing = getInboundEmail("gmail", message.id);
   if (existing?.status === "imported" || existing?.status === "ignored") return "duplicate";
   // A row created by the earlier manual review flow remains a manager decision. An
@@ -318,8 +404,11 @@ function recordAutomaticReply(message: GmailMessage): "logged" | "review" | "dup
 
   const sender = gmailSender(gmailHeader(message.payload, "From"));
   const partner = sender.email ? findPartnerByEmail(sender.email) : undefined;
-  const deal = partner ? automaticGmailDeal(getPartnerDeals(partner.id)) : null;
+  const exactDeal = partner ? automaticGmailDeal(getPartnerDeals(partner.id)) : null;
+  const threadDeal = exactDeal ? null : activeThreadDeal(message.threadId);
+  const deal = exactDeal ?? threadDeal;
   const matchKind: InboxMatchKind = deal ? "deal" : partner ? "partner_only" : "unmatched";
+  const bucket = messageBucket(message, sender.email, accountEmail, Boolean(partner || deal));
   const body = gmailMessageText(message.payload) || "(No readable plain-text message body.)";
   const receivedAt = gmailMessageAt(message);
   const inboxId =
@@ -333,14 +422,20 @@ function recordAutomaticReply(message: GmailMessage): "logged" | "review" | "dup
       subject: gmailHeader(message.payload, "Subject"),
       body,
       receivedAt,
-      partnerId: partner?.id ?? null,
+      partnerId: deal?.partner_id ?? partner?.id ?? null,
       dealId: deal?.id ?? null,
       matchKind,
-      autoEligible: Boolean(deal),
+      matchMethod: exactDeal ? "email" : threadDeal ? "thread" : partner ? "email" : null,
+      bucket,
+      status: bucket === "noise" ? "ignored" : "new",
+      autoEligible: Boolean(exactDeal),
     });
-  if (!deal || !inboxId) return "review";
+  if (bucket === "noise") return "duplicate";
+  // A Gmail-thread match is a strong suggestion, but a changed sender may be an
+  // agency contact. The manager must confirm it before the reply enters the deal.
+  if (!exactDeal || !inboxId) return "review";
 
-  const currentDeal = getDeal(deal.id);
+  const currentDeal = getDeal(exactDeal.id);
   const stillSafe = partner ? automaticGmailDeal(getPartnerDeals(partner.id)) : null;
   if (!currentDeal || stillSafe?.id !== currentDeal.id) return "review";
 
@@ -412,6 +507,27 @@ function recordAutomaticSent(message: GmailMessage): {
 
   const duplicateMessage = existingSyncedMessage(currentDeal.id, "us", body, sentAt);
   const stageUpdate = automaticSentStageUpdate(currentDeal, sentAt);
+  /**
+   * The number, not just the fact that mail went out.
+   *
+   * The sync recorded 64 outbound messages and not one offer, because only the manual
+   * "Mark as sent" button wrote current_offer — so the offer tracker, the gap on the
+   * board, savings against first ask and the next prompt's "our last offer" were all
+   * empty on deals where an offer had plainly been sent. The figure is adopted only when
+   * the email actually quotes it, so a sent follow-up that mentions no price changes
+   * nothing.
+   */
+  const lastProposal = [...getMessages(currentDeal.id)]
+    .reverse()
+    .find((m) => m.sender === "copilot" && m.meta)
+    ?.meta;
+  const proposedOffer = lastProposal
+    ? (JSON.parse(lastProposal) as { proposedOffer?: number }).proposedOffer
+    : null;
+  const confirmedOffer = offerConfirmedBySentEmail(body, proposedOffer);
+  const offerUpdate =
+    confirmedOffer != null ? automaticOfferUpdate(currentDeal, confirmedOffer) : null;
+
   inTransaction(() => {
     const importedMessageId =
       duplicateMessage?.id ??
@@ -421,9 +537,13 @@ function recordAutomaticSent(message: GmailMessage): {
         providerThreadId: message.threadId ?? null,
         subject: gmailHeader(message.payload, "Subject"),
         automatic: true,
+        ...(confirmedOffer != null ? { offer: confirmedOffer } : {}),
       });
     clearFollowUpState(currentDeal.id);
-    if (stageUpdate) updateDeal(currentDeal.id, stageUpdate);
+    // The offer update is stronger evidence than the stage bump, so it wins the merge.
+    if (stageUpdate || offerUpdate) {
+      updateDeal(currentDeal.id, { ...stageUpdate, ...offerUpdate });
+    }
     setOutboundEmailImported(outbound.id, importedMessageId);
   });
   return { outcome: duplicateMessage ? "duplicate" : "logged", contacted: Boolean(stageUpdate) };
@@ -441,6 +561,7 @@ export function syncGmailAutomation(origin: string): Promise<GmailAutomationResu
     try {
       const before = getGmailConnection();
       if (!before) throw new Error("Connect Gmail before enabling automatic tracking.");
+      triageExistingInbox(before.accountEmail);
       if (!before.automationStartedAt) {
         startGmailAutomation(sqliteTimestamp(Date.now()));
         markGmailAutomaticSync({});
@@ -486,7 +607,7 @@ export function syncGmailAutomation(origin: string): Promise<GmailAutomationResu
         if (recorded.contacted) result.dealsContacted += 1;
       }
       for (const message of eligibleInbox) {
-        const recorded = recordAutomaticReply(message);
+        const recorded = recordAutomaticReply(message, before.accountEmail);
         if (recorded === "logged") result.repliesLogged += 1;
         if (recorded === "review") result.reviewOnly += 1;
       }
@@ -506,24 +627,28 @@ export function syncGmailAutomation(origin: string): Promise<GmailAutomationResu
   return sync;
 }
 
-export async function syncGmailInbox(origin: string): Promise<{ added: number; matched: number; unmatched: number }> {
+export async function syncGmailInbox(origin: string): Promise<{ added: number; matched: number; unmatched: number; filtered: number }> {
   try {
+    const connection = getGmailConnection();
+    if (!connection) throw new Error("Connect Gmail before syncing your inbox.");
+    triageExistingInbox(connection.accountEmail);
     const token = await accessToken(origin);
     const query = new URLSearchParams({ labelIds: "INBOX", q: "in:inbox newer_than:30d", maxResults: "50" });
     const list = await gmailJson<{ messages?: { id: string; threadId?: string }[] }>(token, `${GMAIL_API}/messages?${query}`);
     let added = 0;
     let matched = 0;
     let unmatched = 0;
+    let filtered = 0;
     for (const message of list.messages ?? []) {
       if (getInboundEmail("gmail", message.id)) continue;
       const full = await gmailJson<GmailMessage>(token, `${GMAIL_API}/messages/${encodeURIComponent(message.id)}?format=full`);
       const sender = gmailSender(gmailHeader(full.payload, "From"));
       const partner = sender.email ? findPartnerByEmail(sender.email) : undefined;
-      const liveDeals = partner
-        ? getPartnerDeals(partner.id).filter((deal) => !TERMINAL_STAGES.includes(deal.stage))
-        : [];
-      const dealId = liveDeals.length === 1 ? liveDeals[0].id : null;
-      const matchKind: InboxMatchKind = dealId ? "deal" : partner ? "partner_only" : "unmatched";
+      const exactDeal = partner ? automaticGmailDeal(getPartnerDeals(partner.id)) : null;
+      const threadDeal = exactDeal ? null : activeThreadDeal(full.threadId ?? message.threadId);
+      const deal = exactDeal ?? threadDeal;
+      const matchKind: InboxMatchKind = deal ? "deal" : partner ? "partner_only" : "unmatched";
+      const bucket = messageBucket(full, sender.email, connection.accountEmail, Boolean(partner || deal));
       const internalDate = Number(full.internalDate);
       saveInboundEmail({
         provider: "gmail",
@@ -534,16 +659,22 @@ export async function syncGmailInbox(origin: string): Promise<{ added: number; m
         subject: gmailHeader(full.payload, "Subject"),
         body: gmailMessageText(full.payload) || "(No readable plain-text message body.)",
         receivedAt: Number.isFinite(internalDate) ? new Date(internalDate).toISOString() : new Date().toISOString(),
-        partnerId: partner?.id ?? null,
-        dealId,
+        partnerId: deal?.partner_id ?? partner?.id ?? null,
+        dealId: deal?.id ?? null,
         matchKind,
+        matchMethod: exactDeal ? "email" : threadDeal ? "thread" : partner ? "email" : null,
+        bucket,
+        status: bucket === "noise" ? "ignored" : "new",
       });
-      added += 1;
-      if (dealId) matched += 1;
-      else unmatched += 1;
+      if (bucket === "noise") filtered += 1;
+      else {
+        added += 1;
+        if (deal) matched += 1;
+        else unmatched += 1;
+      }
     }
     markGmailSync({});
-    return { added, matched, unmatched };
+    return { added, matched, unmatched, filtered };
   } catch (error) {
     const message = error instanceof Error ? error.message.slice(0, 500) : "Inbox sync failed.";
     markGmailSync({ error: message });

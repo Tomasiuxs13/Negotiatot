@@ -673,6 +673,19 @@ picker is refused rather than becoming the second spelling that splits a bucket.
 category is not yet an input to pricing — the analysis prompt receives the Playbook's
 per-platform CPM ceilings, not the calibrated per-category figure.
 
+**Sent mail → the offer on the table.** When Gmail sync imports an email you sent on a
+deal that has a recommendation, and **the email actually quotes the recommended figure**,
+that figure becomes the deal's `current_offer` — the same thing *Mark as sent* writes, without
+the click. It moves the deal to *Offer sent* with it.
+
+The quote requirement is the whole safety of it: the sync knows an email went out, not what
+was in it, so the number must appear with a currency marker in the words that were sent. A
+bare "600" is a view count as often as a fee, and an outreach email that asks for their rates
+must not be recorded as an offer of whatever was last drafted.
+
+*Mark as sent* remains for when Gmail is not connected, the match is ambiguous, or the email
+was sent from somewhere else.
+
 **Portal → your worklist.** A creator submitting a draft moves the item to *submitted*,
 which puts it on your board and in the attention panel with a review clock running from
 submission — not from when you happen to open the deal. A proposed publication date is a
