@@ -676,6 +676,21 @@ picker is refused rather than becoming the second spelling that splits a bucket.
 category is not yet an input to pricing — the analysis prompt receives the Playbook's
 per-platform CPM ceilings, not the calibrated per-category figure.
 
+**Report shape → whether it can be read at all.** Modash and similar tools export a whole
+dashboard as one enormous page — 588 × 8473 pt, fourteen times taller than it is wide.
+Claude renders each PDF page as a single image and scales it to fit, so a page that shape
+arrives about a hundred pixels across and its figures survive as shapes rather than
+numbers. That is what produced "avg views inferred from an unlabelled numeric block" on one
+report and an analysis that graded nothing on another, a paid call each time.
+
+The page box is now read from the PDF before anything is sent, and a page past 4:1 is
+flagged **before the call**, naming the shape and what to do instead — screenshot the stats
+section, or set the figures with *Correct this*. It is a warning, not a veto: *Analyze it
+anyway* is there for a report that reads fine despite its shape.
+
+If an analysis still comes back having graded nothing, it is asked once more before being
+given up on, rather than discarding a call the manager has paid for.
+
 **Uploaded report → the creator's file.** An analytics report used to be read once and
 discarded: the figures a deal was priced from had no source you could open afterwards, and
 the next deal with the same creator began by asking them for it again. Every report

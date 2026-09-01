@@ -3,6 +3,7 @@ import sharp from "sharp";
 import type { ImageMediaType } from "./claude";
 import { saveFile } from "./files";
 import { savePartnerReport } from "./db";
+import { pdfPageShape, tallPageWarning } from "./pdf-shape";
 
 /**
  * One reading of an uploaded analytics report (Modash, HypeAuditor, a screenshot),
@@ -55,7 +56,13 @@ export interface OriginalReport {
 export type ReadReport =
   | { kind: "none" }
   | { kind: "error"; error: string }
-  | { kind: "pdf"; pdfBase64: string; original: OriginalReport }
+  | {
+      kind: "pdf";
+      pdfBase64: string;
+      original: OriginalReport;
+      /** Set when the page's shape means Claude will not be able to read it. */
+      tallPage: string | null;
+    }
   | { kind: "image"; image: { base64: string; mediaType: ImageMediaType }; original: OriginalReport };
 
 /** Reads the `report` form field into whichever shape performAnalysis takes. */
@@ -68,6 +75,7 @@ export async function readReportFile(file: FormDataEntryValue | null): Promise<R
       kind: "pdf",
       pdfBase64: buffer.toString("base64"),
       original: { buffer, filename: file.name || "report.pdf", mime: "application/pdf" },
+      tallPage: tallPageWarning(pdfPageShape(buffer)),
     };
   }
   if (IMAGE_TYPES.includes(file.type as ImageMediaType)) {

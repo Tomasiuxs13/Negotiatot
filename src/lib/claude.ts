@@ -637,6 +637,8 @@ const ANALYSIS_SCHEMA = {
     },
     metrics: {
       type: "array",
+      description:
+        "The figures the verdict rests on, graded against the playbook — reach, engagement, audience geo, authenticity, price per view, whatever the evidence supports. Never empty: an analysis that grades nothing is not an analysis, and when a figure is missing or unverifiable that IS the metric, with tone 'warn' or 'crit' and a note saying what is absent.",
       items: {
         type: "object",
         additionalProperties: false,
@@ -1582,7 +1584,7 @@ export async function analyzeDeal(params: {
   }
   const text = finalText(response);
   if (!text) throw new Error("Empty analysis response from Claude.");
-  const parsed = JSON.parse(text) as {
+  let parsed = JSON.parse(text) as {
     verdict: DealAnalysis["verdict"];
     verdictSummary: string;
     evidenceConfidence: "confirmed" | "mixed" | "insufficient";
@@ -1602,7 +1604,33 @@ export async function analyzeDeal(params: {
   // API call really had succeeded. The four numbers no longer come from here, so metrics
   // is what's left to check — an analysis that graded nothing is not an answer.
   if (parsed.metrics.length === 0) {
-    throw new Error("Claude returned an incomplete analysis (no metrics). Re-run the analysis.");
+    // Ask again once before giving up. This failure discarded a call the manager had
+    // already paid for and handed back "re-run the analysis" as the only instruction —
+    // the same dead end the projection guard used to be. Reports whose figures sit in
+    // unlabelled blocks are exactly where it happens, and those are the reports most
+    // worth a second attempt.
+    const retry = await client.messages.stream({
+      ...baseRequest,
+      messages: [
+        { role: "user", content: userContent },
+        { role: "assistant", content: response.content },
+        {
+          role: "user" as const,
+          content:
+            "Your analysis came back with an empty metrics array, which is not a usable answer. Return the whole analysis again with metrics populated: grade every figure the evidence supports, and where a figure is missing, unlabelled or unverifiable, make that the metric — tone 'warn' or 'crit', with a note saying exactly what is absent. Do not invent numbers to fill it.",
+        },
+      ],
+    }).finalMessage();
+    track(retry);
+    const retryText = finalText(retry);
+    const retryParsed = retryText ? (JSON.parse(retryText) as typeof parsed) : null;
+    if (retryParsed && retryParsed.metrics.length > 0) {
+      parsed = retryParsed;
+    } else {
+      throw new Error(
+        "Claude graded nothing in this report twice over — its figures are probably not machine-readable. Set the audience numbers by hand with \"Correct this\" on the deal, then run the analysis again."
+      );
+    }
   }
 
   return {

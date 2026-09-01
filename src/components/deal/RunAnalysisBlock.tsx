@@ -32,17 +32,21 @@ export default function RunAnalysisBlock({
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The page-shape warning: shown once, with a way past it. */
+  const [warning, setWarning] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const run = () => {
+  const run = (accept = false) => {
     setError(null);
+    if (!accept) setWarning(null);
     const file = fileRef.current?.files?.[0];
     startTransition(async () => {
       if (file) {
         const fd = new FormData();
         fd.set("report", file);
-        const r = await attachReportAndAnalyze(dealId, fd);
+        const r = await attachReportAndAnalyze(dealId, fd, accept);
         if (r?.error) setError(r.error);
+        else if (r?.warning) setWarning(r.warning);
         return;
       }
       const r = await runAnalysis(dealId);
@@ -143,7 +147,7 @@ export default function RunAnalysisBlock({
       )}
 
       <button
-        onClick={run}
+        onClick={() => run()}
         disabled={isPending}
         className="mt-3 w-full rounded-md bg-brand py-2 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-dark disabled:opacity-60"
       >
@@ -154,6 +158,18 @@ export default function RunAnalysisBlock({
             : "Run analysis without a report"}
       </button>
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+      {warning && (
+        <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2">
+          <p className="text-xs text-amber-900">{warning}</p>
+          <button
+            onClick={() => run(true)}
+            disabled={isPending}
+            className="mt-2 rounded-md border border-amber-400 bg-white px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+          >
+            {isPending ? "Analyzing…" : "Analyze it anyway"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

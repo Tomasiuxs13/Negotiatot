@@ -25,21 +25,28 @@ export default function AttachReportBlock({
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The page-shape warning: shown once, with a way past it. */
+  const [warning, setWarning] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const submit = () => {
+  const submit = (accept = false) => {
     const file = fileRef.current?.files?.[0];
     if (!file) {
       setError("Choose a PDF report or a screenshot first.");
       return;
     }
     setError(null);
+    if (!accept) setWarning(null);
     const fd = new FormData();
     fd.set("report", file);
     startTransition(async () => {
-      const r = await attachReportAndAnalyze(dealId, fd);
+      const r = await attachReportAndAnalyze(dealId, fd, accept);
       if (r?.error) {
         setError(r.error);
+        return;
+      }
+      if (r?.warning) {
+        setWarning(r.warning);
         return;
       }
       // The page revalidates into the "Analyzing…" job state; clear the picker so a
@@ -75,7 +82,7 @@ export default function AttachReportBlock({
       />
       {fileName && (
         <button
-          onClick={submit}
+          onClick={() => submit()}
           disabled={isPending}
           className="mt-2 w-full bg-brand hover:bg-brand-dark text-white rounded-md py-1.5 text-xs font-semibold transition-colors disabled:opacity-50"
         >
@@ -83,6 +90,18 @@ export default function AttachReportBlock({
         </button>
       )}
       {error && <p className="text-xs text-red-600 mt-1.5">{error}</p>}
+      {warning && (
+        <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-2">
+          <p className="text-xs text-amber-900">{warning}</p>
+          <button
+            onClick={() => submit(true)}
+            disabled={isPending}
+            className="mt-2 rounded-md border border-amber-400 bg-white px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+          >
+            {isPending ? "Analyzing…" : "Analyze it anyway"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

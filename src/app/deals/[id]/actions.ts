@@ -291,7 +291,12 @@ export async function deleteMessageAction(dealId: number, messageId: number) {
  * the deal page. The audience lock keeps its meaning: a hand-corrected figure still
  * outranks whatever the report says.
  */
-export async function attachReportAndAnalyze(dealId: number, formData: FormData) {
+export async function attachReportAndAnalyze(
+  dealId: number,
+  formData: FormData,
+  /** Set once the manager has seen the shape warning and wants it analysed regardless. */
+  acceptTallPage = false
+) {
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
   if (!hasApiKey()) return { error: NO_KEY_ERROR };
@@ -299,6 +304,11 @@ export async function attachReportAndAnalyze(dealId: number, formData: FormData)
   const report = await readReportFile(formData.get("report"));
   if (report.kind === "error") return { error: report.error };
   if (report.kind === "none") return { error: "Choose a PDF report or a screenshot first." };
+  // Said before the call, not after: a page this shape reaches the model unreadable, and
+  // the failure it produces costs money and explains nothing.
+  if (report.kind === "pdf" && report.tallPage && !acceptTallPage) {
+    return { warning: report.tallPage };
+  }
 
   if (!setJob(dealId, "analyzing")) {
     return { error: "The Copilot is already working on this deal — wait for it to finish." };
