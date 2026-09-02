@@ -12,6 +12,7 @@ import { CONTRACT_SLOTS, validateTemplate, type TemplateReport } from "@/lib/con
 import { generateContractText } from "@/lib/contract-template";
 import { contractInputsFor } from "@/lib/contract-draft";
 import { hasApiKey, MODEL, proposeContractSlots, type SlotProposal } from "@/lib/claude";
+import { disconnectDocusign } from "@/lib/docusign";
 
 import { randomBytes } from "crypto";
 import { headers } from "next/headers";
@@ -193,4 +194,10 @@ export async function previewContractTemplateAction(
     return { error: `Line ${first.line}: ${first.message}` };
   }
   return { text: generateContractText({ ...contractInputsFor(deal), templateBody: body }) };
+}
+
+export async function disconnectDocusignAction(): Promise<{ error?: string }> {
+  disconnectDocusign();
+  revalidatePath("/settings");
+  return {};
 }

@@ -580,6 +580,24 @@ CREATE TABLE IF NOT EXISTS usage_log (
   // parties, deliverables, compensation — so it can be saved and worked on but is
   // flagged wherever it is offered. The built-in agreement is not a row here; it is
   // the fallback whenever no template is chosen or set as default.
+  // One e-signature envelope per contract draft. The signed PDF still lands in the
+  // `contracts` table through the normal upload-and-parse path, so confirmation and the
+  // rights check work identically whether the signature came from DocuSign or a scan.
+  db.exec(`CREATE TABLE IF NOT EXISTS esign_envelopes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    deal_id INTEGER NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL DEFAULT 'docusign',
+    envelope_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'sent',
+    recipient_email TEXT,
+    recipient_name TEXT,
+    sent_at TEXT NOT NULL DEFAULT (datetime('now')),
+    completed_at TEXT,
+    filed_contract_id INTEGER,
+    last_error TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_esign_deal ON esign_envelopes(deal_id)");
   db.exec(`CREATE TABLE IF NOT EXISTS contract_templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -1574,6 +1592,116 @@ export function getGmailConnection(): (GmailConnectionSummary & { encrypted_toke
     lastAutomaticSyncAt: row.last_automatic_sync_at,
     lastError: row.last_error,
   };
+}
+
+export interface EsignConnectionRow {
+  accountName: string;
+  accountId: string;
+  baseUri: string;
+  encrypted_tokens: string;
+  connectedAt: string;
+  lastError: string | null;
+}
+
+export function getEsignConnection(): EsignConnectionRow | null {
+  const row = db.prepare("SELECT * FROM email_connections WHERE provider = 'docusign'").get() as
+    | { account_email: string; encrypted_tokens: string; scopes: string; connected_at: string; last_error: string | null }
+    | undefined;
+  if (!row) return null;
+  // `scopes` carries "accountId|baseUri" for this provider; the column is reused rather
+  // than adding a near-duplicate table for one integration.
+  const [accountId = "", baseUri = ""] = row.scopes.split("|");
+  return {
+    accountName: row.account_email,
+    accountId,
+    baseUri,
+    encrypted_tokens: row.encrypted_tokens,
+    connectedAt: row.connected_at,
+    lastError: row.last_error,
+  };
+}
+
+export function saveEsignConnection(fields: {
+  accountName: string;
+  accountId: string;
+  baseUri: string;
+  encryptedTokens: string;
+}) {
+  db.prepare(
+    `INSERT INTO email_connections (
+       provider, account_email, encrypted_tokens, scopes, connected_at, last_sync_at,
+       automation_started_at, last_automatic_sync_at, last_error
+     )
+     VALUES ('docusign', ?, ?, ?, datetime('now'), NULL, NULL, NULL, NULL)
+     ON CONFLICT(provider) DO UPDATE SET
+       account_email = excluded.account_email,
+       encrypted_tokens = excluded.encrypted_tokens,
+       scopes = excluded.scopes,
+       connected_at = datetime('now'),
+       last_error = NULL`
+  ).run(fields.accountName, fields.encryptedTokens, `${fields.accountId}|${fields.baseUri}`);
+}
+
+export function updateEsignTokens(encryptedTokens: string) {
+  db.prepare("UPDATE email_connections SET encrypted_tokens = ? WHERE provider = 'docusign'").run(encryptedTokens);
+}
+
+export function markEsignError(error: string | null) {
+  db.prepare("UPDATE email_connections SET last_error = ? WHERE provider = 'docusign'").run(error);
+}
+
+export function disconnectEsign() {
+  db.prepare("DELETE FROM email_connections WHERE provider = 'docusign'").run();
+}
+
+export interface EsignEnvelope {
+  id: number;
+  deal_id: number;
+  provider: string;
+  envelope_id: string;
+  status: string;
+  recipient_email: string | null;
+  recipient_name: string | null;
+  sent_at: string;
+  completed_at: string | null;
+  filed_contract_id: number | null;
+  last_error: string | null;
+}
+
+export function getEsignEnvelope(dealId: number): EsignEnvelope | undefined {
+  return db
+    .prepare("SELECT * FROM esign_envelopes WHERE deal_id = ? ORDER BY id DESC LIMIT 1")
+    .get(dealId) as EsignEnvelope | undefined;
+}
+
+export function createEsignEnvelope(fields: {
+  dealId: number;
+  envelopeId: string;
+  recipientEmail: string;
+  recipientName: string;
+}): EsignEnvelope {
+  const r = db
+    .prepare(
+      "INSERT INTO esign_envelopes (deal_id, envelope_id, status, recipient_email, recipient_name) VALUES (?, ?, 'sent', ?, ?)"
+    )
+    .run(fields.dealId, fields.envelopeId, fields.recipientEmail, fields.recipientName);
+  return db.prepare("SELECT * FROM esign_envelopes WHERE id = ?").get(Number(r.lastInsertRowid)) as EsignEnvelope;
+}
+
+export function updateEsignEnvelope(
+  id: number,
+  fields: { status?: string; completedAt?: string | null; filedContractId?: number | null; lastError?: string | null }
+) {
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  if (fields.status !== undefined) { sets.push("status = ?"); values.push(fields.status); }
+  if (fields.completedAt !== undefined) { sets.push("completed_at = ?"); values.push(fields.completedAt); }
+  if (fields.filedContractId !== undefined) { sets.push("filed_contract_id = ?"); values.push(fields.filedContractId); }
+  if (fields.lastError !== undefined) { sets.push("last_error = ?"); values.push(fields.lastError); }
+  if (sets.length === 0) return;
+  sets.push("updated_at = datetime('now')");
+  values.push(id);
+  db.prepare(`UPDATE esign_envelopes SET ${sets.join(", ")} WHERE id = ?`).run(...values);
 }
 
 export function saveGmailConnection(fields: { accountEmail: string; encryptedTokens: string; scopes: string }) {

@@ -405,6 +405,15 @@ fixed list rather than free text on purpose: "outdoors" and "Outdoor" typed a we
 are two buckets of one deal each, which is worth less than no grouping at all. Removing a
 category leaves the creators in it — they keep the label, and Settings says so.
 
+**DocuSign e-signature** connects one DocuSign account the same way the mailbox does:
+the operator authorises it themselves and only an encrypted refresh token is stored — no
+password, no service account. Server variables are `DOCUSIGN_INTEGRATION_KEY`,
+`DOCUSIGN_SECRET_KEY` and `DOCUSIGN_TOKEN_ENCRYPTION_KEY`, with `DOCUSIGN_REDIRECT_URI`
+optional for a deployed host. It runs against DocuSign's **demo** environment unless
+`DOCUSIGN_ENV=production` is set, so a missing variable can never mail a real creator.
+The whole integration is optional: with nothing configured the deal page simply does not
+offer it, and uploading a signed copy by hand is unaffected.
+
 **Contract templates** — ours or theirs. Every Agreed deal gets a contract draft; this is
 where the wording comes from. A company can keep **Counterpart's standard agreement**, or
 **add their own**: they paste the agreement their lawyer wrote, and the system marks the
@@ -616,6 +625,18 @@ the priced platforms. Mixed/insufficient evidence suppresses forecast figures fr
 recommendation prompt, and a post-generation guard rejects creator-facing projected
 orders, views, total commission, revenue or ROI if they still appear. Offer terms such as
 a fixed fee or per-sale rate remain usable because they are commitments, not forecasts.
+
+**Draft → signature → the signed original.** A contract draft can be sent to the creator
+for signature from the deal, when DocuSign is connected and the creator has an email on
+their profile. The text on screen is the text that gets signed, edits included. Sending
+does **not** mark the draft signed — only DocuSign reporting the envelope complete does
+that, so a draft can never read as signed on the strength of an email having gone out.
+When it completes, the signed PDF is downloaded and filed as the deal's contract through
+the same record an uploaded scan creates, which means parsing, the rights check and
+confirmation are the paths that already existed; the draft locks at the same moment. The
+signature tab is anchored on the agreement's `Signed by the Creator:` line, so a template
+without one is refused before an envelope nobody can sign is created. Uploading the signed
+copy by hand remains a first-class path and needs no integration.
 
 **Contract confirmed → the whole delivery plan.** Confirming a parsed contract generates
 its content items (inheriting the deal's platform when unambiguous), payment items with
@@ -834,6 +855,7 @@ centimetres away — but the two views of the same row do read differently.
 | `campaigns` | Objective, primary KPI, target, named budget, per-campaign playbook overrides, brief and its extracted requirements |
 | `playbook` / `settings` | Per-platform rules; global rules, unit economics, brand profile, negotiation style, onboarding template, measurement windows, creator categories, record layout |
 | `contracts` / `contract_drafts` | Uploaded contracts and their parsed terms; generated drafts until signed |
+| `esign_envelopes` | One e-signature envelope per deal — provider, envelope id, status, and the `contracts` row its signed PDF was filed as |
 | `contract_templates` | A company's own agreements with the fillable parts marked as slots; one may be the default, and `deals.contract_template_id` remembers a deal's choice (0 = the built-in agreement, explicitly) |
 | `content_items` | Deliverables: deal-platform attribution, status, resolved/fixed/relative date rule, approved date override, pending creator date request/reason, draft/approval/posted URLs, revision round, transcript, check result, actual views/engagements/clicks/orders/revenue |
 | `onboarding_tasks` | Setup checklist, partner- or deal-scoped |

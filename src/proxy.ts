@@ -27,6 +27,8 @@ const PUBLIC_PREFIXES = [
   // Google redirects a browser here after consent, with no cookie and no header of ours.
   // It validates its own OAuth state.
   "/api/integrations/gmail/callback",
+  // Same reason, for the same kind of consent redirect. It validates its own OAuth state.
+  "/api/integrations/docusign/callback",
 ];
 
 function isPublicPath(pathname: string): boolean {

@@ -1,4 +1,13 @@
 "use server";
+import { headers } from "next/headers";
+import { getContractDraft, getPartner, markContractDraftSigned } from "@/lib/db";
+import { fetchEnvelopeStatus, getEsignEnvelope, sendForSignature, updateEsignEnvelope } from "@/lib/docusign";
+import { publicOriginFromHeaders } from "@/lib/public-origin";
+
+/** The origin DocuSign redirects back to, and the one its API calls are configured for. */
+async function publicOrigin(): Promise<string> {
+  return publicOriginFromHeaders(await headers(), process.env.DOCUSIGN_REDIRECT_URI);
+}
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
@@ -806,4 +815,134 @@ export async function startOnboardingAction(dealId: number) {
   const result = seedOnboarding(dealId, deal.partner_id, template);
   refresh(dealId);
   return result;
+}
+
+// ---------------------------------------------------------------------------------------
+// E-signature
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Sends the current contract draft to the creator for signature.
+ *
+ * The draft is sent as-is, including any edits made in the platform — the text on screen
+ * is the text that gets signed. Sending does not mark the draft signed: that only happens
+ * when DocuSign reports the envelope complete and the signed PDF is filed, so a draft can
+ * never show as signed on the strength of an email having gone out.
+ */
+export async function sendContractForSignatureAction(
+  dealId: number
+): Promise<{ error?: string; status?: string }> {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+
+  const draft = getContractDraft(dealId);
+  if (!draft?.body.trim()) return { error: "Generate the contract draft first." };
+  if (draft.status === "signed") return { error: "This contract is already marked signed." };
+
+  const partner = deal.partner_id != null ? getPartner(deal.partner_id) : null;
+  const email = partner?.email?.trim();
+  if (!email) {
+    return { error: "The creator has no email address on their profile — add one before sending." };
+  }
+
+  const existing = getEsignEnvelope(dealId);
+  if (existing && existing.status !== "declined" && existing.status !== "voided" && existing.status !== "completed") {
+    return { error: "This contract is already out for signature. Check its status instead." };
+  }
+
+  try {
+    const origin = await publicOrigin();
+    const { envelope } = await sendForSignature({
+      origin,
+      dealId,
+      body: draft.body,
+      subject: `Collaboration agreement — ${deal.creator}`,
+      recipientName: partner?.legal_name?.trim() || partner?.name || deal.creator,
+      recipientEmail: email,
+    });
+    refresh(dealId);
+    return { status: envelope.status };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "DocuSign could not send the contract." };
+  }
+}
+
+/**
+ * Asks DocuSign where the envelope stands, and files the signed PDF when it is done.
+ *
+ * Filing goes through the same `contracts` record an uploaded scan would create, so the
+ * parse, the rights check and confirmation are the paths that already exist. The draft is
+ * marked signed at the same moment, which is what locks it from further editing.
+ */
+export async function refreshSignatureStatusAction(
+  dealId: number
+): Promise<{ error?: string; status?: string; filed?: boolean }> {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  const envelope = getEsignEnvelope(dealId);
+  if (!envelope) return { error: "This contract has not been sent for signature." };
+  if (envelope.status === "completed" && envelope.filed_contract_id != null) {
+    return { status: "completed", filed: true };
+  }
+
+  try {
+    const origin = await publicOrigin();
+    const result = await fetchEnvelopeStatus(origin, envelope.envelope_id);
+    if (!result.signedPdf) {
+      updateEsignEnvelope(envelope.id, { status: result.status, lastError: null });
+      refresh(dealId);
+      return { status: result.status, filed: false };
+    }
+
+    const relativePath = saveFile(
+      `contracts/deal-${dealId}`,
+      `docusign-${envelope.envelope_id}.pdf`,
+      result.signedPdf
+    );
+    const previous = getContract(dealId);
+    if (previous) deleteFile(previous.file_path);
+    const contractId = createContract({
+      dealId,
+      filename: `Signed agreement (DocuSign).pdf`,
+      filePath: relativePath,
+      mime: "application/pdf",
+    });
+    updateEsignEnvelope(envelope.id, {
+      status: result.status,
+      completedAt: result.completedAt,
+      filedContractId: contractId,
+      lastError: null,
+    });
+    // The signed original is now the record; the draft stops being editable.
+    markContractDraftSigned(dealId);
+    refresh(dealId);
+
+    if (hasApiKey()) {
+      after(async () => {
+        try {
+          const { terms, usage } = await parseContract({
+            pdfBase64: result.signedPdf!.toString("base64"),
+            dealContext: `Deal ${dealId} with ${deal.creator}.`,
+          });
+          setContractTerms(contractId, terms as ParsedTerms);
+          logUsage(dealId, "brief", MODEL, usage.inputTokens, usage.outputTokens);
+        } catch (error) {
+          setContractError(
+            contractId,
+            error instanceof Error ? error.message : "The signed contract could not be read."
+          );
+        }
+        refresh(dealId);
+      });
+    } else {
+      setContractError(contractId, "No ANTHROPIC_API_KEY configured — enter the terms manually.");
+    }
+    return { status: result.status, filed: true };
+  } catch (error) {
+    updateEsignEnvelope(envelope.id, {
+      lastError: error instanceof Error ? error.message : "DocuSign could not be reached.",
+    });
+    refresh(dealId);
+    return { error: error instanceof Error ? error.message : "DocuSign could not be reached." };
+  }
 }

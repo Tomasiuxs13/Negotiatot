@@ -37,6 +37,8 @@ import {
 import { money } from "@/lib/format";
 import { actualDealCost, dealCommission, describeCommission, earningsForecast, expectedOrdersFrom, parseTiers, resolveOffer, trueDealCost } from "@/lib/commission";
 import { costScopeLine } from "@/lib/ladder-notes";
+import { docusignSetupStatus, getDocusignConnectionSummary, getEsignEnvelope } from "@/lib/docusign";
+import { headers } from "next/headers";
 import { deliverableCount } from "@/lib/deliverables";
 import AnalysisTab from "@/components/deal/AnalysisTab";
 import NegotiationTab from "@/components/deal/NegotiationTab";
@@ -102,6 +104,9 @@ export default async function DealPage({
 }) {
   const { id } = await params;
   const { tab } = await searchParams;
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("host") ?? "localhost:3000";
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const found = getDeal(Number(id));
   if (!found) notFound();
   const deal = found;
@@ -673,6 +678,23 @@ export default async function DealPage({
                           incomplete: t.incomplete === 1,
                         }))}
                         currentTemplateId={deal.contract_template_id ?? null}
+                        esign={(() => {
+                          const setup = docusignSetupStatus(`${protocol}://${host}`);
+                          if (!setup.configured) return undefined;
+                          const env = getEsignEnvelope(deal.id);
+                          return {
+                            connected: getDocusignConnectionSummary() != null,
+                            envelope: env
+                              ? {
+                                  status: env.status,
+                                  recipientEmail: env.recipient_email,
+                                  sentAt: env.sent_at,
+                                  lastError: env.last_error,
+                                }
+                              : null,
+                            recipientEmail: partnerRecord?.email ?? null,
+                          };
+                        })()}
                       />
                       <ContractBlock
                         dealId={deal.id}

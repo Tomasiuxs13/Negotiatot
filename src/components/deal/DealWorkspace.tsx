@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Children, useState } from "react";
 import { PAGE_WIDTH } from "@/lib/layout";
 
 /**
@@ -17,6 +17,20 @@ import { PAGE_WIDTH } from "@/lib/layout";
  * State lives here because the strip and the body are now in different regions of the
  * page; the server passes each tab's already-rendered content in as a node.
  */
+/**
+ * Renders a node prop that may arrive as a bare array.
+ *
+ * A `<>…</>` passed as a prop from a Server Component does not keep its fragment
+ * wrapper across the RSC boundary: this client component receives the children as a
+ * plain array, so React warned "Each child in a list should have a unique key prop" on
+ * every deal page load — four times over, for actions, cockpit, about and rail.
+ * Children.toArray assigns each entry a stable positional key, which is correct here
+ * because these lists are layout slots whose order never changes.
+ */
+function Slot({ children }: { children: React.ReactNode }) {
+  return <>{Children.toArray(children)}</>;
+}
+
 export default function DealWorkspace({
   breadcrumb,
   actions,
@@ -54,7 +68,7 @@ export default function DealWorkspace({
               thing that could not, which is why "History" ended up clipped behind the
               actions on a 900px window. */}
           <div className="flex min-w-0 items-center gap-4 lg:gap-6">
-            <div className="min-w-0 truncate">{breadcrumb}</div>
+            <div className="min-w-0 truncate"><Slot>{breadcrumb}</Slot></div>
             <nav
               className="hidden shrink-0 items-center gap-1 rounded-lg bg-slate-100 p-1 md:flex"
               role="tablist"
@@ -76,7 +90,7 @@ export default function DealWorkspace({
               ))}
             </nav>
           </div>
-          <div className="flex shrink-0 items-center gap-3 overflow-x-auto">{actions}</div>
+          <div className="flex shrink-0 items-center gap-3 overflow-x-auto"><Slot>{actions}</Slot></div>
         </div>
 
         {/* Below md the strip drops out of the bar rather than squeezing the actions
@@ -104,25 +118,25 @@ export default function DealWorkspace({
       </header>
 
       <div className={`p-4 md:p-6 flex flex-col gap-6 ${PAGE_WIDTH}`}>
-        {workflow}
-        {cockpit}
+        <Slot>{workflow}</Slot>
+        <Slot>{cockpit}</Slot>
         {about ? (
           /* Below xl the work comes first: on a phone, scrolling past a screen of
              properties to reach the thread is worse than losing the side-by-side. */
           <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,23%)_minmax(0,48%)_minmax(0,29%)]">
-            <aside className="order-2 flex min-w-0 flex-col gap-4 xl:order-1">{about}</aside>
+            <aside className="order-2 flex min-w-0 flex-col gap-4 xl:order-1"><Slot>{about}</Slot></aside>
             <div className="order-1 flex min-w-0 flex-col gap-5 xl:order-2">
-              {band}
-              {tabs.find((t) => t.name === tab)?.node}
+              <Slot>{band}</Slot>
+              <Slot>{tabs.find((t) => t.name === tab)?.node}</Slot>
             </div>
-            <aside className="order-3 flex min-w-0 flex-col gap-4">{rail}</aside>
+            <aside className="order-3 flex min-w-0 flex-col gap-4"><Slot>{rail}</Slot></aside>
           </div>
         ) : (
           <>
-            {band}
+            <Slot>{band}</Slot>
             <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,68%)_minmax(0,32%)] gap-6 items-start">
-              <div className="min-w-0">{tabs.find((t) => t.name === tab)?.node}</div>
-              <aside className="flex flex-col gap-6">{rail}</aside>
+              <div className="min-w-0"><Slot>{tabs.find((t) => t.name === tab)?.node}</Slot></div>
+              <aside className="flex flex-col gap-6"><Slot>{rail}</Slot></aside>
             </div>
           </>
         )}

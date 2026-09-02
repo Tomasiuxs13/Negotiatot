@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { CONTRACT_SLOTS, validateTemplate, type SlotValue } from "../contract-slots";
-import { contractContext, DEFAULT_CONTRACT_TEMPLATE, generateContractText } from "../contract-template";
+import {
+  contractContext,
+  contractHasSignatureAnchor,
+  DEFAULT_CONTRACT_TEMPLATE,
+  generateContractText,
+} from "../contract-template";
 import type { Deal } from "../types";
 import type { ContentItem, PaymentItem } from "../fulfillment-types";
 
@@ -114,6 +119,19 @@ describe("the built-in agreement", () => {
         "Signed by the Creator: ____________________  Date: ________",
       ].join("\n")
     );
+  });
+
+  /**
+   * Sending for signature anchors the creator's signature tab on this exact line. Losing
+   * it while editing the template would produce envelopes nobody can sign.
+   */
+  it("keeps the signature line an e-signature envelope anchors on", () => {
+    expect(contractHasSignatureAnchor(DEFAULT_CONTRACT_TEMPLATE)).toBe(true);
+    expect(
+      contractHasSignatureAnchor(
+        generateContractText({ deal, partner: null, items: [], payments: [], brand: {} })
+      )
+    ).toBe(true);
   });
 
   it("renders a company template with its own wording around the slots", () => {

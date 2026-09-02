@@ -15,6 +15,20 @@ import { renderTemplate, type SlotValue } from "./contract-slots";
 export const COMMISSION_ATTRIBUTION_DAYS = 30;
 
 /**
+ * The line an e-signature provider anchors the creator's signature tab to.
+ *
+ * It lives here rather than in the DocuSign module because it is a requirement on the
+ * contract text: a template without it produces an envelope with nowhere to sign. The
+ * built-in agreement is held to it by test, and a company template is checked before
+ * anything is sent.
+ */
+export const SIGNATURE_ANCHOR = "Signed by the Creator:";
+
+export function contractHasSignatureAnchor(body: string): boolean {
+  return body.includes(SIGNATURE_ANCHOR);
+}
+
+/**
  * The compensation clause, built from everything the creator actually receives.
  *
  * A gifted or commission-only deal used to fall through every branch here and print

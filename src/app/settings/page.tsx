@@ -4,6 +4,8 @@ import { hasApiKey, MODEL } from "@/lib/claude";
 import { usageCostUsd, totalTokens } from "@/lib/usage-cost";
 import ApiAccessBlock from "@/components/settings/ApiAccessBlock";
 import ContractTemplatesBlock from "@/components/settings/ContractTemplatesBlock";
+import DocusignConnectionBlock from "@/components/settings/DocusignConnectionBlock";
+import { docusignSetupStatus, getDocusignConnectionSummary } from "@/lib/docusign";
 import { DEFAULT_CONTRACT_TEMPLATE } from "@/lib/contract-template";
 import CreatorCategoriesBlock from "@/components/settings/CreatorCategoriesBlock";
 import RecordLayoutBlock from "@/components/settings/RecordLayoutBlock";
@@ -22,7 +24,7 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ gmail?: string | string[] }>;
+  searchParams: Promise<{ gmail?: string | string[]; docusign?: string | string[] }>;
 }) {
   const query = await searchParams;
   const requestHeaders = await headers();
@@ -30,6 +32,9 @@ export default async function SettingsPage({
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const gmail = gmailSetupStatus(`${protocol}://${host}`);
   const gmailConnection = getGmailConnectionSummary();
+  const docusign = docusignSetupStatus(`${protocol}://${host}`);
+  const docusignConnection = getDocusignConnectionSummary();
+  const docusignStatus = Array.isArray(query.docusign) ? query.docusign[0] : query.docusign;
   const keyConfigured = hasApiKey();
   const deals = getDeals();
   const dealCount = deals.length;
@@ -100,6 +105,14 @@ export default async function SettingsPage({
           />
           <RecordLayoutBlock current={getRecordLayout()} />
           <CreatorCategoriesBlock categories={categories} usage={categoryCounts} />
+          <DocusignConnectionBlock
+            configured={docusign.configured}
+            redirectUri={docusign.redirectUri}
+            missing={docusign.missing}
+            environment={docusign.environment}
+            connection={docusignConnection}
+            status={docusignStatus ?? null}
+          />
           <ContractTemplatesBlock
             templates={listContractTemplates()}
             builtinBody={DEFAULT_CONTRACT_TEMPLATE}
