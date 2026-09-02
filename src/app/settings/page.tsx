@@ -106,10 +106,7 @@ export default async function SettingsPage({
           <RecordLayoutBlock current={getRecordLayout()} />
           <CreatorCategoriesBlock categories={categories} usage={categoryCounts} />
           <DocusignConnectionBlock
-            configured={docusign.configured}
-            redirectUri={docusign.redirectUri}
-            missing={docusign.missing}
-            environment={docusign.environment}
+            setup={docusign}
             connection={docusignConnection}
             status={docusignStatus ?? null}
           />

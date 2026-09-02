@@ -3,12 +3,21 @@ import "server-only";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
 import { contractHasSignatureAnchor, SIGNATURE_ANCHOR } from "./contract-template";
 import {
+  defaultRedirectUri,
+  normalizeEnvironment,
+  resolveDocusign,
+  type DocusignEnvironment,
+  type DocusignSettings,
+} from "./docusign-config";
+import {
   createEsignEnvelope,
   disconnectEsign,
   getEsignConnection,
   getEsignEnvelope,
   markEsignError,
+  getSetting,
   saveEsignConnection,
+  setSetting,
   updateEsignEnvelope,
   updateEsignTokens,
   type EsignEnvelope,
@@ -26,16 +35,15 @@ import {
  * knows or cares which.
  */
 
-const DEMO_ACCOUNT_HOST = "https://account-d.docusign.com";
-const PROD_ACCOUNT_HOST = "https://account.docusign.com";
-
 /** `signature` creates envelopes; `extended` is what returns a refresh token. */
 const SCOPES = ["signature", "extended"];
+
+/** The settings-table key holding what an operator entered in Settings. */
+const SETTINGS_KEY = "docusign_config";
 
 export interface DocusignConfig {
   integrationKey: string;
   secretKey: string;
-  tokenEncryptionKey: string;
   accountHost: string;
   redirectUri: string;
 }
@@ -46,45 +54,156 @@ interface StoredTokens {
   expiresAt: number;
 }
 
-function config(origin: string): DocusignConfig | null {
-  const integrationKey = process.env.DOCUSIGN_INTEGRATION_KEY?.trim();
-  const secretKey = process.env.DOCUSIGN_SECRET_KEY?.trim();
-  const tokenEncryptionKey = process.env.DOCUSIGN_TOKEN_ENCRYPTION_KEY?.trim();
-  if (!integrationKey || !secretKey || !tokenEncryptionKey) return null;
+/** What is written to the settings table. The secret is never stored in the clear. */
+interface StoredDocusignSettings {
+  integrationKey: string;
+  secretCipher: string;
+  environment: DocusignEnvironment;
+  redirectUri: string;
+}
+
+/**
+ * The key everything DocuSign is encrypted with.
+ *
+ * `DOCUSIGN_TOKEN_ENCRYPTION_KEY` if a deployment sets one, else the app password — which
+ * production already requires, so credentials entered in Settings are encrypted at rest
+ * without asking anyone to invent and deploy a second secret. The cost is stated plainly
+ * in Settings: change the app password and DocuSign has to be reconnected, because what
+ * was encrypted under the old one can no longer be read.
+ */
+function encryptionSecret(): string {
+  const value =
+    process.env.DOCUSIGN_TOKEN_ENCRYPTION_KEY?.trim() || process.env.COUNTERPART_PASSWORD?.trim();
+  if (!value) {
+    throw new Error(
+      "No encryption key available. Set COUNTERPART_PASSWORD (or DOCUSIGN_TOKEN_ENCRYPTION_KEY) before storing DocuSign credentials."
+    );
+  }
+  return value;
+}
+
+function readStoredSettings(): Partial<DocusignSettings> | null {
+  const row = getSetting<StoredDocusignSettings>(SETTINGS_KEY);
+  if (!row) return null;
+  let secret = "";
+  if (row.secretCipher) {
+    try {
+      secret = decryptString(row.secretCipher, encryptionSecret());
+    } catch {
+      // An unreadable secret is treated as absent rather than thrown: Settings must still
+      // render so the operator can re-enter it, and the environment fallback still works.
+      secret = "";
+    }
+  }
   return {
-    integrationKey,
-    secretKey,
-    tokenEncryptionKey,
-    // Demo by default: sending real envelopes to real creators is not something a
-    // missing environment variable should switch on.
-    accountHost:
-      process.env.DOCUSIGN_ENV?.trim().toLowerCase() === "production"
-        ? PROD_ACCOUNT_HOST
-        : DEMO_ACCOUNT_HOST,
-    redirectUri:
-      process.env.DOCUSIGN_REDIRECT_URI?.trim() ||
-      `${origin.replace(/\/$/, "")}/api/integrations/docusign/callback`,
+    integrationKey: row.integrationKey ?? "",
+    secret,
+    environment: normalizeEnvironment(row.environment),
+    redirectUri: row.redirectUri ?? "",
   };
 }
 
-export function docusignSetupStatus(origin: string): {
+/** True when a secret is on file, even if it currently cannot be decrypted. */
+function hasStoredSecret(): boolean {
+  return Boolean(getSetting<StoredDocusignSettings>(SETTINGS_KEY)?.secretCipher);
+}
+
+function envVars() {
+  return {
+    integrationKey: process.env.DOCUSIGN_INTEGRATION_KEY,
+    secret: process.env.DOCUSIGN_SECRET_KEY,
+    environment: process.env.DOCUSIGN_ENV,
+    redirectUri: process.env.DOCUSIGN_REDIRECT_URI,
+  };
+}
+
+function config(origin: string): DocusignConfig | null {
+  const resolved = resolveDocusign({ stored: readStoredSettings(), env: envVars(), origin });
+  if (!resolved.configured) return null;
+  return {
+    integrationKey: resolved.integrationKey,
+    secretKey: resolved.secret,
+    accountHost: resolved.accountHost,
+    redirectUri: resolved.redirectUri,
+  };
+}
+
+export interface DocusignSetupStatus {
   configured: boolean;
   redirectUri: string;
   missing: string[];
-  environment: "demo" | "production";
-} {
-  const value = config(origin);
-  const missing = [
-    !process.env.DOCUSIGN_INTEGRATION_KEY?.trim() ? "DOCUSIGN_INTEGRATION_KEY" : null,
-    !process.env.DOCUSIGN_SECRET_KEY?.trim() ? "DOCUSIGN_SECRET_KEY" : null,
-    !process.env.DOCUSIGN_TOKEN_ENCRYPTION_KEY?.trim() ? "DOCUSIGN_TOKEN_ENCRYPTION_KEY" : null,
-  ].filter((v): v is string => v != null);
+  environment: DocusignEnvironment;
+  /** Which source the credentials in effect came from. */
+  source: "settings" | "environment" | "none";
+  /** The integration key in effect, for display. The secret is never sent to the client. */
+  integrationKey: string;
+  /** Whether a secret is saved in Settings, so the form can show it without revealing it. */
+  secretStored: boolean;
+  /** A redirect URI pinned in Settings or the environment, as opposed to derived. */
+  redirectUriIsPinned: boolean;
+  /** Set when credentials cannot be stored at all, e.g. no app password configured. */
+  encryptionError: string | null;
+}
+
+export function docusignSetupStatus(origin: string): DocusignSetupStatus {
+  const resolved = resolveDocusign({ stored: readStoredSettings(), env: envVars(), origin });
+  let encryptionError: string | null = null;
+  try {
+    encryptionSecret();
+  } catch (error) {
+    encryptionError = error instanceof Error ? error.message : "No encryption key available.";
+  }
   return {
-    configured: Boolean(value),
-    redirectUri: value?.redirectUri ?? `${origin.replace(/\/$/, "")}/api/integrations/docusign/callback`,
-    missing,
-    environment: process.env.DOCUSIGN_ENV?.trim().toLowerCase() === "production" ? "production" : "demo",
+    configured: resolved.configured,
+    redirectUri: resolved.redirectUri,
+    missing: resolved.missing,
+    environment: resolved.environment,
+    source: resolved.source,
+    integrationKey: resolved.integrationKey,
+    secretStored: hasStoredSecret(),
+    redirectUriIsPinned: resolved.redirectUri !== defaultRedirectUri(origin),
+    encryptionError,
   };
+}
+
+/**
+ * Saves what an operator entered in Settings.
+ *
+ * An omitted secret keeps the one already stored, so editing the environment or the
+ * redirect URI does not require retyping a credential the form never shows back.
+ */
+export function saveDocusignSettings(input: {
+  integrationKey: string;
+  /** Undefined keeps the stored secret; "" clears it. */
+  secret?: string;
+  environment: DocusignEnvironment;
+  redirectUri: string;
+}): { credentialChanged: boolean } {
+  const existing = getSetting<StoredDocusignSettings>(SETTINGS_KEY);
+  let secretCipher = existing?.secretCipher ?? "";
+  if (input.secret !== undefined) {
+    secretCipher = input.secret.trim()
+      ? encryptString(input.secret.trim(), encryptionSecret())
+      : "";
+  }
+  const integrationKey = input.integrationKey.trim();
+  // Compared against what was STORED, not what is in effect: a deployment can have
+  // environment credentials in play, and typing the same key into Settings for the first
+  // time is still a change of credential.
+  const credentialChanged =
+    input.secret !== undefined || integrationKey !== (existing?.integrationKey ?? "");
+  setSetting(SETTINGS_KEY, {
+    integrationKey,
+    secretCipher,
+    environment: normalizeEnvironment(input.environment),
+    redirectUri: input.redirectUri.trim(),
+  } satisfies StoredDocusignSettings);
+  return { credentialChanged };
+}
+
+/** Forgets the Settings credentials entirely, falling back to the environment if it has any. */
+export function clearDocusignSettings(): void {
+  setSetting(SETTINGS_KEY, null);
 }
 
 export interface DocusignConnectionSummary {
@@ -117,21 +236,28 @@ function keyFromSecret(secret: string): Buffer {
   return createHash("sha256").update(secret).digest();
 }
 
-function encryptTokens(tokens: StoredTokens, secret: string): string {
+function encryptString(plain: string, secret: string): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", keyFromSecret(secret), iv);
-  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(tokens), "utf8"), cipher.final()]);
+  const ciphertext = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
   return [iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), ciphertext.toString("base64url")].join(".");
 }
 
-function decryptTokens(value: string, secret: string): StoredTokens {
+function decryptString(value: string, secret: string): string {
   const [iv, tag, ciphertext] = value.split(".");
   if (!iv || !tag || !ciphertext) throw new Error("DocuSign credentials are unreadable. Reconnect the account.");
+  const decipher = createDecipheriv("aes-256-gcm", keyFromSecret(secret), Buffer.from(iv, "base64url"));
+  decipher.setAuthTag(Buffer.from(tag, "base64url"));
+  return Buffer.concat([decipher.update(Buffer.from(ciphertext, "base64url")), decipher.final()]).toString("utf8");
+}
+
+function encryptTokens(tokens: StoredTokens, secret: string): string {
+  return encryptString(JSON.stringify(tokens), secret);
+}
+
+function decryptTokens(value: string, secret: string): StoredTokens {
   try {
-    const decipher = createDecipheriv("aes-256-gcm", keyFromSecret(secret), Buffer.from(iv, "base64url"));
-    decipher.setAuthTag(Buffer.from(tag, "base64url"));
-    const plain = Buffer.concat([decipher.update(Buffer.from(ciphertext, "base64url")), decipher.final()]).toString("utf8");
-    const parsed = JSON.parse(plain) as StoredTokens;
+    const parsed = JSON.parse(decryptString(value, secret)) as StoredTokens;
     if (!parsed.accessToken || !parsed.refreshToken || !Number.isFinite(parsed.expiresAt)) {
       throw new Error("Invalid token payload");
     }
@@ -224,7 +350,7 @@ export async function completeDocusignAuthorization(origin: string, code: string
         refreshToken: token.refresh_token,
         expiresAt: Date.now() + (token.expires_in ?? 3600) * 1000,
       },
-      value.tokenEncryptionKey
+      encryptionSecret()
     ),
   });
 }
@@ -234,7 +360,7 @@ async function accessToken(origin: string): Promise<{ token: string; apiBase: st
   const value = requiredConfig(origin);
   const connection = getEsignConnection();
   if (!connection) throw new Error("DocuSign is not connected. Connect it in Settings.");
-  const stored = decryptTokens(connection.encrypted_tokens, value.tokenEncryptionKey);
+  const stored = decryptTokens(connection.encrypted_tokens, encryptionSecret());
   const apiBase = `${connection.baseUri}/restapi/v2.1/accounts/${connection.accountId}`;
 
   if (stored.expiresAt > Date.now() + 60_000) return { token: stored.accessToken, apiBase };
@@ -248,7 +374,7 @@ async function accessToken(origin: string): Promise<{ token: string; apiBase: st
     refreshToken: refreshed.refresh_token ?? stored.refreshToken,
     expiresAt: Date.now() + (refreshed.expires_in ?? 3600) * 1000,
   };
-  updateEsignTokens(encryptTokens(next, value.tokenEncryptionKey));
+  updateEsignTokens(encryptTokens(next, encryptionSecret()));
   return { token: next.accessToken, apiBase };
 }
 

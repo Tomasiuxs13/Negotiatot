@@ -407,13 +407,33 @@ category leaves the creators in it — they keep the label, and Settings says so
 
 **DocuSign e-signature** connects one DocuSign account the same way the mailbox does:
 the operator authorises it themselves and only an encrypted refresh token is stored — no
-password, no service account. Server variables are `DOCUSIGN_INTEGRATION_KEY`,
-`DOCUSIGN_SECRET_KEY` and `DOCUSIGN_TOKEN_ENCRYPTION_KEY`, with `DOCUSIGN_REDIRECT_URI`
-optional for a deployed host. It runs against DocuSign's **demo** environment unless
-`DOCUSIGN_ENV=production` is set, so a missing variable can never mail a real creator.
-The whole integration is optional and opt-in: the deal page offers it only once an account
-is connected, never merely because the variables exist, and uploading a signed copy by hand
-is unaffected either way.
+password, no service account.
+
+**Set up in Settings, not over SSH.** The integration key and secret are entered here and
+stored encrypted, because they belong to whoever runs the DocuSign account rather than to
+whoever deploys the app; requiring a root-owned `.env` edit and a redeploy put a server
+login in front of a business setting. The environment variables still work
+(`DOCUSIGN_INTEGRATION_KEY`, `DOCUSIGN_SECRET_KEY`, plus optional `DOCUSIGN_ENV` and
+`DOCUSIGN_REDIRECT_URI`) and are the fallback when Settings is empty, so an existing
+deployment keeps running untouched. Settings wins when it holds both halves; the key and
+the secret are always taken from one source or the other and never mixed, since a
+Settings key paired with an environment secret is a configuration nobody intended. The
+block says which source is in effect. The secret is never sent back to the browser — the
+field shows only that one is stored, and submits only when something is typed into it.
+Changing either half drops any live connection rather than leaving the account looking
+connected against credentials that no longer apply.
+
+Everything is encrypted with `DOCUSIGN_TOKEN_ENCRYPTION_KEY` when a deployment sets one,
+otherwise with the app password that production already requires — so credentials entered
+in Settings are encrypted at rest without anyone having to invent and deploy a second
+secret. The cost is stated in Settings: **change the app password and DocuSign must be
+reconnected**, because what was encrypted under the old one can no longer be read.
+
+It runs against DocuSign's **demo** environment unless production is chosen explicitly, so
+a typo or a blank value can never mail a real creator, and Settings says plainly which of
+the two is live. The whole integration is optional and opt-in: the deal page offers it
+only once an account is connected, never merely because credentials exist, and uploading a
+signed copy by hand is unaffected either way.
 
 **Contract templates** — ours or theirs. Every Agreed deal gets a contract draft; this is
 where the wording comes from. A company can keep **Counterpart's standard agreement**, or

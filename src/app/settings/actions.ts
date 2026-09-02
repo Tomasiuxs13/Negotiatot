@@ -12,7 +12,13 @@ import { CONTRACT_SLOTS, validateTemplate, type TemplateReport } from "@/lib/con
 import { generateContractText } from "@/lib/contract-template";
 import { contractInputsFor } from "@/lib/contract-draft";
 import { hasApiKey, MODEL, proposeContractSlots, type SlotProposal } from "@/lib/claude";
-import { disconnectDocusign } from "@/lib/docusign";
+import {
+  clearDocusignSettings,
+  disconnectDocusign,
+  getDocusignConnectionSummary,
+  saveDocusignSettings,
+} from "@/lib/docusign";
+import { normalizeEnvironment } from "@/lib/docusign-config";
 
 import { randomBytes } from "crypto";
 import { headers } from "next/headers";
@@ -198,6 +204,64 @@ export async function previewContractTemplateAction(
 
 export async function disconnectDocusignAction(): Promise<{ error?: string }> {
   disconnectDocusign();
+  revalidatePath("/settings");
+  return {};
+}
+
+/**
+ * Saves DocuSign credentials entered in Settings.
+ *
+ * `secret` is undefined when the field was left untouched, which keeps the stored one —
+ * the form never receives the secret back, so it cannot resubmit it. Changing the key or
+ * the secret invalidates any live connection, so the account is disconnected in the same
+ * step rather than left looking connected against credentials that no longer apply.
+ */
+export async function saveDocusignSettingsAction(input: {
+  integrationKey: string;
+  secret?: string;
+  environment: string;
+  redirectUri: string;
+}): Promise<{ error?: string; disconnected?: boolean }> {
+  const integrationKey = input.integrationKey.trim();
+  const redirectUri = input.redirectUri.trim();
+  if (integrationKey.length > 200) return { error: "That integration key is too long." };
+  if ((input.secret?.length ?? 0) > 500) return { error: "That secret key is too long." };
+  if (redirectUri) {
+    try {
+      const url = new URL(redirectUri);
+      if (url.protocol !== "https:" && url.hostname !== "localhost") {
+        return { error: "The redirect URI must be https (localhost may use http)." };
+      }
+    } catch {
+      return { error: "That redirect URI is not a valid URL." };
+    }
+  }
+
+  let credentialChanged = false;
+  try {
+    credentialChanged = saveDocusignSettings({
+      integrationKey,
+      secret: input.secret,
+      environment: normalizeEnvironment(input.environment),
+      redirectUri,
+    }).credentialChanged;
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "The credentials could not be saved." };
+  }
+
+  let disconnected = false;
+  if (credentialChanged && getDocusignConnectionSummary() != null) {
+    disconnectDocusign();
+    disconnected = true;
+  }
+  revalidatePath("/settings");
+  return { disconnected };
+}
+
+/** Forgets the Settings credentials; an environment-configured deployment still works. */
+export async function clearDocusignSettingsAction(): Promise<{ error?: string }> {
+  if (getDocusignConnectionSummary() != null) disconnectDocusign();
+  clearDocusignSettings();
   revalidatePath("/settings");
   return {};
 }
