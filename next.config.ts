@@ -9,6 +9,15 @@ const nextConfig: NextConfig = {
   // chunk is how a PDF upload fails at runtime with a missing-module error nobody can
   // reproduce locally.
   serverExternalPackages: ["pdf-to-img", "pdfjs-dist", "@napi-rs/canvas"],
+  // pdfjs declares @napi-rs/canvas as an OPTIONAL dependency and loads it with a runtime
+  // require, so the tracer cannot see it and left it out of .next/standalone entirely.
+  // The build passed, the image ran, and every tall report silently fell back to the
+  // "cannot render" warning — the failure this rendering exists to remove. Force the
+  // package and its platform binary in; the glob resolves to whichever binary the build
+  // host installed (linux-x64-gnu on the VPS, darwin-arm64 locally).
+  outputFileTracingIncludes: {
+    "/**": ["node_modules/@napi-rs/**/*"],
+  },
   experimental: {
     serverActions: {
       // Report PDFs up to 20 MB + multipart overhead
