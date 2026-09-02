@@ -576,7 +576,7 @@ sit beneath it.
 | Tab | What it holds |
 |---|---|
 | **Analysis** | Before the first run: **Run the analysis** — an evidence checklist (analytics report, known audience, channel URL, their message) with the report picker inside it, and a button that names what it is about to do (*Analyze with this report* / *Run analysis without a report*). After it: **Why this verdict** — a collapsible panel whose folded state still carries the verdict pill, a severity count (*1 critical · 5 to weigh · 1 passed*) and one line of the reasoning. It opens while the decision is live and folds once an offer has gone out or the deal is settled, because the reasoning is read closely once and is reference afterwards. Inside: the reasoning, red flags, the four numbers with the arithmetic that produced them (written by `pricing.ts`, not narrated by the model), audience-data editor |
-| **Negotiation** | Round-by-round thread, the Copilot's recommendation with a single ready-to-send draft, on-demand tone rewrite, reply capture. Any message can be removed (mis-pastes happen) — deletion also removes recommendations generated from it and rewinds round, move, asks, stage and label to what the remaining thread supports . Quoted email history folds behind a *N quoted lines* control and a very long message clamps with *Show full message* — a synced reply carries the whole prior thread, which is already the message directly above it. The Copilot's workings fold behind **Why this move**, and the draft sits in a bounded preview that scrolls inside its own frame so Copy draft and Mark as sent stay on screen |
+| **Negotiation** | Round-by-round thread, the Copilot's recommendation with a single ready-to-send draft, on-demand tone rewrite, reply capture. **Recommend a reply** runs the Copilot against the messages already on the deal, so a reply the Gmail sync imported never has to be retyped to get a draft; when a reply arrives after a recommendation was written, the card says so and offers a fresh one rather than letting a stale draft read as the current move. Any message can be removed (mis-pastes happen) — deletion also removes recommendations generated from it and rewinds round, move, asks, stage and label to what the remaining thread supports . Quoted email history folds behind a *N quoted lines* control and a very long message clamps with *Show full message* — a synced reply carries the whole prior thread, which is already the message directly above it. The Copilot's workings fold behind **Why this move**, and the draft sits in a bounded preview that scrolls inside its own frame so Copy draft and Mark as sent stay on screen |
 | **Communication** | Every human message with this creator, across all of their deals — the same panel their profile carries. Subjects, Gmail provenance and the deal each message belongs to; Copilot output is excluded because it was never sent to anyone. The Negotiation tab is this deal's thread as bubbles; this is the correspondence . Quoted chains fold here exactly as they do in the thread — one reader for both, so a message does not look different depending on which tab you opened it from |
 | **Fulfillment** *(signed deals)* | Contact strip (creator email + copyable portal URL), contract upload and parsing, generated contract draft, onboarding checklist with a generated welcome email, content items with the draft review loop and per-item nudge emails, integration check, product delivery, payments |
 | **Actuals** *(delivered deals, plus legacy posted records)* | The campaign's primary KPI and progress to target, plus views for price calibration. Engagements, clicks, orders and revenue are supported per item but non-primary diagnostics sit under **Additional metrics**; measurement-window state, fee-only ROAS and all-in ROAS remain available |
@@ -730,6 +730,23 @@ reading and whether it counts toward the pricing averages.
 saved contact email, and can enter a negotiation only when that partner has exactly one live
 deal and the manager chooses **Add reply & draft next move**. The captured reply follows the
 same stage, recommendation and attention-panel updates as a pasted response; no email is sent.
+
+**Logged reply → a recommendation.** The engine has always read the whole logged thread,
+so a reply imported by the Gmail sync or the extension is available to it the moment it
+lands. What was missing was anything that *asked* for a move: pasting a reply was the only
+trigger, and the empty state told the manager to "paste their latest message below" — so a
+message the app had already logged had to be typed in a second time to get a draft.
+
+The thread is now the input. **Recommend a reply** runs the Copilot against what is on the
+deal, and a recommendation that predates their newest message is marked as behind, with a
+button to redo it. Both go through the same `runRecommendation` path a manual paste uses,
+so the round, the offer tracker and the guards behave identically however the message
+arrived. `recommendationIsBehind` is deliberately a pure comparison of the newest reply
+against the newest recommendation, tie-broken on row id — a sync writing a message in the
+same second as a recommendation must not read as up to date.
+
+It stays a button rather than firing on every synced email: a recommendation is a paid
+Opus call, and the inbox carries plenty of mail that does not deserve one.
 
 **Your take → the draft.** The Copilot decides the number unless you tell it otherwise.
 **Your take** on the Negotiation tab is the instruction channel — "offer $200 per video for

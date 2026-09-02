@@ -9,6 +9,8 @@ import MessageBody from "@/components/MessageBody";
 import GenerateOfferButton from "./GenerateOfferButton";
 import ManagerTakeBox from "./ManagerTakeBox";
 import RegenerateRecoButton from "./RegenerateRecoButton";
+import RecommendReplyButton from "./RecommendReplyButton";
+import { recommendationIsBehind } from "@/lib/negotiation-state";
 import FollowUpComposer from "./FollowUpComposer";
 import type { FollowUpCandidate } from "@/lib/followups";
 
@@ -70,6 +72,7 @@ export default function NegotiationTab({
   const thread = messages.filter((m) => m.sender !== "copilot");
   const rounds = buildRounds(deal, messages, reco);
   const gap = currentGap(rounds);
+  const behind = recommendationIsBehind(messages);
 
   return (
     // Sized against this column, not the window. The hard 1.5fr/0.8fr split left the
@@ -101,6 +104,20 @@ export default function NegotiationTab({
           </div>
         ) : reco ? (
           <div className="flex flex-col gap-2">
+            {/* A reply that lands after a recommendation leaves it answering the wrong
+                message. Saying so beats letting a stale draft read as the current move. */}
+            {behind && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <span className="text-xs text-amber-900">
+                  They have replied since this recommendation was written.
+                </span>
+                <RecommendReplyButton
+                  dealId={deal.id}
+                  busy={deal.job_status != null}
+                  label="Recommend a new reply"
+                />
+              </div>
+            )}
             <div className="flex justify-end">
               <RegenerateRecoButton dealId={deal.id} busy={deal.job_status != null} />
             </div>
@@ -118,8 +135,15 @@ export default function NegotiationTab({
             <ManagerTakeBox dealId={deal.id} busy={deal.job_status != null} hasRecommendation={false} />
           </div>
         ) : (
-          <div className="bg-white rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-            No recommendation yet — paste their latest message below and run the analysis.
+          /* Their reply is already on the thread — from the Gmail sync, the extension or
+             a paste — and the engine reads the thread, so there is nothing to retype.
+             This used to be a dead end that told the manager to paste the message again. */
+          <div className="bg-white rounded-lg border border-dashed border-slate-300 p-6 flex flex-col items-center gap-3">
+            <p className="text-sm text-slate-500 text-center">
+              No recommendation yet for the messages on this deal.
+            </p>
+            <RecommendReplyButton dealId={deal.id} busy={deal.job_status != null} />
+            <ManagerTakeBox dealId={deal.id} busy={deal.job_status != null} hasRecommendation={false} />
           </div>
         )}
 
