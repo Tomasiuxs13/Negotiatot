@@ -1,4 +1,17 @@
 "use server";
+import {
+  deleteContractTemplate,
+  getContractTemplate,
+  getDeal,
+  logUsage,
+  saveContractTemplate,
+  setDefaultContractTemplate,
+  type ContractTemplate,
+} from "@/lib/db";
+import { CONTRACT_SLOTS, validateTemplate, type TemplateReport } from "@/lib/contract-slots";
+import { generateContractText } from "@/lib/contract-template";
+import { contractInputsFor } from "@/lib/contract-draft";
+import { hasApiKey, MODEL, proposeContractSlots, type SlotProposal } from "@/lib/claude";
 
 import { randomBytes } from "crypto";
 import { headers } from "next/headers";
@@ -78,4 +91,106 @@ export async function saveRecordLayoutAction(value: RecordLayout): Promise<{ err
   revalidatePath("/deals", "layout");
   revalidatePath("/partners", "layout");
   return {};
+}
+
+// ---------------------------------------------------------------------------------------
+// Contract templates
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Saves a template. Syntax errors refuse the save — a template that cannot be parsed
+ * cannot render — but a missing requirement group only marks it incomplete, so a company
+ * can save half-mapped work and come back to it.
+ */
+export async function saveContractTemplateAction(input: {
+  id?: number | null;
+  name: string;
+  body: string;
+}): Promise<{ error?: string; template?: ContractTemplate; report?: TemplateReport }> {
+  const name = input.name.trim();
+  const body = input.body.replace(/\r\n/g, "\n");
+  if (!name) return { error: "Give the template a name." };
+  if (name.length > 80) return { error: "Keep the name under 80 characters." };
+  if (!body.trim()) return { error: "The template is empty." };
+  if (body.length > 200_000) return { error: "That template is too long." };
+  const report = validateTemplate(body);
+  if (report.errors.length > 0) {
+    const first = report.errors[0];
+    return { error: `Line ${first.line}: ${first.message}`, report };
+  }
+  if (input.id) {
+    if (!getContractTemplate(input.id)) return { error: "That template no longer exists." };
+  }
+  const template = saveContractTemplate({
+    id: input.id ?? null,
+    name,
+    body,
+    incomplete: report.missing.length > 0,
+  });
+  revalidatePath("/settings");
+  return { template, report };
+}
+
+export async function deleteContractTemplateAction(id: number): Promise<{ error?: string }> {
+  if (!getContractTemplate(id)) return { error: "That template no longer exists." };
+  deleteContractTemplate(id);
+  revalidatePath("/settings");
+  return {};
+}
+
+/** Null makes the built-in agreement the default again. */
+export async function setDefaultContractTemplateAction(id: number | null): Promise<{ error?: string }> {
+  if (id != null) {
+    const t = getContractTemplate(id);
+    if (!t) return { error: "That template no longer exists." };
+    if (t.incomplete) {
+      return { error: "An incomplete template cannot be the default — it cannot state every required part of an agreement." };
+    }
+  }
+  setDefaultContractTemplate(id);
+  revalidatePath("/settings");
+  return {};
+}
+
+/**
+ * The one-time mapping pass over a pasted contract: Claude keeps the wording and marks
+ * what the app can fill. The result is a proposal for the person to review, never saved
+ * on its own.
+ */
+export async function proposeContractSlotsAction(
+  text: string
+): Promise<{ error?: string; proposal?: SlotProposal; report?: TemplateReport }> {
+  if (!hasApiKey()) return { error: "No Claude API key is configured, so the contract cannot be read." };
+  const trimmed = text.replace(/\r\n/g, "\n").trim();
+  if (trimmed.length < 200) return { error: "Paste the whole agreement — that is too short to be one." };
+  if (trimmed.length > 80_000) return { error: "That is longer than a contract this can convert in one pass. Trim the schedules and try again." };
+  try {
+    const { proposal, usage } = await proposeContractSlots({ text: trimmed, catalog: CONTRACT_SLOTS });
+    logUsage(null, "contract_template", MODEL, usage.inputTokens, usage.outputTokens);
+    // The catalog is shown to the model as {{path}}, and it tends to echo the braces back
+    // in `slot`. The UI adds its own, so strip them here rather than in every renderer.
+    const mapped = proposal.mapped.map((m) => ({
+      ...m,
+      slot: m.slot.replace(/^\{\{\s*#?(?:if|each)?\s*|\s*\}\}$/g, "").trim(),
+    }));
+    return { proposal: { ...proposal, mapped }, report: validateTemplate(proposal.template) };
+  } catch (error) {
+    console.error("proposeContractSlots failed:", error);
+    return { error: error instanceof Error ? error.message : "The contract could not be converted." };
+  }
+}
+
+/** Renders a template body against a real deal so the mapping can be judged on a case. */
+export async function previewContractTemplateAction(
+  body: string,
+  dealId: number
+): Promise<{ error?: string; text?: string }> {
+  const deal = getDeal(dealId);
+  if (!deal) return { error: "Deal not found" };
+  const report = validateTemplate(body);
+  if (report.errors.length > 0) {
+    const first = report.errors[0];
+    return { error: `Line ${first.line}: ${first.message}` };
+  }
+  return { text: generateContractText({ ...contractInputsFor(deal), templateBody: body }) };
 }

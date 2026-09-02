@@ -405,6 +405,34 @@ fixed list rather than free text on purpose: "outdoors" and "Outdoor" typed a we
 are two buckets of one deal each, which is worth less than no grouping at all. Removing a
 category leaves the creators in it — they keep the label, and Settings says so.
 
+**Contract templates** — ours or theirs. Every Agreed deal gets a contract draft; this is
+where the wording comes from. A company can keep **Counterpart's standard agreement**, or
+**add their own**: they paste the agreement their lawyer wrote, and the system marks the
+parts it can fill per deal — parties, deliverables, fee and instalments, commission, gifted
+product, rights, dates — while every other word stays as written. The one-time review shows
+three lists: what was **automated** (each slot and the text it replaced), what **stays
+manual** (clauses that vary per deal but that the system has no fact for, such as a
+creator-specific discount code or a competitor list), and **notes** (a clause that now
+renders conditionally, a payout cadence that differs from the app's). A live preview
+renders the template against any real deal before it is saved.
+
+Templates are the company's text with the variable parts marked as slots
+(`contract-slots.ts`): a small Mustache subset — values, `{{#if}}`/`{{else}}`, `{{#each}}` —
+with no arithmetic and no free logic, so a template can place a fact but never derive one.
+Every slot is documented in a catalog that is both what the editor shows and what Claude is
+told it may use; a slot outside it renders empty and is flagged. The built-in agreement is
+written in the same language, deliberately: if the vocabulary can express a fee deal, a
+commission-only deal and a gifted one in our wording, it can express them in anyone's, and a
+gap shows up in our template first.
+
+Three things every template must be able to say — **both parties, the deliverables, the
+compensation** — because confirmation reads those back out of the signed copy and the chain
+below depends on them. A template missing one saves as **Incomplete**: it can be worked on
+but cannot be the default and cannot be picked on a deal. One template can be the
+**default**; each deal can still choose any template, or the built-in agreement explicitly,
+and remembers the choice for regeneration. Deleting a template sends its deals back to the
+default. The mapping pass is one Opus call per template, logged under API usage.
+
 **Gmail inbox** shows whether the OAuth client is configured, gives the exact redirect URI
 needed in Google Cloud, and connects or disconnects one user-owned Gmail account. The required
 server-only environment variables are `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET` and
@@ -602,7 +630,9 @@ never silently credited to the primary platform.
 
 **Agreement → provisional operations.** Marking a deal Agreed performs the safe part of
 the hand-off immediately: reusable onboarding is seeded, an editable contract draft is
-generated, and an unambiguous deliverable scope becomes provisional content items.
+generated from the deal's chosen template (else the default, else the built-in agreement —
+see *Contract templates* in Settings), and an unambiguous deliverable scope becomes
+provisional content items.
 
 The draft's compensation clause covers every way a creator is actually paid, not just a
 fee. A gifted or commission-only deal used to fall through every branch and print
@@ -804,6 +834,7 @@ centimetres away — but the two views of the same row do read differently.
 | `campaigns` | Objective, primary KPI, target, named budget, per-campaign playbook overrides, brief and its extracted requirements |
 | `playbook` / `settings` | Per-platform rules; global rules, unit economics, brand profile, negotiation style, onboarding template, measurement windows, creator categories, record layout |
 | `contracts` / `contract_drafts` | Uploaded contracts and their parsed terms; generated drafts until signed |
+| `contract_templates` | A company's own agreements with the fillable parts marked as slots; one may be the default, and `deals.contract_template_id` remembers a deal's choice (0 = the built-in agreement, explicitly) |
 | `content_items` | Deliverables: deal-platform attribution, status, resolved/fixed/relative date rule, approved date override, pending creator date request/reason, draft/approval/posted URLs, revision round, transcript, check result, actual views/engagements/clicks/orders/revenue |
 | `onboarding_tasks` | Setup checklist, partner- or deal-scoped |
 | `shipments` | Product delivery, address token, carrier, tracking, and explicit no-tracking exception |
@@ -817,7 +848,7 @@ centimetres away — but the two views of the same row do read differently.
 
 | Purpose | Model | Notes |
 |---|---|---|
-| Analysis, recommendation, contract & brief parsing, integration check | `claude-opus-5` | Adaptive thinking, high effort, streamed, prompt caching on the large prefix |
+| Analysis, recommendation, contract & brief parsing, contract-template mapping, integration check | `claude-opus-5` | Adaptive thinking, high effort, streamed, prompt caching on the large prefix |
 | Report/screenshot extraction | `claude-haiku-4-5` | OCR-grade transcription only — no judgement is made here |
 | Tone rewrite of a finished draft | `claude-opus-5` | Narrow, low effort |
 | Video transcription | fal.ai Whisper | Word-level timestamps, brand names primed |

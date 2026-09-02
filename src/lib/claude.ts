@@ -890,6 +890,131 @@ export async function parseContract(params: {
   };
 }
 
+const SLOT_PROPOSAL_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    template: {
+      type: "string",
+      description:
+        "The full contract text, wording preserved verbatim, with the variable parts replaced by slots and conditional clauses wrapped in {{#if}} blocks.",
+    },
+    mapped: {
+      type: "array",
+      description: "Every replacement made, so the person reviewing can see what was automated and from what.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          slot: { type: "string", description: "The slot path used, exactly as in the catalog." },
+          original: { type: "string", description: "The text it replaced, verbatim." },
+          reason: { type: "string", description: "One sentence: why this is that slot." },
+        },
+        required: ["slot", "original", "reason"],
+      },
+    },
+    unmapped: {
+      type: "array",
+      description:
+        "Clauses that carry a deal-specific fact the catalog cannot supply, left as written. Not every clause — only ones that will need editing per deal.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          excerpt: { type: "string", description: "The clause or phrase, verbatim, at most two sentences." },
+          reason: { type: "string", description: "What varies per deal here and why no slot fits." },
+        },
+        required: ["excerpt", "reason"],
+      },
+    },
+    notes: {
+      type: "array",
+      items: { type: "string" },
+      description: "Anything the reviewer must know — a required group the document never states, a clause that conflicts with how the app tracks terms, currency other than USD.",
+    },
+  },
+  required: ["template", "mapped", "unmapped", "notes"],
+} as const;
+
+export interface SlotProposal {
+  template: string;
+  mapped: { slot: string; original: string; reason: string }[];
+  unmapped: { excerpt: string; reason: string }[];
+  notes: string[];
+}
+
+/**
+ * Turns a company's own contract into a template: keeps their wording, marks the parts
+ * the app can fill. The one-time "questionnaire" — per template, never per deal.
+ *
+ * The catalog is the contract between this call and the renderer: the model may use
+ * only the slots listed, and validateTemplate catches anything it invents.
+ */
+export async function proposeContractSlots(params: {
+  text: string;
+  catalog: { path: string; label: string; description: string; kind: string; satisfies?: string }[];
+}): Promise<{ proposal: SlotProposal; usage: TokenUsage }> {
+  const client = getClient();
+  const catalogText = params.catalog
+    .map(
+      (s) =>
+        `- {{${s.path}}} (${s.kind}${s.satisfies ? `, satisfies "${s.satisfies}"` : ""}): ${s.label}${s.description ? ` — ${s.description}` : ""}`
+    )
+    .join("\n");
+
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 20000,
+    thinking: { type: "adaptive" },
+    system:
+      "You are Counterpart, converting a brand's own influencer agreement into a reusable template. You never change the legal wording; you only mark which facts the system fills in per deal.",
+    messages: [
+      {
+        role: "user",
+        content: [
+          "Convert this contract into a template using ONLY the slots below.",
+          "",
+          "Template language (a Mustache subset):",
+          "  {{slot.path}}                       inserts a value",
+          "  {{#if slot}} … {{else}} … {{/if}}   shows a passage only when the slot is set",
+          "  {{#each list}} {{@index}}. {{field}} {{/each}}   repeats for each item",
+          "Inside {{#each}}, fields are written bare: {{title}}, not {{deliverables.items[].title}}.",
+          "",
+          "Rules:",
+          "- Preserve every word of the legal text. Replace only the specific facts that change per deal: names, addresses, tax IDs, amounts, deliverable descriptions, dates, rates, product names, rights terms.",
+          "- Where the document has a fee clause, a commission clause, or a gifted-product clause, wrap that clause in the matching {{#if}} block (hasFee / commission / product) so it disappears on deals where it does not apply. Do this even if the original document treats it as unconditional.",
+          "- Where the document lists deliverables or payment instalments, replace the list with an {{#each}} over deliverables.items or payments.items, keeping the surrounding wording.",
+          "- Prefer the granular slots when the document has its own wording for a clause; use the composed blocks (deliverables.lines, compensation.lines) only when the document has a bare list with no wording of its own.",
+          "- Never invent a slot that is not in the catalog. If a fact varies per deal and no slot fits, leave the text as written and report it in unmapped.",
+          "- Never add clauses the document does not contain. If a required group (parties, deliverables, compensation) is genuinely absent, say so in notes.",
+          "- Do not translate, reformat or reorder. Keep line breaks and numbering.",
+          "",
+          "Slot catalog:",
+          catalogText,
+          "",
+          `Contract text:\n"""${params.text}"""`,
+        ].join("\n"),
+      },
+    ],
+    output_config: {
+      format: { type: "json_schema", schema: SLOT_PROPOSAL_SCHEMA as unknown as Record<string, unknown> },
+    },
+  });
+
+  if (response.stop_reason === "refusal") {
+    throw new Error("The contract could not be converted (refused).");
+  }
+  const text = finalText(response);
+  if (!text) throw new Error("Empty template proposal.");
+  return {
+    proposal: JSON.parse(text) as SlotProposal,
+    usage: {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+    },
+  };
+}
+
 /**
  * The cheap model that reads documents. Extraction is transcription, not judgement —
  * no negotiation decision is made here, which is what makes moving it down a tier safe.

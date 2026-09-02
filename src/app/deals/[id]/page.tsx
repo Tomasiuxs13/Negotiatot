@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ensurePartnerPortalToken, getCampaign, getContractDraft, getDeal, getFollowUpState, getMessages, getNegotiationStyle, getPartner, getPartnerChannels, getPartnerCommunication, getPartnerDeals, getPartnerReports, getRecordLayout, getPlaybook, getLastRunAt, getRemindersFor, getSetting, getUnitEconomics, getUsageTotals } from "@/lib/db";
+import { ensurePartnerPortalToken, getCampaign, getContractDraft, getDeal, getFollowUpState, getMessages, getNegotiationStyle, getPartner, getPartnerChannels, getPartnerCommunication, getPartnerDeals, getPartnerReports, getRecordLayout, getPlaybook, getLastRunAt, getRemindersFor, getSetting, getUnitEconomics, getUsageTotals, listContractTemplates } from "@/lib/db";
 import ContactStrip from "@/components/deal/ContactStrip";
 import RightsEditor from "@/components/deal/RightsEditor";
 import AttachReportBlock from "@/components/deal/AttachReportBlock";
@@ -666,6 +666,13 @@ export default async function DealPage({
                           const d = getContractDraft(deal.id);
                           return d ? { body: d.body, status: d.status } : null;
                         })()}
+                        templates={listContractTemplates().map((t) => ({
+                          id: t.id,
+                          name: t.name,
+                          isDefault: t.is_default === 1,
+                          incomplete: t.incomplete === 1,
+                        }))}
+                        currentTemplateId={deal.contract_template_id ?? null}
                       />
                       <ContractBlock
                         dealId={deal.id}

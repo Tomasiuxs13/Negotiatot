@@ -11,11 +11,20 @@ import {
 export default function ContractDraftBlock({
   dealId,
   initial,
+  templates = [],
+  currentTemplateId = null,
 }: {
   dealId: number;
   initial: { body: string; status: "draft" | "signed" } | null;
+  /** The company's own templates, from Settings. Empty means only the built-in agreement. */
+  templates?: { id: number; name: string; isDefault: boolean; incomplete: boolean }[];
+  /** The deal's remembered choice; null means whichever is default. */
+  currentTemplateId?: number | null;
 }) {
   const [body, setBody] = useState(initial?.body ?? "");
+  // 0 is the built-in agreement chosen explicitly; null is "the default, whatever it is".
+  const [templateId, setTemplateId] = useState<number | null>(currentTemplateId);
+  const defaultLabel = templates.find((t) => t.isDefault)?.name ?? "Counterpart standard agreement";
   const [status, setStatus] = useState(initial?.status ?? null);
   const [note, setNote] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -39,9 +48,27 @@ export default function ContractDraftBlock({
           Contract draft{status === "signed" && <span className="text-emerald-700 font-normal text-xs"> · marked signed</span>}
         </h3>
         <div className="flex gap-2">
+          {status !== "signed" && templates.length > 0 && (
+            <select
+              value={templateId == null ? "" : String(templateId)}
+              onChange={(e) => setTemplateId(e.target.value === "" ? null : Number(e.target.value))}
+              disabled={isPending}
+              aria-label="Contract template"
+              title="Which agreement to generate from. Set up templates in Settings."
+              className="text-[11px] border border-slate-200 rounded-md px-2 py-1 text-slate-700 bg-white max-w-48"
+            >
+              <option value="">Default · {defaultLabel}</option>
+              <option value="0">Counterpart standard agreement</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id} disabled={t.incomplete}>
+                  {t.name}{t.incomplete ? " (incomplete)" : ""}
+                </option>
+              ))}
+            </select>
+          )}
           {status !== "signed" && (
             <button
-              onClick={() => run(() => generateContractDraftAction(dealId), () => setStatus("draft"))}
+              onClick={() => run(() => generateContractDraftAction(dealId, templateId), () => setStatus("draft"))}
               disabled={isPending}
               className="text-xs font-semibold text-brand-dark hover:underline disabled:opacity-50"
             >

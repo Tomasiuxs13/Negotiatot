@@ -1,23 +1,12 @@
 import "server-only";
 
-import {
-  getBrandProfile,
-  getContractDraft,
-  getDeal,
-  getPartner,
-  getSetting,
-  getUnitEconomics,
-  saveContractDraft,
-} from "./db";
-import { resolveOffer } from "./commission";
+import { getContractDraft, getDeal, getSetting, saveContractDraft } from "./db";
 import { provisionalDeliverables } from "./deliverables";
-import { generateContractText } from "./contract-template";
+import { buildContractDraft } from "./contract-draft";
 import {
   createContentItem,
   DEFAULT_ONBOARDING,
   getContentItems,
-  getPaymentItems,
-  getShipments,
   seedOnboarding,
   type OnboardingTemplateStep,
 } from "./fulfillment";
@@ -71,22 +60,9 @@ export function prepareAgreedDeal(dealId: number): AgreementPreparation {
 
   let contractDraftCreated = false;
   if (!getContractDraft(deal.id)) {
-    const brand = getBrandProfile();
-    saveContractDraft(
-      deal.id,
-      generateContractText({
-        deal,
-        partner: deal.partner_id != null ? (getPartner(deal.partner_id) ?? null) : null,
-        items: getContentItems(deal.id),
-        payments: getPaymentItems(deal.id),
-        brand,
-        // Resolved, not read off the deal row: most deals carry no commission columns
-        // and run on the Playbook's standard offer, which is also what the pricing
-        // used. A contract silent on it would contradict the deal that was agreed.
-        commission: resolveOffer(deal, getUnitEconomics()).commission,
-        shipments: getShipments(deal.id),
-      })
-    );
+    // Content items were just created above, so the draft lists them rather than the
+    // bare scope line. Re-read the deal for the same reason.
+    saveContractDraft(deal.id, buildContractDraft(getDeal(deal.id) ?? deal));
     contractDraftCreated = true;
   }
 

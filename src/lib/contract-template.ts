@@ -4,6 +4,8 @@ import type { Commission } from "./commission";
 import type { ContentItem, PaymentItem, Shipment } from "./fulfillment-types";
 import type { Partner } from "./partners";
 import { money } from "./format";
+import { PLATFORM_META } from "./types";
+import { renderTemplate, type SlotValue } from "./contract-slots";
 
 /**
  * Attribution and payout terms for commission. Written down here rather than left to
@@ -33,36 +35,18 @@ export function compensationClauses(params: {
   const hasCashFee = payments.length > 0 || (agreedPrice != null && agreedPrice > 0);
   if (payments.length > 0) {
     for (const p of payments) {
-      items.push(
-        `${money(p.amount)} — ${p.description}${
-          p.required_verified != null
-            ? ` (payable after ${p.required_verified} deliverables are live and verified)`
-            : ""
-        }`
-      );
+      items.push(`${money(p.amount)} — ${p.description}${paymentCondition(p)}`);
     }
   } else if (agreedPrice != null && agreedPrice > 0) {
     items.push(`Fixed fee: ${money(agreedPrice)}`);
   }
 
-  if (commission && commission.type !== "none" && commission.value > 0) {
-    const rate =
-      commission.type === "percent"
-        ? `${commission.value}% of net sales`
-        : `${money(commission.value)} per order`;
-    items.push(
-      `Commission: ${rate} attributed to the Creator's tracked link or discount code. ` +
-        `Attribution window: ${COMMISSION_ATTRIBUTION_DAYS} days from click. Net sales ` +
-        `exclude tax, shipping, refunds and cancellations. Paid monthly in arrears, ` +
-        `within 30 days of month end.`
-    );
-  }
+  const commissionText = commissionClause(commission);
+  if (commissionText) items.push(commissionText);
 
   for (const s of shipments) {
     items.push(
-      `Gifted product: ${s.product}${
-        s.value != null && s.value > 0 ? ` (retail value ${money(s.value)})` : ""
-      } — supplied by Brand at no charge to the Creator, for use in the deliverables above.`
+      `Gifted product: ${productSummary(s)} — supplied by Brand at no charge to the Creator, for use in the deliverables above.`
     );
   }
 
@@ -77,12 +61,33 @@ export function compensationClauses(params: {
   return { lines: items.map((t, i) => `  2.${i + 1} ${t}`), hasCashFee };
 }
 
-/**
- * A working draft, not legal advice: generated deterministically from the negotiated
- * terms so it appears instantly, then edited freely in the platform until marked
- * signed. The signed original still arrives through the upload-and-parse flow.
- */
-export function generateContractText(params: {
+function paymentCondition(p: PaymentItem): string {
+  return p.required_verified != null
+    ? ` (payable after ${p.required_verified} deliverables are live and verified)`
+    : "";
+}
+
+function commissionRate(commission: Commission): string {
+  return commission.type === "percent"
+    ? `${commission.value}% of net sales`
+    : `${money(commission.value)} per order`;
+}
+
+function commissionClause(commission: Commission | null): string | null {
+  if (!commission || commission.type === "none" || commission.value <= 0) return null;
+  return (
+    `Commission: ${commissionRate(commission)} attributed to the Creator's tracked link or discount code. ` +
+    `Attribution window: ${COMMISSION_ATTRIBUTION_DAYS} days from click. Net sales ` +
+    `exclude tax, shipping, refunds and cancellations. Paid monthly in arrears, ` +
+    `within 30 days of month end.`
+  );
+}
+
+function productSummary(s: Pick<Shipment, "product" | "value">): string {
+  return `${s.product}${s.value != null && s.value > 0 ? ` (retail value ${money(s.value)})` : ""}`;
+}
+
+export interface ContractInputs {
   deal: Deal;
   partner: Partner | null;
   items: ContentItem[];
@@ -96,47 +101,150 @@ export function generateContractText(params: {
   commission?: Commission | null;
   /** Product being sent, so a gifted deal states what the creator receives. */
   shipments?: Pick<Shipment, "product" | "value">[];
-}): string {
+  /** Fixed for tests; defaults to today. */
+  today?: string;
+}
+
+/**
+ * Everything a template may say about a deal, computed once. The slot catalog in
+ * contract-slots.ts documents each field; the two must agree, and the test suite holds
+ * them to it.
+ */
+export function contractContext(params: ContractInputs): Record<string, SlotValue> {
   const { deal, partner, items, payments, brand } = params;
-  const creatorParty = partner?.company_name
-    ? `${partner.company_name}${partner?.legal_name ? `, represented by ${partner.legal_name}` : ""}`
-    : partner?.legal_name || deal.creator;
+  const commission =
+    params.commission && params.commission.type !== "none" && params.commission.value > 0
+      ? params.commission
+      : null;
+  const shipments = params.shipments ?? [];
   const compensation = compensationClauses({
     agreedPrice: deal.agreed_price,
     payments,
-    commission: params.commission ?? null,
-    shipments: params.shipments ?? [],
+    commission,
+    shipments,
   });
-  const lines: string[] = [
-    `INFLUENCER COLLABORATION AGREEMENT`,
-    ``,
-    `Between: ${brand.brandName || "[Brand legal name]"} ("Brand")`,
-    `And: ${creatorParty} ("Creator")${partner?.tax_id ? ` · Tax ID: ${partner.tax_id}` : ""}`,
-    partner?.legal_address ? `Creator address: ${partner.legal_address}` : `Creator address: [to be filled — request via the partner portal]`,
-    ``,
-    `1. DELIVERABLES`,
-    ...(items.length > 0
+
+  const creatorParty = partner?.company_name
+    ? `${partner.company_name}${partner?.legal_name ? `, represented by ${partner.legal_name}` : ""}`
+    : partner?.legal_name || deal.creator;
+
+  const scope = deal.deliverables ?? deal.format ?? null;
+  const deliverableLines =
+    items.length > 0
       ? items.map((c, i) => `  1.${i + 1} ${c.title}${c.due_date ? ` — publish by ${c.due_date}` : ""}`)
-      : [`  1.1 ${deal.deliverables ?? deal.format ?? "[deliverables]"}`]),
-    ``,
-    `2. COMPENSATION`,
-    ...compensation.lines,
-    // Net-30 from invoice describes a cash fee. On a commission-only deal there is no
-    // invoice to count from, and the payout date is already in the commission clause.
-    ...(compensation.hasCashFee ? [`  Payment terms: Net-30 from invoice.`] : []),
-    ``,
-    `3. REVIEW & APPROVAL`,
-    `  Draft submitted at least 10 days before each publish date; Brand responds within`,
-    `  48 hours; maximum two revision rounds. Content goes live only in its approved form.`,
-    ``,
-    `4. TRACKING`,
-    `  All links and codes provided by Brand must be used as supplied.`,
-    ``,
-    `5. USAGE RIGHTS & EXCLUSIVITY`,
-    `  ${rightsContractClause(parseRights(deal.rights))}`,
-    ``,
-    `Signed for the Brand: ____________________  Date: ________`,
-    `Signed by the Creator: ____________________  Date: ________`,
-  ];
-  return lines.join("\n");
+      : [`  1.1 ${scope ?? "[deliverables]"}`];
+
+  const platforms = (() => {
+    try {
+      const list = JSON.parse(deal.platforms ?? "[]") as string[];
+      return list.map((p) => PLATFORM_META[p as keyof typeof PLATFORM_META]?.label ?? p);
+    } catch {
+      return [];
+    }
+  })();
+
+  return {
+    brand: {
+      name: brand.brandName || "[Brand legal name]",
+      signatory: brand.senderName || "",
+      product: brand.productName || "",
+    },
+    creator: {
+      party: creatorParty,
+      legalName: partner?.legal_name ?? "",
+      companyName: partner?.company_name ?? "",
+      handle: deal.creator,
+      email: partner?.email ?? "",
+      taxId: partner?.tax_id ?? "",
+      address: partner?.legal_address || "[to be filled — request via the partner portal]",
+    },
+    deliverables: {
+      lines: deliverableLines.join("\n"),
+      text: scope ?? "[deliverables]",
+      count: items.length > 0 ? items.length : 0,
+      items: items.map((c) => ({
+        title: c.title,
+        platform: c.platform ?? "",
+        dueDate: c.due_date ?? "",
+      })),
+    },
+    platforms: platforms.join(", "),
+    compensation: { lines: compensation.lines.join("\n") },
+    fee: deal.agreed_price != null && deal.agreed_price > 0 ? money(deal.agreed_price) : "",
+    hasFee: compensation.hasCashFee,
+    payments: {
+      items: payments.map((p) => ({
+        amount: money(p.amount),
+        description: p.description,
+        condition: paymentCondition(p).replace(/^ \(|\)$/g, ""),
+      })),
+    },
+    commission: commission
+      ? {
+          rate: commissionRate(commission),
+          attributionDays: COMMISSION_ATTRIBUTION_DAYS,
+          clause: commissionClause(commission) ?? "",
+        }
+      : null,
+    product:
+      shipments.length > 0
+        ? {
+            items: shipments.map((s) => ({
+              name: s.product,
+              value: s.value != null && s.value > 0 ? money(s.value) : "",
+            })),
+            summary: shipments.map(productSummary).join(", "),
+          }
+        : null,
+    rights: { clause: rightsContractClause(parseRights(deal.rights)) },
+    today: params.today ?? new Date().toISOString().slice(0, 10),
+  };
+}
+
+/**
+ * Counterpart's own agreement, written in the same slot language a company's template
+ * uses. That is deliberate: if this vocabulary can express a fee deal, a commission-only
+ * deal and a gifted one here, it can express them in someone else's wording too, and a
+ * gap in the vocabulary shows up in our template first.
+ */
+export const DEFAULT_CONTRACT_TEMPLATE = `INFLUENCER COLLABORATION AGREEMENT
+
+Between: {{brand.name}} ("Brand")
+And: {{creator.party}} ("Creator"){{#if creator.taxId}} · Tax ID: {{creator.taxId}}{{/if}}
+Creator address: {{creator.address}}
+
+1. DELIVERABLES
+{{deliverables.lines}}
+
+2. COMPENSATION
+{{compensation.lines}}
+{{#if hasFee}}
+  Payment terms: Net-30 from invoice.
+{{/if}}
+
+3. REVIEW & APPROVAL
+  Draft submitted at least 10 days before each publish date; Brand responds within
+  48 hours; maximum two revision rounds. Content goes live only in its approved form.
+
+4. TRACKING
+  All links and codes provided by Brand must be used as supplied.
+
+5. USAGE RIGHTS & EXCLUSIVITY
+  {{rights.clause}}
+
+Signed for the Brand: ____________________  Date: ________
+Signed by the Creator: ____________________  Date: ________
+`;
+
+/**
+ * A working draft, not legal advice: generated deterministically from the negotiated
+ * terms so it appears instantly, then edited freely in the platform until marked
+ * signed. The signed original still arrives through the upload-and-parse flow.
+ *
+ * `templateBody` is a company's own template in slot form; without one the built-in
+ * agreement is used.
+ */
+export function generateContractText(params: ContractInputs & { templateBody?: string | null }): string {
+  const body = params.templateBody?.trim() ? params.templateBody : DEFAULT_CONTRACT_TEMPLATE;
+  return renderTemplate(body, contractContext(params)).replace(/\n+$/, "");
 }

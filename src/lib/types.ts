@@ -132,6 +132,8 @@ export interface Deal {
   engagement_rate: number | null;
   /** When outreach actually went out; updated_at moves on every edit and can't answer this. */
   contacted_at?: string | null;
+  /** Contract template the draft is generated from; null means the default. */
+  contract_template_id?: number | null;
   /** When the deal was won; monthly KPIs key on this, never on updated_at. */
   agreed_at?: string | null;
   /** 1 when the manager set the audience figures by hand; re-runs must not overwrite them. */

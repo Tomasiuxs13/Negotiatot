@@ -154,6 +154,9 @@ CREATE TABLE IF NOT EXISTS usage_log (
     db.exec("ALTER TABLE deals ADD COLUMN commission_type TEXT");
   if (!cols.includes("commission_value"))
     db.exec("ALTER TABLE deals ADD COLUMN commission_value REAL");
+  // Which contract template this deal's draft is generated from; NULL means the default.
+  if (!cols.includes("contract_template_id"))
+    db.exec("ALTER TABLE deals ADD COLUMN contract_template_id INTEGER");
   // The coupon the audience gets — its cost lands on us, so it belongs on the deal.
   if (!cols.includes("discount_type")) db.exec("ALTER TABLE deals ADD COLUMN discount_type TEXT");
   if (!cols.includes("discount_value"))
@@ -571,6 +574,20 @@ CREATE TABLE IF NOT EXISTS usage_log (
     status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','signed')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  // A company's own agreement with the variable parts marked as slots (contract-slots.ts).
+  // `incomplete` records that the template cannot state one of the required groups —
+  // parties, deliverables, compensation — so it can be saved and worked on but is
+  // flagged wherever it is offered. The built-in agreement is not a row here; it is
+  // the fallback whenever no template is chosen or set as default.
+  db.exec(`CREATE TABLE IF NOT EXISTS contract_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    body TEXT NOT NULL,
+    is_default INTEGER NOT NULL DEFAULT 0,
+    incomplete INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
   // "50% after half the videos": how many linked content items must be verified before
   // an on_verification payment unlocks. NULL means all of them.
@@ -1886,6 +1903,67 @@ export function markContractDraftSigned(dealId: number): boolean {
   return r.changes > 0;
 }
 
+export interface ContractTemplate {
+  id: number;
+  name: string;
+  body: string;
+  is_default: 0 | 1;
+  incomplete: 0 | 1;
+  created_at: string;
+  updated_at: string;
+}
+
+export function listContractTemplates(): ContractTemplate[] {
+  return db
+    .prepare("SELECT * FROM contract_templates ORDER BY is_default DESC, name COLLATE NOCASE")
+    .all() as ContractTemplate[];
+}
+
+export function getContractTemplate(id: number): ContractTemplate | undefined {
+  return db.prepare("SELECT * FROM contract_templates WHERE id = ?").get(id) as ContractTemplate | undefined;
+}
+
+/** The template used when a deal has not chosen one; undefined means the built-in agreement. */
+export function getDefaultContractTemplate(): ContractTemplate | undefined {
+  return db.prepare("SELECT * FROM contract_templates WHERE is_default = 1 LIMIT 1").get() as
+    | ContractTemplate
+    | undefined;
+}
+
+export function saveContractTemplate(t: {
+  id?: number | null;
+  name: string;
+  body: string;
+  incomplete: boolean;
+}): ContractTemplate {
+  if (t.id) {
+    db.prepare(
+      "UPDATE contract_templates SET name = ?, body = ?, incomplete = ?, updated_at = datetime('now') WHERE id = ?"
+    ).run(t.name, t.body, t.incomplete ? 1 : 0, t.id);
+    return getContractTemplate(t.id)!;
+  }
+  const r = db
+    .prepare("INSERT INTO contract_templates (name, body, incomplete) VALUES (?, ?, ?)")
+    .run(t.name, t.body, t.incomplete ? 1 : 0);
+  return getContractTemplate(Number(r.lastInsertRowid))!;
+}
+
+/** Deals pointing at the deleted template fall back to the default; nothing is orphaned. */
+export function deleteContractTemplate(id: number): void {
+  inTransaction(() => {
+    db.prepare("UPDATE deals SET contract_template_id = NULL WHERE contract_template_id = ?").run(id);
+    db.prepare("DELETE FROM contract_templates WHERE id = ?").run(id);
+  });
+}
+
+/** Null clears the default so the built-in agreement is used again. */
+export function setDefaultContractTemplate(id: number | null): void {
+  inTransaction(() => {
+    db.prepare("UPDATE contract_templates SET is_default = 0").run();
+    if (id != null) db.prepare("UPDATE contract_templates SET is_default = 1 WHERE id = ?").run(id);
+  });
+}
+
 export function savePartnerLegalDetails(
   partnerId: number,
   f: { legalName: string; companyName: string; taxId: string; legalAddress: string }
@@ -2232,7 +2310,7 @@ export function clearJob(dealId: number, error?: string) {
 
 export function logUsage(
   dealId: number | null,
-  kind: "analysis" | "recommendation" | "brief" | "integration_check" | "extraction" | "rewrite",
+  kind: "analysis" | "recommendation" | "brief" | "integration_check" | "extraction" | "rewrite" | "contract_template",
   model: string,
   inputTokens: number,
   outputTokens: number,
@@ -2516,7 +2594,7 @@ export function updateDeal(dealId: number, fields: Record<string, unknown>) {
     "job_status", "job_error", "job_started_at",
     "partner_id", "campaign_id", "deal_type",
     "decline_reason", "decline_note", "declined_at", "revisit_on",
-    "commission_type", "commission_value", "discount_type", "discount_value",
+    "commission_type", "commission_value", "discount_type", "discount_value", "contract_template_id",
   ];
   const keys = Object.keys(fields).filter((k) => allowed.includes(k));
   if (keys.length === 0) return;

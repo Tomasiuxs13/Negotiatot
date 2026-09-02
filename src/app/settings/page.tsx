@@ -1,8 +1,10 @@
 import PageHeader from "@/components/PageHeader";
-import { getCreatorCategories, getDeals, getPartners, getRecordLayout, getUsageTotals } from "@/lib/db";
+import { getCreatorCategories, getDeals, getPartners, getRecordLayout, getUsageTotals, listContractTemplates } from "@/lib/db";
 import { hasApiKey, MODEL } from "@/lib/claude";
 import { usageCostUsd, totalTokens } from "@/lib/usage-cost";
 import ApiAccessBlock from "@/components/settings/ApiAccessBlock";
+import ContractTemplatesBlock from "@/components/settings/ContractTemplatesBlock";
+import { DEFAULT_CONTRACT_TEMPLATE } from "@/lib/contract-template";
 import CreatorCategoriesBlock from "@/components/settings/CreatorCategoriesBlock";
 import RecordLayoutBlock from "@/components/settings/RecordLayoutBlock";
 import { categoryUsage } from "@/lib/categories";
@@ -29,7 +31,13 @@ export default async function SettingsPage({
   const gmail = gmailSetupStatus(`${protocol}://${host}`);
   const gmailConnection = getGmailConnectionSummary();
   const keyConfigured = hasApiKey();
-  const dealCount = getDeals().length;
+  const deals = getDeals();
+  const dealCount = deals.length;
+  // Agreed deals first — a contract is judged on the deals it will actually be used for.
+  const sampleDeals = [...deals]
+    .sort((a, b) => (a.stage === "agreed" ? -1 : b.stage === "agreed" ? 1 : 0))
+    .slice(0, 12)
+    .map((d) => ({ id: d.id, creator: d.creator }));
   const usage = getUsageTotals();
   const categories = getCreatorCategories();
   const categoryCounts = categoryUsage(categories, getPartners().map((p) => p.category));
@@ -92,6 +100,12 @@ export default async function SettingsPage({
           />
           <RecordLayoutBlock current={getRecordLayout()} />
           <CreatorCategoriesBlock categories={categories} usage={categoryCounts} />
+          <ContractTemplatesBlock
+            templates={listContractTemplates()}
+            builtinBody={DEFAULT_CONTRACT_TEMPLATE}
+            sampleDeals={sampleDeals}
+            apiConfigured={keyConfigured}
+          />
           <ApiAccessBlock currentKey={getSetting<string>("api_key")} />
         </div>
       </main>

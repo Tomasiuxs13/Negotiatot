@@ -5,11 +5,8 @@ import { hasRights, parseRights, type DealRights } from "@/lib/rights";
 import { fileReportAgainstPartner, readReportFile } from "@/lib/report-upload";
 import { dependentCopilotIds, repairThread } from "@/lib/thread-repair";
 import { after } from "next/server";
-import { addMessage, clearFollowUpState, deleteMessage, getContractDraft, getDeal, getMessage, getMessages, getPartner, markContractDraftSigned, saveContractDraft, setJob, updateDeal, upsertPartnerChannel, getUnitEconomics } from "@/lib/db";
-import { getContentItems, getPaymentItems, getShipments } from "@/lib/fulfillment";
-import { generateContractText } from "@/lib/contract-template";
-import { getBrandProfile } from "@/lib/db";
-import { resolveOffer } from "@/lib/commission";
+import { addMessage, clearFollowUpState, deleteMessage, getContractDraft, getDeal, getMessage, getMessages, markContractDraftSigned, saveContractDraft, setJob, updateDeal, upsertPartnerChannel, getUnitEconomics } from "@/lib/db";
+import { buildContractDraft } from "@/lib/contract-draft";
 import { hasApiKey } from "@/lib/claude";
 import { performAnalysis, performRecommendation, platformsOf } from "@/lib/engine";
 import { recommendationGuardError } from "@/lib/recommendation-guard";
@@ -352,22 +349,21 @@ export async function saveDealNotesAction(dealId: number, notes: string) {
   return {};
 }
 
-export async function generateContractDraftAction(dealId: number) {
+/**
+ * `templateId` picks a company template for this deal and remembers the choice, so a
+ * later regenerate uses the same one. Omitted: the deal's remembered choice, else the
+ * default, else the built-in agreement. Null explicitly clears the choice.
+ */
+export async function generateContractDraftAction(dealId: number, templateId?: number | null) {
   const deal = getDeal(dealId);
   if (!deal) return { error: "Deal not found" };
   const existing = getContractDraft(dealId);
   if (existing?.status === "signed") return { error: "The contract is marked signed — it can't be regenerated." };
-  const body = generateContractText({
-    deal,
-    partner: deal.partner_id != null ? (getPartner(deal.partner_id) ?? null) : null,
-    items: getContentItems(dealId),
-    payments: getPaymentItems(dealId),
-    // getBrandProfile, not the raw setting: the raw row omits every default, so a brand
-    // that never opened Settings produced a contract headed "[Brand legal name]".
-    brand: getBrandProfile(),
-    commission: resolveOffer(deal, getUnitEconomics()).commission,
-    shipments: getShipments(dealId),
-  });
+  if (templateId !== undefined && templateId !== (deal.contract_template_id ?? null)) {
+    updateDeal(dealId, { contract_template_id: templateId });
+    deal.contract_template_id = templateId;
+  }
+  const body = buildContractDraft(deal, templateId);
   saveContractDraft(dealId, body);
   revalidatePath(`/deals/${dealId}`);
   return { body };
