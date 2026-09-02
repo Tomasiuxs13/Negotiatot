@@ -18,7 +18,7 @@ import {
   type ExtensionPartnerCandidate,
 } from "./extension-context";
 import { normalizeEmail } from "./creator-identity";
-import { TERMINAL_STAGES } from "./types";
+import { TERMINAL_STAGES, isOpenStage } from "./types";
 
 export function extensionContacts(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -48,8 +48,7 @@ export function gmailExtensionDealOptions(rawQuery: unknown): ExtensionDealOptio
     .filter(
       (deal) =>
         deal.partner_id != null &&
-        deal.stage !== "agreed" &&
-        !TERMINAL_STAGES.includes(deal.stage)
+        isOpenStage(deal.stage)
     )
     .map((deal): ExtensionDealOption | null => {
       const partner = partners.get(deal.partner_id!);
@@ -109,8 +108,7 @@ export function gmailExtensionContext(
     linkedDeal &&
     linkedPartner &&
     linkedDeal.partner_id === linkedPartner.id &&
-    linkedDeal.stage !== "agreed" &&
-    !TERMINAL_STAGES.includes(linkedDeal.stage)
+    isOpenStage(linkedDeal.stage)
       ? { link, deal: linkedDeal, partner: linkedPartner }
       : null;
 

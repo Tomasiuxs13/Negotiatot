@@ -5,10 +5,14 @@ export const ALL_PLATFORMS: Platform[] = ["youtube", "instagram", "tiktok", "fac
 export type Stage =
   | "lead"
   | "contacted"
+  /** They answered. Not yet priced, so no decision is waiting on you. */
+  | "in_contact"
   | "analyzing"
   | "offer_sent"
   | "negotiating"
   | "agreed"
+  /** Signed and in delivery: the contract is confirmed and the work is running. */
+  | "active"
   | "completed"
   | "declined";
 
@@ -16,13 +20,48 @@ export type Stage =
 export const ALL_STAGES: Stage[] = [
   "lead",
   "contacted",
+  "in_contact",
   "analyzing",
   "offer_sent",
   "negotiating",
   "agreed",
+  "active",
   "completed",
   "declined",
 ];
+
+/**
+ * Stage questions, asked once.
+ *
+ * Adding "active" meant twenty-odd `stage === "agreed"` checks scattered through
+ * attention, approvals, partners and outcomes would each have silently skipped a deal
+ * the moment it entered delivery — a dashboard item that stops appearing, a deal missing
+ * from the win rate. These predicates are the single place that knows, so a future stage
+ * is one edit rather than a hunt.
+ */
+
+/** The deal was won. Agreed, in delivery, or finished — all of it is booked business. */
+export function isWonStage(stage: Stage): boolean {
+  return stage === "agreed" || stage === "active" || stage === "completed";
+}
+
+/**
+ * There is live delivery work: onboarding, shipping, content, payments. Excludes
+ * completed, where the work is done, and is what fulfillment checks should ask.
+ */
+export function isDeliveringStage(stage: Stage): boolean {
+  return stage === "agreed" || stage === "active";
+}
+
+/** Nothing more will happen here on its own. */
+export function isTerminalStage(stage: Stage): boolean {
+  return stage === "completed" || stage === "declined";
+}
+
+/** Still moving: not won, not lost. */
+export function isOpenStage(stage: Stage): boolean {
+  return !isWonStage(stage) && stage !== "declined";
+}
 
 /** Deals that are finished — excluded from the working pipeline and active counts. */
 export const TERMINAL_STAGES: Stage[] = ["completed", "declined"];
@@ -34,10 +73,12 @@ export const TERMINAL_STAGES: Stage[] = ["completed", "declined"];
 export const STAGE_LABELS: Record<Stage, string> = {
   lead: "Lead",
   contacted: "Contacted",
+  in_contact: "In contact",
   analyzing: "To review",
   offer_sent: "Offer Sent",
   negotiating: "Negotiating",
   agreed: "Agreed",
+  active: "Active",
   completed: "Completed",
   declined: "Declined",
 };
@@ -55,7 +96,11 @@ export const STAGE_HELP: Record<Stage, { description: string; next: string }> = 
   },
   contacted: {
     description: "Outreach sent; waiting for a response.",
-    next: "Add their reply or start analysis.",
+    next: "Log their reply when it arrives.",
+  },
+  in_contact: {
+    description: "They replied. Nothing is priced yet.",
+    next: "Run the analysis to price it, then decide.",
   },
   analyzing: {
     description: "Evidence and pricing are ready for a decision.",
@@ -70,8 +115,12 @@ export const STAGE_HELP: Record<Stage, { description: string; next: string }> = 
     next: "Record each reply or mark terms agreed.",
   },
   agreed: {
-    description: "Terms are final; delivery is in progress.",
-    next: "Finish paperwork, content, and payment.",
+    description: "Terms are final; the contract is not confirmed yet.",
+    next: "Confirm the signed contract to start delivery.",
+  },
+  active: {
+    description: "Signed and running — delivery is in progress.",
+    next: "Finish content, product and payment, then complete it.",
   },
   completed: {
     description: "Everything is delivered and paid.",
@@ -224,15 +273,28 @@ export interface CopilotReco {
   approvedOverride?: number;
 }
 
+/**
+ * The working pipeline, in order — board columns and the card's "Move to" list.
+ *
+ * Declined is deliberately absent: it is a real stage, but reaching it must capture a
+ * reason, so it is entered through the decline dialog rather than by picking it from a
+ * list. The board renders it as its own column beside these.
+ */
 export const STAGES: { key: Stage; label: string }[] = [
   { key: "lead", label: "Lead" },
   { key: "contacted", label: "Contacted" },
+  // They answered but nothing is priced yet — the deal is alive without a decision
+  // waiting on anyone.
+  { key: "in_contact", label: "In contact" },
   // Named for the human's job, not the machine's: once analysis lands, the deal is
   // sitting there waiting on a decision.
   { key: "analyzing", label: "To review" },
   { key: "offer_sent", label: "Offer Sent" },
   { key: "negotiating", label: "Negotiating" },
   { key: "agreed", label: "Agreed" },
+  // Signed and running. Separated from Agreed because "we shook hands" and "they are
+  // filming and we owe them money" are different questions to ask of a board.
+  { key: "active", label: "Active" },
   { key: "completed", label: "Completed" },
 ];
 

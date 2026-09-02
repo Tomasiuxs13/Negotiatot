@@ -8,6 +8,22 @@ import DealCard from "./DealCard";
 import { moveDealStage } from "@/app/pipeline-actions";
 
 const COMPLETED_PREVIEW = 5;
+/** Declines accumulate forever; the column is a glance, the list is the record. */
+const DECLINED_PREVIEW = 10;
+
+/**
+ * The board's columns: the working pipeline, plus Declined at the end.
+ *
+ * Declined is not in STAGES because that list is also the card's "Move to" menu, and
+ * reaching Declined has to capture a reason. It gets a column so a lost deal is visible
+ * where you work rather than only behind a link, but the column is deliberately NOT a
+ * drop target — dropping a card there would decline it with no reason recorded, which is
+ * the one thing the decline dialog exists to prevent.
+ */
+const BOARD_COLUMNS: { key: Stage; label: string }[] = [
+  ...STAGES,
+  { key: "declined", label: "Declined" },
+];
 
 export default function PipelineBoard({
   deals,
@@ -62,24 +78,32 @@ export default function PipelineBoard({
         </div>
       )}
       <div className="flex h-[calc(100vh-310px)] min-h-[480px] gap-3 pb-4">
-      {STAGES.map((stage) => {
+      {BOARD_COLUMNS.map((stage) => {
         const stageDeals = items.filter((d) => d.stage === stage.key);
         const isOver = overStage === stage.key;
         // Completed deals stay droppable but don't pile up forever — the column shows the
         // most recent few and sends you to the list for the rest.
-        const capped = stage.key === "completed" && stageDeals.length > COMPLETED_PREVIEW;
-        const visible = capped ? stageDeals.slice(0, COMPLETED_PREVIEW) : stageDeals;
+        const droppable = stage.key !== "declined";
+        const preview =
+          stage.key === "completed"
+            ? COMPLETED_PREVIEW
+            : stage.key === "declined"
+              ? DECLINED_PREVIEW
+              : null;
+        const capped = preview != null && stageDeals.length > preview;
+        const visible = capped ? stageDeals.slice(0, preview) : stageDeals;
         return (
           <div
             key={stage.key}
             onDragOver={(e) => {
+              if (!droppable) return;
               e.preventDefault();
               if (overStage !== stage.key) setOverStage(stage.key);
             }}
             onDragLeave={(e) => {
               if (!e.currentTarget.contains(e.relatedTarget as Node)) setOverStage(null);
             }}
-            onDrop={() => onDrop(stage.key)}
+            onDrop={() => droppable && onDrop(stage.key)}
             className={`flex-1 min-w-64 flex flex-col rounded-xl p-2 border transition-colors ${
               isOver
                 ? "bg-brand/5 border-brand/40"
@@ -133,7 +157,9 @@ export default function PipelineBoard({
                   href={`/pipeline?view=list&stage=${stage.key}`}
                   className="block text-xs text-slate-500 hover:text-slate-800 text-center py-2 border border-dashed border-slate-200 rounded-lg"
                 >
-                  View all {stageDeals.length} completed →
+                  {stage.key === "declined"
+                    ? `View all ${stageDeals.length} with reasons →`
+                    : `View all ${stageDeals.length} completed →`}
                 </a>
               )}
               {stageDeals.length === 0 && (

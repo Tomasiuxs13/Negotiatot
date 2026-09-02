@@ -1,4 +1,5 @@
 import type { Stage } from "./types";
+import { isOpenStage } from "./types";
 
 /**
  * Where a deal lands after something real happens to it.
@@ -22,7 +23,7 @@ import type { Stage } from "./types";
 
 /** After Agreed a stage is a record, not a step — those never move from here. */
 function settled(stage: Stage): boolean {
-  return stage === "agreed" || stage === "completed" || stage === "declined";
+  return !isOpenStage(stage);
 }
 
 /** Our number is out. Sent from any pre-offer stage, that is what Offer sent means. */
@@ -39,5 +40,30 @@ export function stageAfterOffer(stage: Stage): Stage {
 export function stageAfterTheirReply(stage: Stage, hasOurOffer: boolean): Stage {
   if (settled(stage)) return stage;
   if (stage === "offer_sent" || stage === "negotiating") return "negotiating";
-  return hasOurOffer ? "negotiating" : "analyzing";
+  // Their first reply lands in "In contact", not "To review": they have answered, but
+  // nothing is priced, so no decision is waiting on the manager yet. "To review" used to
+  // absorb both and so claimed a decision was ready when it was not.
+  return hasOurOffer ? "negotiating" : "in_contact";
+}
+
+/**
+ * Pricing lands. This is the one place a tool moves a deal, and it is what makes
+ * "To review" mean what it says: evidence and a price exist, and the next move is the
+ * manager's. A deal already past pricing is left alone — re-running the analysis on a
+ * live negotiation must not drag it backwards.
+ */
+export function stageAfterAnalysis(stage: Stage): Stage {
+  if (settled(stage)) return stage;
+  return stage === "lead" || stage === "contacted" || stage === "in_contact"
+    ? "analyzing"
+    : stage;
+}
+
+/**
+ * The signed contract is confirmed, so delivery obligations are real and dated. That is
+ * the moment Agreed becomes Active — "we shook hands" and "they are filming and we owe
+ * them money" are different questions to ask of a board.
+ */
+export function stageAfterContractConfirmed(stage: Stage): Stage {
+  return stage === "agreed" ? "active" : stage;
 }

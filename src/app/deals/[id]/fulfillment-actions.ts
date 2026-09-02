@@ -22,6 +22,7 @@ import { dealPlatforms } from "@/lib/types";
 import { canAdvanceContent, canManageFulfillment, isHttpUrl } from "@/lib/lifecycle";
 import { parseCheck, parseRequirements, verificationBlocker } from "@/lib/brief-requirements";
 import { saveFile, deleteFile } from "@/lib/files";
+import { stageAfterContractConfirmed } from "@/lib/stage-advance";
 import {
   confirmContract,
   createContentItem,
@@ -279,6 +280,21 @@ export async function confirmContractAction(
   }
 
   confirmContract(contractId, terms, signedAt);
+  // Delivery obligations are now real and dated, which is what Active means. Guarded by
+  // stageAfterContractConfirmed so re-confirming a completed deal cannot reopen it.
+  {
+    const current = getDeal(contract.deal_id);
+    if (current) {
+      const next = stageAfterContractConfirmed(current.stage);
+      if (next !== current.stage) {
+        updateDeal(current.id, {
+          stage: next,
+          status_label: "Active · in delivery",
+          status_tone: "good",
+        });
+      }
+    }
+  }
   updateDeal(dealId, {
     // Completed deals were rejected above; confirming an active contract records the win.
     stage: "agreed",

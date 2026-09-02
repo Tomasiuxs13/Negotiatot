@@ -37,10 +37,12 @@ export const TONE_CLASS_BORDERED: Record<StatusTone, string> = {
 export const DEAL_STAGE_TONE: Record<Stage, StatusTone> = {
   lead: "neutral",
   contacted: "neutral",
+  in_contact: "neutral", // they answered; nothing is waiting on the manager yet
   analyzing: "action", // labeled "To review" — it is waiting on the manager
   offer_sent: "active",
   negotiating: "active", // the your-move flag, not the stage, says when it needs you
   agreed: "done",
+  active: "active", // signed and running — live work, not a finished record
   completed: "done",
   declined: "problem",
 };

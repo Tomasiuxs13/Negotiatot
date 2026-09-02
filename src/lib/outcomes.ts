@@ -1,4 +1,5 @@
 import type { Deal, DeclineReason } from "./types";
+import { isOpenStage, isWonStage } from "./types";
 import { DECLINE_REASON_LABEL } from "./types";
 
 export interface Outcomes {
@@ -20,11 +21,9 @@ export interface Outcomes {
  * you nothing.
  */
 export function outcomes(deals: Deal[]): Outcomes {
-  const won = deals.filter((d) => d.stage === "agreed" || d.stage === "completed");
+  const won = deals.filter((d) => isWonStage(d.stage));
   const lost = deals.filter((d) => d.stage === "declined");
-  const open = deals.filter(
-    (d) => !["agreed", "completed", "declined"].includes(d.stage)
-  );
+  const open = deals.filter((d) => isOpenStage(d.stage));
 
   const byReason = new Map<DeclineReason, { count: number; value: number }>();
   for (const d of lost) {

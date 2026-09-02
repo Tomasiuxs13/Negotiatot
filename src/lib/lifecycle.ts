@@ -1,5 +1,6 @@
 import type { ContentStatus, PaymentStatus, ShipmentStatus } from "./fulfillment-types";
 import type { Stage } from "./types";
+import { isDeliveringStage, isWonStage } from "./types";
 
 export interface LifecycleResult {
   ok: boolean;
@@ -12,7 +13,7 @@ type ShipmentState = { status: ShipmentStatus };
 
 /** Fulfillment is real work, so it only starts after the deal has been won. */
 export function canManageFulfillment(stage: Stage): LifecycleResult {
-  return stage === "agreed"
+  return isDeliveringStage(stage)
     ? { ok: true }
     : {
         ok: false,
@@ -34,8 +35,8 @@ export function canCompleteDeal(input: {
   payments: PaymentState[];
   shipments: ShipmentState[];
 }): LifecycleResult {
-  if (input.currentStage !== "agreed") {
-    return { ok: false, reason: "Move the deal to Agreed before completing it." };
+  if (!isDeliveringStage(input.currentStage)) {
+    return { ok: false, reason: "Move the deal to Agreed or Active before completing it." };
   }
 
   const tracked = input.content.length + input.payments.length + input.shipments.length;
@@ -65,8 +66,9 @@ export function canLeaveWonStage(input: {
   paymentCount: number;
   shipmentCount: number;
 }): LifecycleResult {
-  if (input.currentStage !== "agreed") return { ok: true };
-  if (input.nextStage === "agreed" || input.nextStage === "completed") return { ok: true };
+  if (!isDeliveringStage(input.currentStage)) return { ok: true };
+  // Moving between the won stages is not leaving them.
+  if (isWonStage(input.nextStage)) return { ok: true };
 
   const hasWork =
     input.hasConfirmedContract ||

@@ -1,4 +1,5 @@
 import type { Deal } from "./types";
+import { isDeliveringStage, isWonStage } from "./types";
 import type {
   ContentItem,
   Contract,
@@ -123,7 +124,7 @@ export function approvalItems({
 
   for (const content of contentItems) {
     const deal = dealById.get(content.deal_id);
-    if (!deal || (deal.stage !== "agreed" && deal.stage !== "completed")) continue;
+    if (!deal || !isWonStage(deal.stage)) continue;
 
     if (content.status === "submitted") {
       const days = content.due_date ? daysToPublish(content.due_date, today) : null;
@@ -164,7 +165,7 @@ export function approvalItems({
   for (const payment of payments) {
     if (payment.status !== "approvable") continue;
     const deal = dealById.get(payment.deal_id);
-    if (!deal || deal.stage !== "agreed") continue;
+    if (!deal || !isDeliveringStage(deal.stage)) continue;
     items.push({
       id: `payment-${payment.id}`,
       kind: "payment",
@@ -181,7 +182,7 @@ export function approvalItems({
   }
 
   for (const deal of deals) {
-    if (deal.stage !== "agreed") continue;
+    if (!isDeliveringStage(deal.stage)) continue;
     const dealContent = contentByDeal.get(deal.id) ?? [];
     const dealPayments = paymentsByDeal.get(deal.id) ?? [];
     const dealShipments = shipmentsByDeal.get(deal.id) ?? [];

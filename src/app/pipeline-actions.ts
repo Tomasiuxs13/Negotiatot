@@ -19,10 +19,12 @@ import {
 const STAGE_STATUS: Record<Stage, { label: string; tone: "good" | "warn" | "neutral" }> = {
   lead: { label: "New lead", tone: "neutral" },
   contacted: { label: "Reached out · awaiting reply", tone: "neutral" },
+  in_contact: { label: "They replied · not priced yet", tone: "neutral" },
   analyzing: { label: "Analyzing", tone: "neutral" },
   offer_sent: { label: "Offer sent · waiting", tone: "neutral" },
   negotiating: { label: "Negotiating", tone: "warn" },
   agreed: { label: "Agreed", tone: "good" },
+  active: { label: "Active · in delivery", tone: "good" },
   completed: { label: "Completed", tone: "good" },
   declined: { label: "Declined", tone: "warn" },
 };

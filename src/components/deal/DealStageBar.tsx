@@ -2,11 +2,15 @@
 
 import { useState, useTransition } from "react";
 import { moveDealStage } from "@/app/pipeline-actions";
-import { STAGES, STAGE_HELP, STAGE_LABELS, type Stage } from "@/lib/types";
+import { isWonStage, STAGES, STAGE_HELP, STAGE_LABELS, type Stage } from "@/lib/types";
 
-const NEGOTIATION_STAGES = STAGES.filter(
-  (stage) => stage.key !== "agreed" && stage.key !== "completed"
-);
+/**
+ * The stages a deal can be moved between freely. The won ones are reached through their
+ * guarded actions instead — Mark agreed, confirming the contract, Complete — because
+ * each has checks behind it. Asking the predicate rather than naming stages is what
+ * stopped "Active" appearing here and letting a deal skip Agreed entirely.
+ */
+const NEGOTIATION_STAGES = STAGES.filter((stage) => !isWonStage(stage.key));
 
 /**
  * Makes the lifecycle visible on every deal and gives pre-agreement stages an explicit,
@@ -78,7 +82,9 @@ export default function DealStageBar({
         ) : (
           <p className="max-w-sm text-xs text-slate-500 xl:text-right">
             {current === "agreed"
-              ? "This deal now moves through Fulfillment. Complete it when all work is done."
+              ? "Confirm the signed contract in Fulfillment to start delivery."
+              : current === "active"
+                ? "In delivery. Complete it when the work and the money are done."
               : current === "completed"
                 ? "Completed deals can be reopened from their guarded action when needed."
                 : "Use Reopen to return this deal to the active pipeline."}

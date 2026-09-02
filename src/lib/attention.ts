@@ -1,4 +1,5 @@
 import type { Deal } from "./types";
+import { isDeliveringStage, isWonStage } from "./types";
 import type {
   ContentItem,
   Contract,
@@ -210,7 +211,7 @@ export function attentionItems({
   for (const c of contentItems) {
     if (!shouldRequestDraft(c, today, draftLeadDays)) continue;
     const deal = dealById.get(c.deal_id);
-    if (!deal || deal.stage !== "agreed") continue;
+    if (!deal || !isDeliveringStage(deal.stage)) continue;
     const days = daysToPublish(c.due_date!, today);
     if (days < 0) continue; // past publish — the overdue loop owns it from here
     items.push({
@@ -227,7 +228,7 @@ export function attentionItems({
   for (const c of contentItems) {
     if (c.status !== "submitted") continue;
     const deal = dealById.get(c.deal_id);
-    if (!deal || (deal.stage !== "agreed" && deal.stage !== "completed")) continue;
+    if (!deal || !isWonStage(deal.stage)) continue;
     const days = c.due_date ? daysToPublish(c.due_date, today) : null;
     items.push({
       id: `draft-review-${c.id}`,
@@ -245,7 +246,7 @@ export function attentionItems({
   for (const c of contentItems) {
     if (!c.requested_due_date) continue;
     const deal = dealById.get(c.deal_id);
-    if (!deal || deal.stage !== "agreed") continue;
+    if (!deal || !isDeliveringStage(deal.stage)) continue;
     items.push({
       id: `date-change-${c.id}`,
       severity: "warning",
@@ -423,7 +424,7 @@ export function attentionItems({
   // remembers that a video posted five weeks ago is now worth measuring.
   for (const c of contentItems) {
     const deal = dealById.get(c.deal_id);
-    if (!deal || (deal.stage !== "agreed" && deal.stage !== "completed")) continue;
+    if (!deal || !isWonStage(deal.stage)) continue;
     const m = measurementState(c, windows, today);
     if (m.state !== "due" && m.state !== "provisional") continue;
     if (m.state === "provisional" && (m.daysUntilMature ?? 0) > 0) continue;
@@ -442,7 +443,7 @@ export function attentionItems({
   // Setup that other work is already outrunning. A creator filming against a link that
   // doesn't exist yet is the failure this checklist exists to prevent.
   for (const d of deals) {
-    if (d.stage !== "agreed") continue;
+    if (!isDeliveringStage(d.stage)) continue;
     const blocking = onboarding.filter(
       (t) =>
         t.status !== "done" &&
@@ -468,7 +469,7 @@ export function attentionItems({
   // One exception per agreement, rather than three separate warnings. The manager can
   // open Fulfillment once and finish the entire hand-off from negotiation to delivery.
   for (const d of deals) {
-    if (d.stage !== "agreed") continue;
+    if (!isDeliveringStage(d.stage)) continue;
     const missing: string[] = [];
     if (!contracts.some((contract) => contract.deal_id === d.id && contract.status === "confirmed")) {
       missing.push("confirmed signed contract");
@@ -511,7 +512,7 @@ export function attentionItems({
   // Deals where the work and the money are both done — close them out so the board
   // reflects live work rather than history.
   for (const d of deals) {
-    if (d.stage !== "agreed") continue;
+    if (!isDeliveringStage(d.stage)) continue;
     const content = contentItems.filter((c) => c.deal_id === d.id);
     const dealPayments = payments.filter((p) => p.deal_id === d.id);
     const contentDone = content.length > 0 && content.every((c) => c.status === "verified");

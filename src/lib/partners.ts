@@ -1,4 +1,5 @@
 import type { Deal, Message, Platform, Stage } from "./types";
+import { isDeliveringStage, isOpenStage, isWonStage } from "./types";
 import { dealPlatforms, TERMINAL_STAGES } from "./types";
 import type { ContentItem } from "./fulfillment-types";
 
@@ -140,7 +141,7 @@ export const PARTNER_STATUS_LABEL: Record<PartnerStatus, string> = {
 export function partnerStatus(deals: Deal[], today = new Date().toISOString().slice(0, 10)): PartnerStatus {
   if (deals.length === 0) return "prospect";
 
-  if (deals.some((d) => d.stage === "agreed")) return "delivering";
+  if (deals.some((d) => isDeliveringStage(d.stage))) return "delivering";
   if (deals.some((d) => d.stage === "offer_sent" || d.stage === "negotiating" || d.stage === "analyzing"))
     return "negotiating";
 
@@ -208,9 +209,9 @@ export function otherLiveDeals(deals: Deal[], excludeDealId: number): Deal[] {
 
 /** Lifetime numbers for a partner, computed from their deals. */
 export function partnerStats(deals: Deal[]): PartnerStats {
-  const won = deals.filter((d) => d.stage === "agreed" || d.stage === "completed");
+  const won = deals.filter((d) => isWonStage(d.stage));
   const active = deals.filter(
-    (d) => d.stage !== "agreed" && d.stage !== "completed" && d.stage !== "declined"
+    (d) => isOpenStage(d.stage)
   );
 
   const withActuals = won.filter((d) => d.agreed_price && d.actual_views);

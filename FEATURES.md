@@ -126,15 +126,39 @@ Board and list views over all deals.
   messages in the thread, dated from `contacted_at` until the first chase is logged.
 - Filters: platform, stage, campaign, and a free-text search over creator, **handle**, **email**, campaign and deliverables — an imported creator is recognised by their handle, so searching one used to return an empty board.
 
-**What moves a deal between stages** is the conversation, not the tooling. Their reply
-lands a *Contacted* deal in **To review** — a first reply is an ask to be priced, not a
-counter to be negotiated — and lands it in **Negotiating** only once a number of ours is
+**The stages**, in order: Lead → Contacted → **In contact** → To review → Offer sent →
+Negotiating → Agreed → **Active** → Completed, with Declined alongside.
+
+**What moves a deal between them** is mostly the conversation. Their reply lands a
+*Contacted* deal in **In contact** — they have answered, but nothing is priced, so no
+decision is waiting on anyone — and in **Negotiating** only once a number of ours is
 already on the table. Sending an offer means **Offer sent** from any pre-offer stage.
-Running the analysis moves nothing on its own: a deal is routinely priced before the
-creator ever answers, and calling that "ready for a decision" would claim the manager was
-holding it up when it was still waiting on the creator. The rules live in one place
-(`src/lib/stage-advance.ts`) so a pasted reply, a Gmail-synced reply and a sent offer
-cannot disagree.
+
+Pricing is the one exception, and it is what makes **To review** honest: a completed
+analysis moves a deal there, so the column means evidence and a number exist and the next
+move is the manager's. Before *In contact* existed, a reply and a price both landed in To
+review, which claimed a decision was ready on deals that had never been priced. Re-pricing
+a live negotiation never drags it backwards.
+
+**Agreed → Active** happens when the signed contract is confirmed, because that is when
+delivery obligations become real and dated. Agreed means terms are settled; Active means
+the work is running and money is owed — different questions to ask of a board.
+
+The rules live in one place (`src/lib/stage-advance.ts`) so a pasted reply, a Gmail-synced
+reply, a sent offer and a confirmed contract cannot disagree.
+
+**Declined** has its own board column but is not in the move-to list: reaching it records
+a *reason*, which is what makes a loss useful later, so it is entered through the decline
+dialog and the column is deliberately not a drop target. The column shows the ten most
+recent with a link to the full list.
+
+**Three questions, asked once.** `isWonStage`, `isDeliveringStage` and `isOpenStage` in
+`types.ts` are the single source of truth for "was this won", "is delivery live" and "is
+this still moving". Adding Active proved why they are needed: twenty-odd
+`stage === "agreed"` checks were scattered through attention, approvals, partners and
+outcomes, and every one would have silently skipped a deal the moment its contract was
+confirmed — a dashboard item that stops appearing, a deal missing from the win rate, all
+compiling perfectly.
 
 Signed deals show a **phase** rather than a stage — "Producing 2/3", "Payment to approve",
 "Ready to wrap" — because a deal is routinely mid-onboarding *and* mid-production *and*

@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS deals (
   creator TEXT NOT NULL,
   platform TEXT NOT NULL CHECK (platform IN ('youtube','instagram','tiktok','facebook')),
   format TEXT,
-  stage TEXT NOT NULL DEFAULT 'analyzing' CHECK (stage IN ('lead','contacted','analyzing','offer_sent','negotiating','agreed','completed','declined')),
+  stage TEXT NOT NULL DEFAULT 'analyzing' CHECK (stage IN ('lead','contacted','in_contact','analyzing','offer_sent','negotiating','agreed','active','completed','declined')),
   round INTEGER NOT NULL DEFAULT 0,
   your_move INTEGER NOT NULL DEFAULT 0,
   first_ask INTEGER,

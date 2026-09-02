@@ -56,11 +56,12 @@ describe("automatic Gmail stage updates", () => {
     });
   });
 
-  it("prices an unanswered outreach rather than negotiating against nothing", () => {
+  it("puts an unanswered outreach In contact rather than negotiating against nothing", () => {
     // Their first mail back is their ask. Calling that a negotiation skips the step
-    // where the deal gets a number of its own to answer with.
+    // where the deal gets a number of its own to answer with — and calling it "To
+    // review" claims a decision is ready before anything has been priced.
     expect(automaticReplyStageUpdate(deal(1, "contacted"))).toMatchObject({
-      stage: "analyzing",
+      stage: "in_contact",
       round: 1,
       your_move: 1,
     });

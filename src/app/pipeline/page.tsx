@@ -307,20 +307,6 @@ export default async function PipelinePage({
           />
         )}
 
-        {/* The board has no Declined column by design, but the deals must stay
-            findable — "where did that deal go" should have a visible answer. */}
-        {!isList && all.some((d) => d.stage === "declined") && (
-          <div className="mt-4">
-            <Link
-              href="/pipeline?view=list&stage=declined"
-              className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2"
-            >
-              {all.filter((d) => d.stage === "declined").length} declined deal
-              {all.filter((d) => d.stage === "declined").length === 1 ? "" : "s"} — view with
-              reasons and revisit dates →
-            </Link>
-          </div>
-        )}
       </main>
     </>
   );

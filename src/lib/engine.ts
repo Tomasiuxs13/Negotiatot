@@ -39,6 +39,7 @@ import {
 import type { Deal } from "./types";
 import { priorDeals, type PriorDeal } from "./partners";
 import { parseTakeAmount } from "./manager-take";
+import { stageAfterAnalysis } from "./stage-advance";
 
 export function platformsOf(deal: Pick<Deal, "platform" | "platforms">): string[] {
   if (deal.platforms) {
@@ -362,6 +363,10 @@ export async function performAnalysis(
           : result.analysis.verdict === "decline"
             ? "warn"
             : "neutral",
+      // Pricing is what makes "To review" true: evidence and a number now exist and the
+      // next move is the manager's. Deliberately the only tool that moves a stage, and
+      // it never drags a live negotiation backwards.
+      stage: stageAfterAnalysis(deal.stage),
     });
     clearJob(dealId);
   } catch (err) {
