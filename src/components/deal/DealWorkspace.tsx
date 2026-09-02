@@ -90,7 +90,12 @@ export default function DealWorkspace({
               ))}
             </nav>
           </div>
-          <div className="flex shrink-0 items-center gap-3 overflow-x-auto"><Slot>{actions}</Slot></div>
+          {/* Must NOT clip: the More menu is absolutely positioned inside this row, and
+              `overflow-x-auto` computes overflow-y to `auto` too, so the dropdown was
+              cut off at the row's 30px height and no z-index could rescue it — clicking
+              More appeared to do nothing. The breadcrumb beside this is the element that
+              truncates, so the actions never needed a scroller of their own. */}
+          <div className="flex shrink-0 items-center gap-3"><Slot>{actions}</Slot></div>
         </div>
 
         {/* Below md the strip drops out of the bar rather than squeezing the actions
