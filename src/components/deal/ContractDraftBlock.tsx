@@ -138,14 +138,15 @@ export default function ContractDraftBlock({
           )}
         </>
       )}
-      {esign && body && status !== "signed" && (
+      {/* E-signature is opt-in and stays that way: nothing appears here until a DocuSign
+          account is actually connected. Configuring the server variables is not consent —
+          it used to put a "connect DocuSign" line on every contract draft, which nags a
+          manager who has decided to keep signing by hand. Getting a signed PDF back and
+          uploading it in the Contract block below is a complete path on its own and needs
+          none of this. */}
+      {esign?.connected && body && status !== "signed" && (
         <div className="mt-3 border-t border-slate-100 pt-3">
-          {!esign.connected ? (
-            <p className="text-[11px] text-slate-500">
-              Connect DocuSign in Settings to send this for signature. You can also upload
-              the signed copy in the Contract block below once it comes back.
-            </p>
-          ) : envelope ? (
+          {envelope ? (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-semibold rounded-full px-2 py-0.5 bg-slate-100 text-slate-600">
                 DocuSign · {ENVELOPE_LABEL[envelope.status] ?? envelope.status}

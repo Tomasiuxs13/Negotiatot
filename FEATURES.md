@@ -411,8 +411,9 @@ password, no service account. Server variables are `DOCUSIGN_INTEGRATION_KEY`,
 `DOCUSIGN_SECRET_KEY` and `DOCUSIGN_TOKEN_ENCRYPTION_KEY`, with `DOCUSIGN_REDIRECT_URI`
 optional for a deployed host. It runs against DocuSign's **demo** environment unless
 `DOCUSIGN_ENV=production` is set, so a missing variable can never mail a real creator.
-The whole integration is optional: with nothing configured the deal page simply does not
-offer it, and uploading a signed copy by hand is unaffected.
+The whole integration is optional and opt-in: the deal page offers it only once an account
+is connected, never merely because the variables exist, and uploading a signed copy by hand
+is unaffected either way.
 
 **Contract templates** — ours or theirs. Every Agreed deal gets a contract draft; this is
 where the wording comes from. A company can keep **Counterpart's standard agreement**, or
@@ -626,9 +627,13 @@ recommendation prompt, and a post-generation guard rejects creator-facing projec
 orders, views, total commission, revenue or ROI if they still appear. Offer terms such as
 a fixed fee or per-sale rate remain usable because they are commitments, not forecasts.
 
-**Draft → signature → the signed original.** A contract draft can be sent to the creator
-for signature from the deal, when DocuSign is connected and the creator has an email on
-their profile. The text on screen is the text that gets signed, edits included. Sending
+**Draft → signature → the signed original.** E-signature is **opt-in and stays optional**.
+Nothing about it appears on a deal until a DocuSign account is actually connected —
+setting the server variables is not consent — and getting a signed PDF back by any means
+and uploading it in the Contract block is a complete path that needs none of it.
+Disconnecting in Settings turns the whole thing off again. When it *is* connected, a
+contract draft can be sent to the creator for signature from the deal, provided the
+creator has an email on their profile. The text on screen is the text that gets signed, edits included. Sending
 does **not** mark the draft signed — only DocuSign reporting the envelope complete does
 that, so a draft can never read as signed on the strength of an email having gone out.
 When it completes, the signed PDF is downloaded and filed as the deal's contract through

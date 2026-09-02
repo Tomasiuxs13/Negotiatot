@@ -679,11 +679,13 @@ export default async function DealPage({
                         }))}
                         currentTemplateId={deal.contract_template_id ?? null}
                         esign={(() => {
-                          const setup = docusignSetupStatus(`${protocol}://${host}`);
-                          if (!setup.configured) return undefined;
+                          // Connected, not merely configured: e-signature is opt-in, and a
+                          // deal page that is not using it should not pay for the lookup.
+                          if (!docusignSetupStatus(`${protocol}://${host}`).configured) return undefined;
+                          if (getDocusignConnectionSummary() == null) return undefined;
                           const env = getEsignEnvelope(deal.id);
                           return {
-                            connected: getDocusignConnectionSummary() != null,
+                            connected: true,
                             envelope: env
                               ? {
                                   status: env.status,
