@@ -993,6 +993,8 @@ const EXTRACTION_SCHEMA = {
 export async function extractReportData(params: {
   pdfBase64?: string;
   image?: { base64: string; mediaType: ImageMediaType };
+  /** Several images of one report — a tall export cut into readable strips, in order. */
+  images?: { base64: string; mediaType: ImageMediaType }[];
   text?: string;
 }): Promise<{ extracted: ExtractedReport; usage: TokenUsage; model: string }> {
   const client = getClient();
@@ -1004,10 +1006,17 @@ export async function extractReportData(params: {
       source: { type: "base64", media_type: "application/pdf", data: params.pdfBase64 },
     });
   }
-  if (params.image) {
+  const images = [...(params.image ? [params.image] : []), ...(params.images ?? [])];
+  if (images.length > 1) {
+    content.push({
+      type: "text",
+      text: `The report follows as ${images.length} images: one tall page cut into strips, top to bottom, with a little overlap between consecutive strips. Read them as a single document and do not count a figure twice because it appears at a cut line.`,
+    });
+  }
+  for (const image of images) {
     content.push({
       type: "image",
-      source: { type: "base64", media_type: params.image.mediaType, data: params.image.base64 },
+      source: { type: "base64", media_type: image.mediaType, data: image.base64 },
     });
   }
   content.push({
@@ -1369,6 +1378,8 @@ export async function analyzeDeal(params: {
   history?: PriorDeal[];
   reportPdfBase64?: string;
   reportImage?: { base64: string; mediaType: ImageMediaType };
+  /** A tall report cut into readable strips, top to bottom; sent in place of the document. */
+  reportImages?: { base64: string; mediaType: ImageMediaType }[];
   reportText?: string;
   theirMessage?: string;
   channelUrl?: string;
@@ -1466,7 +1477,7 @@ export async function analyzeDeal(params: {
 
   // 3. Untrusted. Everything below this point was authored by, or transcribed from, the
   //    other side of the negotiation.
-  if (supplied.length > 0 || params.reportPdfBase64 || params.reportImage) {
+  if (supplied.length > 0 || params.reportPdfBase64 || params.reportImage || params.reportImages?.length) {
     userContent.push({ type: "text", text: UNTRUSTED_PREAMBLE });
   }
   if (params.reportPdfBase64) {
@@ -1475,21 +1486,27 @@ export async function analyzeDeal(params: {
       source: { type: "base64", media_type: "application/pdf", data: params.reportPdfBase64 },
     });
   }
-  if (params.reportImage) {
+  const reportImages = [
+    ...(params.reportImage ? [params.reportImage] : []),
+    ...(params.reportImages ?? []),
+  ];
+  if (reportImages.length > 1) {
+    userContent.push({
+      type: "text",
+      text: `The creator's report follows as ${reportImages.length} images — one tall page cut into strips, top to bottom, overlapping slightly. Read them as one document.`,
+    });
+  }
+  for (const image of reportImages) {
     userContent.push({
       type: "image",
-      source: {
-        type: "base64",
-        media_type: params.reportImage.mediaType,
-        data: params.reportImage.base64,
-      },
+      source: { type: "base64", media_type: image.mediaType, data: image.base64 },
     });
   }
   userContent.push({
     type: "text",
     text: [
-      params.reportImage
-        ? `An image is attached — a screenshot of the creator's analytics report or rate card. Read every stat and price from it.`
+      reportImages.length > 0
+        ? `${reportImages.length > 1 ? "Images are" : "An image is"} attached — the creator's analytics report or rate card. Read every stat and price from ${reportImages.length > 1 ? "them" : "it"}.`
         : ``,
       ...supplied.map((s) => `<creator_supplied>\n${s}\n</creator_supplied>`),
       params.extracted
@@ -1507,7 +1524,7 @@ export async function analyzeDeal(params: {
   });
 
   const tools =
-    params.channelUrl || params.reportPdfBase64 || params.reportImage || params.extracted
+    params.channelUrl || params.reportPdfBase64 || params.reportImage || params.reportImages?.length || params.extracted
       ? // Every search's results stay in context and are re-billed on each resume, so the
         // cost of a search is multiplied by however many resumes follow it. Six was
         // generous for a channel lookup; three still covers stats, geo and recent sponsors.

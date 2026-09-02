@@ -318,8 +318,10 @@ export async function attachReportAndAnalyze(
   updateDeal(dealId, { status_label: "Analyzing report…", status_tone: "neutral" });
   after(() =>
     performAnalysis(dealId, {
-      reportPdfBase64: report.kind === "pdf" ? report.pdfBase64 : undefined,
+      // A tall export goes as strips; the document itself is unreadable at that shape.
+      reportPdfBase64: report.kind === "pdf" && !report.strips ? report.pdfBase64 : undefined,
       reportImage: report.kind === "image" ? report.image : undefined,
+      reportImages: report.kind === "pdf" ? report.strips ?? undefined : undefined,
     })
   );
   revalidatePath(`/deals/${dealId}`);

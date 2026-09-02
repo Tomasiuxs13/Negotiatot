@@ -683,10 +683,16 @@ arrives about a hundred pixels across and its figures survive as shapes rather t
 numbers. That is what produced "avg views inferred from an unlabelled numeric block" on one
 report and an analysis that graded nothing on another, a paid call each time.
 
-The page box is now read from the PDF before anything is sent, and a page past 4:1 is
-flagged **before the call**, naming the shape and what to do instead — screenshot the stats
-section, or set the figures with *Correct this*. It is a warning, not a veto: *Analyze it
-anyway* is there for a report that reads fine despite its shape.
+The page box is read from the PDF before anything is sent (`pdf-shape.ts`). A page past
+4:1 is no longer sent as a PDF at all: it is rendered at 1000 px wide and cut into
+1000 × 1400 strips with an 80 px overlap so no line of figures is split (`pdf-strips.ts`,
+`pdf-to-img` + `sharp`), and the strips go to both the extraction pass and the analysis
+as a top-to-bottom sequence of images. The same 14:1 Modash export that graded nothing
+now yields the follower count, engagement, fake-follower share, audience geo and the
+growth charts. A report the renderer cannot open falls back to the earlier behaviour: a
+warning **before the call** naming the shape and what to do instead, with *Analyze it
+anyway* for a report that reads fine despite its shape. Renders are capped at 16 strips;
+anything taller is truncated rather than refused.
 
 If an analysis still comes back having graded nothing, it is asked once more before being
 given up on, rather than discarding a call the manager has paid for.

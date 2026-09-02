@@ -114,9 +114,12 @@ export async function createDealAction(
 
   let pdfBase64: string | undefined;
   let reportImage: { base64: string; mediaType: ImageMediaType } | undefined;
+  let reportImages: { base64: string; mediaType: ImageMediaType }[] | undefined;
   const report = await readReportFile(formData.get("report"));
   if (report.kind === "error") return { error: report.error };
-  if (report.kind === "pdf") pdfBase64 = report.pdfBase64;
+  // A tall export goes as strips; the document itself is unreadable at that shape.
+  if (report.kind === "pdf" && report.strips) reportImages = report.strips;
+  else if (report.kind === "pdf") pdfBase64 = report.pdfBase64;
   if (report.kind === "image") reportImage = report.image;
 
   const id = createDeal({
@@ -190,6 +193,7 @@ export async function createDealAction(
     performAnalysis(id, {
       reportPdfBase64: pdfBase64,
       reportImage,
+      reportImages,
       channelUrl: channelUrl || undefined,
       knownAvgViews,
       knownEngagement,

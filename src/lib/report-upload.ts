@@ -3,7 +3,8 @@ import sharp from "sharp";
 import type { ImageMediaType } from "./claude";
 import { saveFile } from "./files";
 import { savePartnerReport } from "./db";
-import { pdfPageShape, tallPageWarning } from "./pdf-shape";
+import { pdfPageShape, tallPageWarning, UNREADABLE_ASPECT } from "./pdf-shape";
+import { renderPdfToStrips, type ReportImage } from "./pdf-strips";
 
 /**
  * One reading of an uploaded analytics report (Modash, HypeAuditor, a screenshot),
@@ -60,7 +61,13 @@ export type ReadReport =
       kind: "pdf";
       pdfBase64: string;
       original: OriginalReport;
-      /** Set when the page's shape means Claude will not be able to read it. */
+      /**
+       * A dashboard-shaped page rendered and cut into readable strips. When present the
+       * strips go to the model instead of the document — the document is unreadable at
+       * that shape, which is the whole reason the strips exist.
+       */
+      strips: ReportImage[] | null;
+      /** Set only when the page is that shape AND rendering it failed. */
       tallPage: string | null;
     }
   | { kind: "image"; image: { base64: string; mediaType: ImageMediaType }; original: OriginalReport };
@@ -71,11 +78,24 @@ export async function readReportFile(file: FormDataEntryValue | null): Promise<R
   if (file.type.includes("pdf")) {
     if (file.size > MAX_PDF_BYTES) return { kind: "error", error: "Report PDF is too large (max 20 MB)." };
     const buffer = Buffer.from(await file.arrayBuffer());
+    const shape = pdfPageShape(buffer);
+    let strips: ReportImage[] | null = null;
+    let tallPage: string | null = null;
+    if (shape && shape.ratio > UNREADABLE_ASPECT) {
+      try {
+        strips = await renderPdfToStrips(buffer, shape);
+      } catch (error) {
+        console.error("Could not render the tall report into strips:", error);
+      }
+      // No strips means we could not make it readable; say so before a call is spent.
+      if (!strips) tallPage = tallPageWarning(shape);
+    }
     return {
       kind: "pdf",
       pdfBase64: buffer.toString("base64"),
       original: { buffer, filename: file.name || "report.pdf", mime: "application/pdf" },
-      tallPage: tallPageWarning(pdfPageShape(buffer)),
+      strips,
+      tallPage,
     };
   }
   if (IMAGE_TYPES.includes(file.type as ImageMediaType)) {

@@ -214,6 +214,8 @@ export async function performAnalysis(
   inputs: {
     reportPdfBase64?: string;
     reportImage?: { base64: string; mediaType: ImageMediaType };
+    /** A tall report cut into readable strips; sent in place of the document. */
+    reportImages?: { base64: string; mediaType: ImageMediaType }[];
     channelUrl?: string;
     knownAvgViews?: number | null;
     knownEngagement?: number | null;
@@ -239,11 +241,12 @@ export async function performAnalysis(
     // extraction — and if it comes back unusable we send the raw document as before
     // rather than analyse on numbers nobody can vouch for.
     let extracted: ExtractedReport | undefined;
-    if (inputs.reportPdfBase64 || inputs.reportImage) {
+    if (inputs.reportPdfBase64 || inputs.reportImage || inputs.reportImages?.length) {
       try {
         const pass = await extractReportData({
           pdfBase64: inputs.reportPdfBase64,
           image: inputs.reportImage,
+          images: inputs.reportImages,
         });
         logUsage(dealId, "extraction", pass.model, pass.usage.inputTokens, pass.usage.outputTokens);
         if (isExtractionUsable(pass.extracted)) {
@@ -281,6 +284,7 @@ export async function performAnalysis(
       // usable extraction, so the fallback needs no separate call path.
       reportPdfBase64: inputs.reportPdfBase64,
       reportImage: inputs.reportImage,
+      reportImages: inputs.reportImages,
       extracted,
       theirMessage: theirMessage || undefined,
       channelUrl: inputs.channelUrl || deal.channel_url || undefined,
