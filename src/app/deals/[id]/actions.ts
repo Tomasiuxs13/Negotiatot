@@ -6,9 +6,10 @@ import { fileReportAgainstPartner, readReportFile } from "@/lib/report-upload";
 import { dependentCopilotIds, repairThread } from "@/lib/thread-repair";
 import { after } from "next/server";
 import { addMessage, clearFollowUpState, deleteMessage, getContractDraft, getDeal, getMessage, getMessages, getPartner, markContractDraftSigned, saveContractDraft, setJob, updateDeal, upsertPartnerChannel, getUnitEconomics } from "@/lib/db";
-import { getContentItems, getPaymentItems } from "@/lib/fulfillment";
+import { getContentItems, getPaymentItems, getShipments } from "@/lib/fulfillment";
 import { generateContractText } from "@/lib/contract-template";
-import { getSetting } from "@/lib/db";
+import { getBrandProfile } from "@/lib/db";
+import { resolveOffer } from "@/lib/commission";
 import { hasApiKey } from "@/lib/claude";
 import { performAnalysis, performRecommendation, platformsOf } from "@/lib/engine";
 import { recommendationGuardError } from "@/lib/recommendation-guard";
@@ -361,7 +362,11 @@ export async function generateContractDraftAction(dealId: number) {
     partner: deal.partner_id != null ? (getPartner(deal.partner_id) ?? null) : null,
     items: getContentItems(dealId),
     payments: getPaymentItems(dealId),
-    brand: getSetting<Record<string, string>>("brand_profile") ?? {},
+    // getBrandProfile, not the raw setting: the raw row omits every default, so a brand
+    // that never opened Settings produced a contract headed "[Brand legal name]".
+    brand: getBrandProfile(),
+    commission: resolveOffer(deal, getUnitEconomics()).commission,
+    shipments: getShipments(dealId),
   });
   saveContractDraft(dealId, body);
   revalidatePath(`/deals/${dealId}`);

@@ -36,6 +36,7 @@ import {
 } from "@/lib/fulfillment";
 import { money } from "@/lib/format";
 import { actualDealCost, dealCommission, describeCommission, earningsForecast, expectedOrdersFrom, parseTiers, resolveOffer, trueDealCost } from "@/lib/commission";
+import { costScopeLine } from "@/lib/ladder-notes";
 import { deliverableCount } from "@/lib/deliverables";
 import AnalysisTab from "@/components/deal/AnalysisTab";
 import NegotiationTab from "@/components/deal/NegotiationTab";
@@ -175,6 +176,10 @@ export default async function DealPage({
           productCost,
         });
       })();
+  // What that cost buys. The number alone is unreadable: it is a whole-bundle figure,
+  // and on a deal with no deliverables written down the bundle size came from the
+  // Playbook rather than from anything the manager chose.
+  const costScope = costScopeLine({ scopeText: scope, pieces: ladderPieces, fee: costFee });
   /** Widest cap among this deal's platforms — a crosspost isn't capped at the strictest. */
   const maxPerDeal = (() => {
     const caps = platforms
@@ -489,6 +494,7 @@ export default async function DealPage({
                 fee={costFee}
                 maxPerDeal={maxPerDeal}
                 breakeven={deal.breakeven}
+                scope={costScope}
               />
             </div>
           </section>
@@ -519,6 +525,7 @@ export default async function DealPage({
                   fee={costFee}
                   maxPerDeal={maxPerDeal}
                   breakeven={deal.breakeven}
+                  scope={costScope}
                 />
               )}
               <AudienceDataEditor

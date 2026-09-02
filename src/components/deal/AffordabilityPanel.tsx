@@ -1,4 +1,5 @@
 import { money } from "@/lib/format";
+import type { CostScopeLine } from "@/lib/ladder-notes";
 
 /**
  * Can we afford this, and does it make money — the two questions the price ladder
@@ -16,12 +17,15 @@ export default function AffordabilityPanel({
   fee,
   maxPerDeal,
   breakeven,
+  scope,
 }: {
   totalCost: number;
   /** The fee the ladder's target marker represents. */
   fee: number | null;
   maxPerDeal: number | null;
   breakeven: number | null;
+  /** What the money buys. Without it the total is unreadable — see costScopeLine. */
+  scope: CostScopeLine;
 }) {
   const rows: { label: string; ok: boolean; verdict: string }[] = [];
 
@@ -47,9 +51,22 @@ export default function AffordabilityPanel({
       <span className="text-[11px] uppercase font-semibold tracking-wider text-slate-500 block mb-1">
         Total deal cost
       </span>
-      <span className="text-2xl font-semibold font-tabular text-slate-900 block mb-3">
+      <span className="text-2xl font-semibold font-tabular text-slate-900 block">
         {money(totalCost)}
       </span>
+      {/* An assumed bundle size must not read like a quoted one, so it does not get the
+          same colour as a scope the manager actually wrote. */}
+      <div className="mb-3 mt-0.5">
+        <span className="block text-[12px] text-slate-600">{scope.text}</span>
+        {scope.assumed && (
+          <span
+            className="block text-[11px] text-amber-700 mt-0.5"
+            title="No deliverables are recorded on this deal, so the bundle size comes from the Playbook's minimum. Set the deliverables to price what you are actually asking for."
+          >
+            Assumed — no deliverables set on this deal
+          </span>
+        )}
+      </div>
       {rows.length === 0 ? (
         <p className="text-[11px] text-slate-400">
           Set a target and a per-deal cap to see whether this is affordable.

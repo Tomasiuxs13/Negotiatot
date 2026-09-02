@@ -489,6 +489,16 @@ properties between the header and the conversation. The **Audience & evidence** 
 collapsed by default with an issue count, then expands to show every value and reason;
 this keeps the recommendation and next action above the fold.
 
+**A cost always says what it buys.** The total deal cost is a whole-bundle figure, so
+the same "$248" describes one video or three, and the panel used to show the number
+alone. Worse, most deals carry no deliverables text at all — 166 of 211 active ones —
+and are priced on the Playbook's `minIntegrations` instead; the analysis records that
+honestly as "Deliverables: Unspecified, priced as 2 integrations" while the screen
+showed only what came out of it. The panel now carries the scope under the money, with
+the fee split per piece, and a count nobody chose is marked **Assumed** in amber so it
+can never be mistaken for a scope the manager wrote. The line the price ladder used to
+carry was deleted in the CRM-layout rewrite; this replaces it where the cost actually is.
+
 **Nothing is priced silently.** The run action states its inputs at the moment you press
 it, because the commonest and least visible mistake was running the analysis with the
 Modash PDF still sitting on the desktop — the report upload used to be a separate card in
@@ -592,7 +602,19 @@ never silently credited to the primary platform.
 
 **Agreement → provisional operations.** Marking a deal Agreed performs the safe part of
 the hand-off immediately: reusable onboarding is seeded, an editable contract draft is
-generated, and an unambiguous deliverable scope becomes provisional content items. A
+generated, and an unambiguous deliverable scope becomes provisional content items.
+
+The draft's compensation clause covers every way a creator is actually paid, not just a
+fee. A gifted or commission-only deal used to fall through every branch and print
+`[payment schedule]` — a contract naming no money at all, for the one deal shape where
+the creator's whole upside sits outside the fee. Commission is now a clause of its own
+with the rate, a 30-day attribution window, the net-sales basis (excluding tax, shipping,
+refunds and cancellations) and a monthly-in-arrears payout; gifted product is named with
+its retail value; and the absence of a fee is stated rather than left as a gap. The
+Net-30 invoice line appears only when there is a cash fee to invoice for. The commission
+written into the contract is the one the pricing used — the deal's own terms if it has
+any, else the Playbook's standard offer — so the paperwork cannot promise a rate the
+analysis never priced. A
 mixed-platform scope that cannot be attributed is left for the manager instead of being
 guessed. Contract confirmation remains the authoritative step for payment, product and
 signed-source terms and replaces only untouched provisional rows. Production progress,

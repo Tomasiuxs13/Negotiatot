@@ -6,8 +6,10 @@ import {
   getDeal,
   getPartner,
   getSetting,
+  getUnitEconomics,
   saveContractDraft,
 } from "./db";
+import { resolveOffer } from "./commission";
 import { provisionalDeliverables } from "./deliverables";
 import { generateContractText } from "./contract-template";
 import {
@@ -15,6 +17,7 @@ import {
   DEFAULT_ONBOARDING,
   getContentItems,
   getPaymentItems,
+  getShipments,
   seedOnboarding,
   type OnboardingTemplateStep,
 } from "./fulfillment";
@@ -77,7 +80,11 @@ export function prepareAgreedDeal(dealId: number): AgreementPreparation {
         items: getContentItems(deal.id),
         payments: getPaymentItems(deal.id),
         brand,
-        productOffer: brand.productOffer,
+        // Resolved, not read off the deal row: most deals carry no commission columns
+        // and run on the Playbook's standard offer, which is also what the pricing
+        // used. A contract silent on it would contradict the deal that was agreed.
+        commission: resolveOffer(deal, getUnitEconomics()).commission,
+        shipments: getShipments(deal.id),
       })
     );
     contractDraftCreated = true;
